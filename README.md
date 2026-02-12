@@ -1,3 +1,6 @@
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7c3aed)](https://docs.anthropic.com/en/docs/claude-code)
+[![GitHub release](https://img.shields.io/github/v/release/izantech/lineup)](https://github.com/izantech/lineup/releases)
+
 # Lineup
 
 A structured multi-agent workflow that breaks complex tasks into a clear pipeline: **Clarify → Research → Clarification Gate → Plan → Implement → Verify**.
