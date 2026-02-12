@@ -188,7 +188,7 @@ Ideas for contributions:
 
 ## Credits
 
-The clarification gate, confidence-based review filtering, and multi-option architecture patterns were adapted from the [feature-dev](https://github.com/anthropics/claude-code/tree/main/.claude/skills/feature-dev) skill for Claude Code.
+The clarification gate, confidence-based review filtering, and multi-option architecture patterns were adapted from the [feature-dev](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/feature-dev) skill for Claude Code.
 
 ## License
 
