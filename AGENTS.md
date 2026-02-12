@@ -33,6 +33,7 @@ Each agent is a Markdown file with YAML frontmatter:
 ```markdown
 ---
 name: <role>
+color: <color>
 description: <one-line>
 tools: <comma-separated>
 model: haiku|sonnet|opus
@@ -44,6 +45,7 @@ memory: user|project|local
 
 The frontmatter fields are:
 - `name`: agent role name
+- `color`: display color for visual identification (valid: `blue`, `green`, `yellow`, `red`; officially supported but may have rendering issues: `cyan`, `magenta`)
 - `description`: one-line summary
 - `tools`: comma-space separated list (e.g. `Read, Grep, Glob, LS`)
 - `model`: one of `haiku`, `sonnet`, `opus`

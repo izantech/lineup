@@ -1,5 +1,6 @@
 ---
 name: developer
+color: yellow
 description: Implements code changes following an approved plan. Use when you have a clear, approved implementation plan and need code written, tests added, or documentation updated. Can run in parallel with other developers for independent modules.
 tools: Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
 model: opus
