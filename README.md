@@ -36,18 +36,7 @@ This workflow adds structure:
 
 ## Quick start
 
-### Plugin install (recommended)
-
-Point Claude Code at this directory as a plugin:
-
-```bash
-git clone https://github.com/izantech/lineup.git
-claude --plugin-dir /path/to/lineup
-```
-
-This loads all agents and skills automatically. The `lineup:` namespace comes from the plugin name in `plugin.json`.
-
-### Marketplace install
+### Marketplace install (recommended)
 
 First, register the izantech marketplace (one-time setup):
 
@@ -60,6 +49,23 @@ Then install lineup:
 ```bash
 /plugin install lineup@izantech
 ```
+
+Update to the latest version anytime:
+
+```bash
+claude plugin update lineup@izantech
+```
+
+### Manual install
+
+For development or customization, point Claude Code at a local clone:
+
+```bash
+git clone https://github.com/izantech/lineup.git
+claude --plugin-dir /path/to/lineup
+```
+
+This loads all agents and skills automatically. The `lineup:` namespace comes from the plugin name in `plugin.json`.
 
 ### Customized install
 
