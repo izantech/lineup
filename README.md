@@ -49,9 +49,15 @@ This loads all agents and skills automatically. The `lineup:` namespace comes fr
 
 ### Marketplace install
 
-Install from the izantech marketplace:
+First, register the izantech marketplace (one-time setup):
 
+```bash
+claude plugin marketplace add izantech/claude-plugins
 ```
+
+Then install lineup:
+
+```bash
 /plugin install lineup@izantech
 ```
 
@@ -156,7 +162,7 @@ Run `/lineup:configure` inside Claude Code to customize agent settings interacti
 | Model | All agents or per-agent | `haiku`, `sonnet`, or `opus` |
 | Tools | Per-agent | Add, remove, or replace tools (e.g. swap `WebSearch` for Brave Search MCP) |
 | Memory | All agents or per-agent | `user`, `project`, or `local` |
-| Reset | All agents | Restore agent files to git defaults |
+| Reset | All agents | Restore agent files to defaults |
 
 ### Managing agents
 
