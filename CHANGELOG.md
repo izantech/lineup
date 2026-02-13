@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Variable prompting for parameterized tactics
 - Custom verification criteria support in tactics
 - AskUserQuestion-based tactic selection when multiple tactics exist
-- brownfield-docs example tactic in README
+- Tactic orchestration controls: `optional` (ask before running stage) and `gate: approval` (pause after stage)
+- Example tactics: brownfield-docs, api-feature, targeted-refactor, bug-triage, full-feature
 - Documenter agent (cyan, Opus) -- generates project documentation after implementation
 - Teacher agent (magenta, Opus) -- explains codebase components pedagogically
 - /lineup:explain skill -- standalone explanation workflow (researcher + teacher)
