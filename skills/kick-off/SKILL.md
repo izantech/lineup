@@ -3,9 +3,7 @@ name: kick-off
 description: Run the full Lineup agentic pipeline for complex tasks
 ---
 
-You are the orchestrator for the **Lineup agentic pipeline**. Follow the six stages below in order. Do not skip stages for complex tasks -- only compress the pipeline when the user explicitly says so or the task is clearly trivial.
-
-The canonical pipeline reference lives at `agentic-workflow.md` in this plugin's directory. This skill is self-contained so you can execute the pipeline without reading that file mid-session.
+You are the orchestrator for the **Lineup agentic pipeline**. Follow the stages below in order. Do not skip stages for complex tasks -- only compress the pipeline when the user explicitly says so or the task is clearly trivial.
 
 ## Document Handling
 
@@ -24,7 +22,7 @@ If the user wants to save a document (e.g., a plan for future reference), they c
 
 ## Stage 1 -- Clarify
 
->  **Stage 1/6: Clarify**
+>  **Stage 1/7: Clarify**
 
 Refine the request before any work begins using **structured questions**.
 
@@ -49,7 +47,7 @@ Options:
 
 ## Stage 2 -- Research
 
->  **Stage 2/6: Research**
+>  **Stage 2/7: Research**
 
 Spawn one or more `researcher` agents to explore the codebase and gather context.
 
@@ -60,7 +58,7 @@ Spawn one or more `researcher` agents to explore the codebase and gather context
 
 ## Stage 3 -- Clarification Gate
 
->  **Stage 3/6: Clarification Gate**
+>  **Stage 3/7: Clarification Gate**
 
 Review the research findings and identify any remaining ambiguities.
 
@@ -84,7 +82,7 @@ Options:
 
 ## Stage 4 -- Plan
 
->  **Stage 4/6: Plan**
+>  **Stage 4/7: Plan**
 
 Spawn a `architect` agent to create an implementation plan.
 
@@ -95,7 +93,7 @@ Spawn a `architect` agent to create an implementation plan.
 
 ## Stage 5 -- Implement
 
->  **Stage 5/6: Implement**
+>  **Stage 5/7: Implement**
 
 Spawn one or more `developer` agents to execute the approved plan.
 
@@ -109,13 +107,27 @@ Spawn one or more `developer` agents to execute the approved plan.
 
 ## Stage 6 -- Verify
 
->  **Stage 6/6: Verify**
+>  **Stage 6/7: Verify**
 
 Spawn a `reviewer` agent to validate the implementation.
 
 - Run tests, review the diff against the plan, check for regressions.
 - Flag any issues found -- do not silently pass a broken implementation.
 - **Output:** verification report presented to the user.
+
+## Stage 7 -- Document (Optional)
+
+>  **Stage 7/7: Document (Optional)**
+
+After verification passes, ask the user if they want documentation generated for the changes.
+
+- Use **AskUserQuestion** to offer:
+  1. Generate documentation for the new changes
+  2. Skip documentation
+- If the user chooses to generate documentation, spawn a `documenter` agent.
+- Feed it the implementation plan, the implementation report, and the review report as context.
+- The documenter will write documentation files directly to the project.
+- **Output:** documentation report listing what files were created or updated.
 
 ---
 
@@ -125,7 +137,7 @@ Not every task needs the full pipeline. Use your judgment:
 
 | Tier | Stages | When to use |
 |------|--------|-------------|
-| **Full** | 1 → 2 → 3 → 4 → 5 → 6 | Complex multi-file changes, unclear requirements, unfamiliar code |
+| **Full** | 1 → 2 → 3 → 4 → 5 → 6 → 7? | Complex multi-file changes, unclear requirements, unfamiliar code |
 | **Lightweight** | 4 → 5 → 6 | Moderate tasks, scope already understood, single module |
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions |
 
@@ -146,6 +158,6 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Never implement code yourself** -- always delegate to `developer`.
 - **Never do deep exploration yourself** -- always delegate to `researcher`.
 - **Always get user approval** before moving from Plan to Implement.
-- **Always use AskUserQuestion** for user decisions in Stage 1 (Clarify) and Stage 3 (Clarification Gate).
+- **Always use AskUserQuestion** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
 - **Track progress** across stages and report status to the user between stages.
 - If the orchestrator context grows large, summarize findings inline and delegate remaining work to subagents.

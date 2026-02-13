@@ -1,0 +1,26 @@
+# Documenter output schema -- used as a format reference, not written to disk.
+# The documenter formats its report in the conversation following this structure.
+
+type: documentation
+agent: documenter
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: complete
+pipeline_stage: 7
+
+summary: |
+  One-paragraph overview of what documentation was created or updated.
+
+documentation_created:
+  - file: "path/to/doc/file.md"
+    type: readme  # readme | api | guide | inline | changelog
+    description: "What this document covers"
+    action: created  # created | updated
+
+documentation_gaps:
+  - area: "Area that still needs documentation"
+    priority: high  # high | medium | low
+    suggestion: "What should be documented and where"
+
+conventions_followed:
+  - "Documentation convention observed and applied"

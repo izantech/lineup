@@ -1,0 +1,34 @@
+# Teacher output schema -- used as a format reference, not written to disk.
+# The teacher formats its explanation in the conversation following this structure.
+
+type: explanation
+agent: teacher
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: complete
+pipeline_stage: null  # Not part of main pipeline
+
+learning_objectives:
+  - "What the user will understand after this explanation"
+
+prerequisites:
+  - concept: "Prerequisite concept"
+    description: "Brief description of what the user should know"
+
+explanation:
+  overview: |
+    High-level summary of the topic.
+  sections:
+    - title: "Section title"
+      content: |
+        Detailed explanation of this aspect.
+      code_examples:
+        - file: "path/to/file.ext"
+          lines: "N-M"
+          description: "What this code demonstrates"
+      key_takeaways:
+        - "Key point from this section"
+
+further_exploration:
+  - topic: "Related topic to explore"
+    relevance: "Why this might be interesting"

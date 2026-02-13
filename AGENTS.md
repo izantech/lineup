@@ -4,7 +4,7 @@ This file is the single source of truth for AI agent instructions in this reposi
 
 ## Project Overview
 
-Lineup is a Claude Code plugin that provides a structured multi-agent workflow: **Clarify → Research → Clarification Gate → Plan → Implement → Verify**. It ships specialized subagents, skills, and a pipeline definition as a self-contained plugin directory.
+Lineup is a Claude Code plugin that provides a structured multi-agent workflow: **Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?**. It ships specialized subagents, skills, and a pipeline definition as a self-contained plugin directory.
 
 The project is a set of Markdown agent definitions, skills, a plugin manifest, and a workflow reference — no build system, no runtime dependencies.
 
@@ -23,7 +23,8 @@ Lineup is structured as a Claude Code plugin. The `.claude-plugin/plugin.json` m
 agents/*.md                   → Agent definitions (loaded as lineup:<name>)
 skills/kick-off/SKILL.md      → Skill: full pipeline entry point
 skills/configure/SKILL.md     → Skill: interactive agent configurator
-agentic-workflow.md            → Pipeline reference document
+skills/explain/SKILL.md       → Skill: explain project components
+templates/*.yaml              → YAML schemas for agent output documents
 ```
 
 ### Agent Definitions (`agents/*.md`)
@@ -61,6 +62,7 @@ Skills are static SKILL.md files that provide slash commands.
 |-------|------|---------|---------|
 | Kick-off | `skills/kick-off/SKILL.md` | `/lineup:kick-off` | Entry point for the full agentic pipeline |
 | Configure | `skills/configure/SKILL.md` | `/lineup:configure` | Interactive agent configurator |
+| Explain | `skills/explain/SKILL.md` | `/lineup:explain` | Explain project components via researcher + teacher |
 
 ## Conventions
 
@@ -86,17 +88,19 @@ All agent output follows YAML schemas defined in `templates/`:
 | `templates/architect.yaml` | architect | Implementation plan |
 | `templates/developer.yaml` | developer | Implementation report |
 | `templates/reviewer.yaml` | reviewer | Review report |
+| `templates/documenter.yaml` | documenter | Documentation report |
+| `templates/teacher.yaml` | teacher | Explanation |
 
 Every document includes these core fields:
 
 | Field | Required | Values | Description |
 |-------|----------|--------|-------------|
-| type | Yes | `research`, `plan`, `implementation`, `review` | Document type |
-| agent | Yes | `researcher`, `architect`, `developer`, `reviewer` | Producing agent |
+| type | Yes | `research`, `plan`, `implementation`, `review`, `documentation`, `explanation` | Document type |
+| agent | Yes | `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` | Producing agent |
 | date | Yes | `YYYY-MM-DD` | Creation date |
 | topic | Yes | kebab-case string | Short topic label |
 | status | Yes | varies by type | Document status |
-| pipeline_stage | Yes | `2`, `4`, `5`, `6` | Pipeline stage number |
+| pipeline_stage | Yes | `2`, `4`, `5`, `6`, `7`, `null` | Pipeline stage number |
 | plan_ref | Conditional | filename string | Required for `implementation` and `review` types |
 
 **Status values by type**:
@@ -104,6 +108,8 @@ Every document includes these core fields:
 - plan: `draft`, `approved`, `superseded`
 - implementation: `complete`
 - review: `PASS`, `FAIL`, `PASS_WITH_WARNINGS`
+- documentation: `complete`
+- explanation: `complete`
 
 ### Persistence
 
@@ -115,6 +121,8 @@ All documents are **fully ephemeral**:
 | Implementation plan | Conversation context | Passed to developer and reviewer as input |
 | Implementation report | Conversation context | Passed to reviewer as input |
 | Review report | Conversation context | Presented to user in conversation |
+| Documentation report | Conversation context + project files | Documenter writes docs to project; report is ephemeral |
+| Explanation | Conversation context | Presented to user in conversation |
 
 If the user wants to save any document for future reference, they can copy it from the conversation.
 

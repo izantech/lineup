@@ -11,11 +11,13 @@ The agent files live in this plugin's `agents/` directory — two levels up from
 
 ## Step 1 — Read current config
 
-Read all four agent files from the plugin's `agents/` directory:
+Read all agent files from the plugin's `agents/` directory:
 - `researcher.md`
 - `architect.md`
 - `developer.md`
 - `reviewer.md`
+- `documenter.md`
+- `teacher.md`
 
 Extract and display their current frontmatter in a summary table:
 
@@ -60,6 +62,8 @@ Default frontmatter values:
 | architect | opus | user | Read, Grep, Glob, LS, Write |
 | developer | opus | user | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
 | reviewer | opus | user | Read, Grep, Glob, LS, Bash |
+| documenter | opus | user | Read, Grep, Glob, LS, Write, WebFetch |
+| teacher | opus | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 ---
 

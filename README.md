@@ -3,7 +3,7 @@
 
 # Lineup
 
-A structured multi-agent workflow that breaks complex tasks into a clear pipeline: **Clarify → Research → Clarification Gate → Plan → Implement → Verify**.
+A structured multi-agent workflow that breaks complex tasks into a clear pipeline: **Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?**.
 
 Instead of letting a single agent do everything in one shot, this workflow delegates work to specialized subagents — each with its own tools, model, and persistent memory.
 
@@ -24,22 +24,27 @@ This workflow adds structure:
 ```
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
-├── agentic-workflow.md           # The workflow reference
 ├── agents/
 │   ├── researcher.md             # Read-only codebase explorer (Haiku)
 │   ├── architect.md              # Plan creator (Opus)
 │   ├── developer.md              # Code implementer (Opus)
-│   └── reviewer.md               # Post-implementation verifier (Opus)
+│   ├── reviewer.md               # Post-implementation verifier (Opus)
+│   ├── documenter.md             # Post-verify documentation generator (Opus)
+│   └── teacher.md                # Codebase explainer (Opus)
 ├── skills/
 │   ├── kick-off/                 # /lineup:kick-off slash command
 │   │   └── SKILL.md
-│   └── configure/               # /lineup:configure slash command
+│   ├── configure/               # /lineup:configure slash command
+│   │   └── SKILL.md
+│   └── explain/                  # /lineup:explain slash command
 │       └── SKILL.md
 ├── templates/
 │   ├── researcher.yaml           # Research findings YAML schema
 │   ├── architect.yaml            # Implementation plan YAML schema
 │   ├── developer.yaml            # Implementation report YAML schema
-│   └── reviewer.yaml             # Review report YAML schema
+│   ├── reviewer.yaml             # Review report YAML schema
+│   ├── documenter.yaml           # Documentation report YAML schema
+│   └── teacher.yaml              # Explanation YAML schema
 ```
 
 ## Quick start
@@ -113,6 +118,9 @@ claude --plugin-dir /path/to/lineup
    5. VERIFY ──────── reviewer agent runs tests and reviews the diff
             │
             ▼
+   [DOCUMENT?] ────── documenter agent writes project docs (optional, user-prompted)
+            │
+            ▼
    [USER REVIEWS] ─── User sees the final result
 ```
 
@@ -120,7 +128,7 @@ claude --plugin-dir /path/to/lineup
 
 | Tier | Pipeline | Use when |
 |------|----------|----------|
-| **Full** | Clarify → Research → Clarification Gate → Plan → Implement → Verify | Complex multi-file changes, unclear requirements, unfamiliar code |
+| **Full** | Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document? | Complex multi-file changes, unclear requirements, unfamiliar code |
 | **Lightweight** | Plan → Implement → Verify | Moderate tasks, scope is understood, single module |
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions from user |
 
@@ -133,6 +141,8 @@ claude --plugin-dir /path/to/lineup
 | Architect | `architect.md` | Opus | Read-only + Write | Synthesizes findings into actionable plans |
 | Developer | `developer.md` | Opus | All | Implements the approved plan |
 | Reviewer | `reviewer.md` | Opus | Read-only + Bash | Runs tests, reviews diffs, validates work |
+| Documenter | `documenter.md` | Opus | Read-only + Write + Web | Generates project documentation after verify |
+| Teacher | `teacher.md` | Opus | Read-only + Web | Explains codebase components via /lineup:explain |
 
 All subagents have **persistent user-level memory** — they accumulate knowledge about your codebases across sessions.
 
@@ -142,8 +152,9 @@ Skills are slash commands that trigger predefined workflows. The `lineup:` prefi
 
 | Skill | Command | Description |
 |-------|---------|-------------|
-| Kick-off | `/lineup:kick-off` | Runs the full agentic pipeline (Clarify → Research → Clarification Gate → Plan → Implement → Verify) |
+| Kick-off | `/lineup:kick-off` | Runs the full agentic pipeline (Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?) |
 | Configure | `/lineup:configure` | Interactively customize agent models, tools, and memory settings |
+| Explain | `/lineup:explain` | Get a structured explanation of any project component |
 
 ### Usage
 
@@ -157,6 +168,12 @@ Type `/lineup:configure` to interactively customize agent settings. The skill wa
 
 ```
 /lineup:configure
+```
+
+Type `/lineup:explain` followed by a question about any part of the codebase. The skill delegates to the teacher agent, which explores the code and returns a structured explanation.
+
+```
+/lineup:explain How does the authentication middleware work?
 ```
 
 ## Customization
