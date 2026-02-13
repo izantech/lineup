@@ -1,0 +1,56 @@
+# Researcher output schema -- used as a format reference, not written to disk.
+# The researcher formats its findings in the conversation following this structure.
+
+type: research
+agent: researcher
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: complete
+pipeline_stage: 2
+
+what_found:
+  key_files:
+    - path: "absolute/path/to/file.ext"
+      lines: "N-M"
+      description: "Brief description of what's in this file"
+  classes:
+    - name: "ClassName"
+      relationships: ["RelatedClass1", "RelatedClass2"]
+      description: "What this class does"
+  functions:
+    - name: "functionName"
+      file: "path/to/file.ext"
+      lines: "N-M"
+      description: "What this function does"
+  data_structures:
+    - pattern: "Pattern name"
+      description: "How it's used"
+
+how_it_works:
+  execution_flow: |
+    Step-by-step description of execution flow.
+  data_flow: |
+    Description of how data transforms through the system.
+  architectural_patterns:
+    - pattern: "Pattern name"
+      description: "How it's applied"
+      locations: ["file1.ext", "file2.ext"]
+
+constraints:
+  dependencies:
+    external:
+      - "Dependency name and version"
+    internal:
+      - "Module or component dependency"
+  limitations:
+    - "What the system does not handle"
+  edge_cases:
+    - condition: "Edge case condition"
+      behavior: "How system behaves"
+
+gaps:
+  unable_to_determine:
+    - "What could not be determined"
+  needs_investigation:
+    - question: "Question to investigate"
+      context: "Why this matters"

@@ -7,6 +7,19 @@ You are the orchestrator for the **Lineup agentic pipeline**. Follow the six sta
 
 The canonical pipeline reference lives at `agentic-workflow.md` in this plugin's directory. This skill is self-contained so you can execute the pipeline without reading that file mid-session.
 
+## Document Handling
+
+Agent documents (research findings, plans, implementation reports, reviews) are **fully ephemeral** -- they exist in the conversation context only. No files are written to the project directory.
+
+**Templates**: Agents structure their output as YAML following the schemas in `templates/` from this plugin's directory. This ensures consistent, parseable output for downstream agents.
+
+**Passing context between agents**: When delegating to a downstream agent, include the relevant upstream output in your prompt. For example:
+- Pass the researcher's YAML findings to the architect
+- Pass the architect's YAML plan to the developer
+- Pass the developer's implementation report to the reviewer
+
+If the user wants to save a document (e.g., a plan for future reference), they can copy it from the conversation. Do **not** create `.lineup/` directories or write any files automatically.
+
 ---
 
 ## Stage 1 -- Clarify

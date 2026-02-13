@@ -35,6 +35,11 @@ This workflow adds structure:
 │   │   └── SKILL.md
 │   └── configure/               # /lineup:configure slash command
 │       └── SKILL.md
+├── templates/
+│   ├── researcher.yaml           # Research findings YAML schema
+│   ├── architect.yaml            # Implementation plan YAML schema
+│   ├── developer.yaml            # Implementation report YAML schema
+│   └── reviewer.yaml             # Review report YAML schema
 ```
 
 ## Quick start

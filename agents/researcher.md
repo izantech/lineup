@@ -29,3 +29,7 @@ Guidelines:
 - If the codebase uses specific frameworks or patterns, identify them
 
 Update your agent memory with codebase patterns, architectural decisions, and key file locations you discover. This builds institutional knowledge across sessions.
+
+## Document Output
+
+Structure your findings as YAML following the schema in `templates/researcher.yaml` from this plugin's directory. Present the YAML directly in your response -- do not write it to a file. The orchestrator will pass your structured findings to downstream agents as context.

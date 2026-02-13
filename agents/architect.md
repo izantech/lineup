@@ -41,3 +41,7 @@ Guidelines:
 - Break large plans into numbered phases that can be implemented and verified independently
 
 Update your agent memory with architectural decisions, patterns chosen, and rationale. This helps maintain consistency across sessions.
+
+## Document Output
+
+Structure your plan as YAML following the schema in `templates/architect.yaml` from this plugin's directory. Present the plan directly in your response. Write the plan to a file **only** if explicitly requested -- use the path provided by the user or orchestrator. Do not create directories or write files by default.

@@ -1,0 +1,56 @@
+# Architect output schema -- used as a format reference.
+# Plans are ephemeral by default; saved to a user-chosen path on request.
+
+type: plan
+agent: architect
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: draft  # draft | approved | superseded
+pipeline_stage: 4
+
+summary: |
+  One-paragraph overview of what will be done and why.
+
+approaches:
+  - name: "Approach 1 Name"
+    strategy: "Description of how this approach works"
+    pros:
+      - "Advantage 1"
+    cons:
+      - "Disadvantage 1"
+    scope:
+      files_changed: 5
+      lines_changed: 200
+
+recommendation:
+  approach: "Approach 1 Name"
+  rationale: |
+    Explanation of why this approach is recommended.
+
+changes:
+  - file: "path/to/file.ext"
+    change: "Description of modification"
+    rationale: "Why this change is needed"
+
+parallelization_strategy:
+  batches:
+    - batch_number: 1
+      execution: parallel
+      changes: [1, 2, 3]
+      rationale: "These changes have no inter-dependencies"
+  default_recommendation: parallel
+  rationale: "Most changes are independent"
+
+dependencies:
+  - from_change: 4
+    to_change: 1
+    description: "Change 4 requires Change 1"
+
+acceptance_criteria:
+  - criterion: "All tests pass"
+    verified_by: "Run test suite"
+
+risks:
+  - risk: "Description of potential risk"
+    mitigation: "How to handle this risk"
+    severity: high  # low | medium | high | critical

@@ -31,3 +31,7 @@ When done, provide:
 - **Verification**: What you tested and the results
 
 Update your agent memory with implementation patterns, build quirks, and debugging insights you discover.
+
+## Document Output
+
+Structure your implementation report as YAML following the schema in `templates/developer.yaml` from this plugin's directory. Present it directly in your response -- do not write a separate report file.

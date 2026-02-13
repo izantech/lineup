@@ -1,0 +1,32 @@
+# Reviewer output schema -- used as a format reference, not written to disk.
+
+type: review
+agent: reviewer
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: PASS  # PASS | FAIL | PASS_WITH_WARNINGS
+pipeline_stage: 6
+plan_ref: architect-YYYY-MM-DD-topic.yaml
+
+summary: |
+  One-paragraph assessment of the implementation.
+
+issues:
+  - severity: critical  # critical | warning | suggestion
+    confidence: 85  # 75-100 (only issues >= 75 reported)
+    file: "path/file.ext"
+    line: 123
+    description: "What is wrong and why it matters"
+    fix: "Recommended fix"
+
+test_results:
+  test_suite:
+    status: pass  # pass | fail
+    tests_run: 42
+    tests_passed: 42
+    tests_failed: 0
+  coverage:
+    available: true
+    percentage: 85.5
+    uncovered_areas:
+      - "path/to/file.ext:45-50"

@@ -48,3 +48,7 @@ Guidelines:
 - If no tests exist, note this as a gap
 
 Update your agent memory with common issues, test patterns, and review insights you discover.
+
+## Document Output
+
+Structure your review report as YAML following the schema in `templates/reviewer.yaml` from this plugin's directory. Present it directly in your response -- do not write a separate report file.

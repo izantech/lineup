@@ -1,0 +1,36 @@
+# Developer output schema -- used as a format reference, not written to disk.
+
+type: implementation
+agent: developer
+date: YYYY-MM-DD
+topic: kebab-case-topic
+status: complete
+pipeline_stage: 5
+plan_ref: architect-YYYY-MM-DD-topic.yaml
+
+changes_made:
+  - file: "path/to/file.ext"
+    description: "Brief description of what was changed"
+    lines_modified: "N-M"
+
+issues_encountered:
+  - issue: "Description of problem encountered"
+    resolution: "How it was resolved"
+    impact: none  # none | minor | moderate | significant
+
+verification:
+  build:
+    command: "npm run build"
+    result: success  # success | failure
+    output: |
+      Build output summary
+  tests:
+    command: "npm test"
+    result: success
+    tests_run: 42
+    tests_passed: 42
+    tests_failed: 0
+  linting:
+    command: "npm run lint"
+    result: success
+    issues_found: 0
