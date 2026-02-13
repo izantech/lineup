@@ -1,0 +1,38 @@
+# api-feature -- Full pipeline for adding a new API endpoint or service.
+# Includes targeted research on existing API patterns, planning with
+# endpoint specification, implementation, and verification with API testing.
+
+name: api-feature
+description: |
+  Add a new API endpoint or service. Researches existing API conventions,
+  plans the endpoint specification, implements it, and verifies with tests.
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Focus on existing API patterns: routing conventions, middleware stack,
+      request/response schemas, authentication, error handling, and test
+      structure. Identify the established patterns so the new endpoint
+      follows them consistently.
+  - type: plan
+    agent: architect
+    prompt: |
+      Design the new endpoint following the conventions found in research.
+      Include: route path, HTTP method, request/response schemas, middleware
+      chain, error responses, and test cases. Reference existing endpoints
+      as models.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+    prompt: |
+      Verify the implementation matches the plan. Run the test suite and
+      confirm the new endpoint follows the established API conventions.
+
+verification:
+  - "New endpoint follows existing routing conventions"
+  - "Request and response schemas are validated"
+  - "Error responses use the project's standard error format"
+  - "Tests cover success, validation failure, and auth failure cases"
+  - "No existing tests are broken"

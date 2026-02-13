@@ -1,6 +1,6 @@
 ---
 name: kick-off
-description: Run the full Lineup agentic pipeline for complex tasks
+description: Run the full Lineup agentic pipeline for complex tasks, with optional per-project tactics
 ---
 
 You are the orchestrator for the **Lineup agentic pipeline**. Follow the stages below in order. Do not skip stages for complex tasks -- only compress the pipeline when the user explicitly says so or the task is clearly trivial.
@@ -17,6 +17,67 @@ Agent documents (research findings, plans, implementation reports, reviews) are 
 - Pass the developer's implementation report to the reviewer
 
 If the user wants to save a document (e.g., a plan for future reference), they can copy it from the conversation. Do **not** create `.lineup/` directories or write any files automatically.
+
+---
+
+## Stage 0 -- Tactic Resolution
+
+Before starting the pipeline, check if the project defines any **tactics** -- reusable
+workflow definitions stored as YAML files in `.lineup/tactics/`.
+
+### Discovery
+
+1. Check if `.lineup/tactics/` exists in the current working directory.
+2. If it does, read all `.yaml` files in that directory.
+3. Parse each file and extract: `name`, `description`, `stages`, `verification`, and `variables`.
+
+### Selection
+
+- If the user provided a tactic name as an argument (e.g., `/lineup:kick-off brownfield-docs`),
+  look for `.lineup/tactics/brownfield-docs.yaml`. If found, load it. If not found, report the
+  error and list available tactics.
+
+- If the user provided NO argument AND tactics exist, use **AskUserQuestion** to present them:
+
+```
+Question: "This project has tactics defined. Which workflow would you like to run?"
+Options:
+  1. brownfield-docs -- Generate missing documentation for an existing codebase
+  2. api-feature -- Full pipeline with API-focused research and testing
+  3. Run the default pipeline (Clarify -> Research -> ... -> Document?)
+  4. Other (please specify)
+```
+
+Each option shows the tactic `name` followed by a truncated `description`.
+Always include "Run the default pipeline" and "Other" as the last two options.
+
+- If no `.lineup/tactics/` directory exists, skip this stage silently and proceed to Stage 1.
+
+### Variable Prompting
+
+If the selected tactic defines `variables`, prompt the user for each one before execution:
+
+- Show the variable `description` and `default` value
+- Use **AskUserQuestion** with the default as option 1 and a free-text option
+- Substitute resolved values into stage prompts using `${variable_name}` replacement
+
+### Tactic Execution
+
+When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence:
+
+1. Iterate over the tactic's `stages` array in order.
+2. For each stage, delegate to the specified `agent`.
+3. If the stage has a custom `prompt`, include it in the agent's instructions (appended after
+   the agent's default instructions, not replacing them).
+4. Pass context between stages the same way as the default pipeline (upstream output feeds downstream).
+5. After all stages complete, if `verification` criteria exist, present them to the user as a
+   checklist and evaluate them:
+   - If a `verify` stage was included in the tactic, the reviewer evaluates the criteria.
+   - If no `verify` stage exists, the orchestrator presents them as a manual checklist.
+6. **Do not** fall through to the default Stage 1-7 pipeline -- tactic execution is complete.
+
+**Stage labels**: When running a tactic, use the stage count from the tactic, not the default
+7-stage numbering. For example, a 3-stage tactic shows "Stage 1/3", "Stage 2/3", "Stage 3/3".
 
 ---
 

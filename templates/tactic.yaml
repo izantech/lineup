@@ -1,0 +1,35 @@
+# Tactic schema -- defines a reusable per-project workflow.
+# Place tactic files in .lineup/tactics/<name>.yaml in your project directory.
+
+name: my-tactic                    # Unique identifier (kebab-case, matches filename)
+description: |                     # One-paragraph summary shown during tactic selection
+  What this tactic does and when to use it.
+
+# Stage sequence -- ordered list of stages to execute.
+# Each stage maps to a pipeline stage with an agent and optional custom prompt.
+# Available stage types: clarify, research, clarification-gate, plan, implement, verify, document
+# Available agents: researcher, architect, developer, reviewer, documenter, teacher
+stages:
+  - type: research               # Stage type from the pipeline
+    agent: researcher             # Agent to invoke
+    prompt: |                     # Optional -- custom instructions for this agent in this tactic
+      Focus on finding documentation gaps: missing READMEs, undocumented APIs,
+      stale architecture docs.
+  - type: plan
+    agent: architect
+  - type: implement
+    agent: developer
+
+# Verification criteria -- checked by the reviewer agent (or orchestrator if verify stage is absent).
+# Each criterion is a human-readable check. The reviewer evaluates them against the implementation.
+verification:
+  - "All new public APIs have JSDoc comments"
+  - "README.md has been updated with new feature section"
+  - "No existing tests are broken"
+
+# Optional: variables that the orchestrator prompts the user for before execution.
+# These are substituted into stage prompts using ${variable_name} syntax.
+variables:
+  - name: target_module
+    description: "Which module should this tactic target?"
+    default: "src/"

@@ -43,8 +43,15 @@ This workflow adds structure:
 │   ├── architect.yaml            # Implementation plan YAML schema
 │   ├── developer.yaml            # Implementation report YAML schema
 │   ├── reviewer.yaml             # Review report YAML schema
+│   ├── tactic.yaml               # Tactic definition schema
 │   ├── documenter.yaml           # Documentation report YAML schema
 │   └── teacher.yaml              # Explanation YAML schema
+├── examples/
+│   └── tactics/                   # Example tactic files to copy into your project
+│       ├── brownfield-docs.yaml
+│       ├── api-feature.yaml
+│       ├── targeted-refactor.yaml
+│       └── bug-triage.yaml
 ```
 
 ## Quick start
@@ -175,6 +182,108 @@ Type `/lineup:explain` followed by a question about any part of the codebase. Th
 ```
 /lineup:explain How does the authentication middleware work?
 ```
+
+## Tactics
+
+Tactics are per-project reusable workflows. Instead of running the full 7-stage pipeline
+every time, you can define a custom sequence of agents and stages tailored to a specific
+task pattern.
+
+### Creating a tactic
+
+1. Create `.lineup/tactics/` in your project root
+2. Add a YAML file (e.g., `brownfield-docs.yaml`). See `templates/tactic.yaml` for the schema.
+
+Example -- `brownfield-docs.yaml`:
+
+```yaml
+name: brownfield-docs
+description: |
+  Generate missing documentation for an existing codebase. Skips clarification
+  (docs are always needed) and implementation (no code changes). Focuses on finding
+  documentation gaps, planning doc structure, and writing the docs.
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Focus on documentation gaps: missing READMEs, undocumented public APIs,
+      stale architecture docs, missing setup guides. Catalog what exists and
+      what is missing.
+  - type: plan
+    agent: architect
+    prompt: |
+      Create a documentation plan based on the research findings. Prioritize
+      the most impactful gaps. Define what documents to create or update.
+  - type: implement
+    agent: documenter
+
+verification:
+  - "README.md exists and covers project setup"
+  - "All public API endpoints are documented"
+  - "Architecture overview document exists"
+```
+
+### Running a tactic
+
+```
+/lineup:kick-off brownfield-docs
+```
+
+Or run `/lineup:kick-off` with no arguments to see available tactics and choose one.
+
+### Tactic schema
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier in kebab-case (must match the filename without `.yaml`) |
+| `description` | Yes | One-paragraph summary shown during tactic selection |
+| `stages` | Yes | Ordered list of stages to execute (see below) |
+| `verification` | No | List of human-readable criteria checked after execution |
+| `variables` | No | List of variables prompted before execution (see below) |
+
+**Stage fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document` |
+| `agent` | Yes | Agent to invoke: `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
+| `prompt` | No | Custom instructions appended to the agent's defaults (not a replacement) |
+
+**Variable fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Variable identifier used in `${name}` substitutions within stage prompts |
+| `description` | Yes | Shown to the user when prompting for the value |
+| `default` | No | Default value offered as option 1 during prompting |
+
+Full annotated schema: [`templates/tactic.yaml`](templates/tactic.yaml)
+
+### Example tactics
+
+The `examples/tactics/` directory contains ready-to-use tactic files. Copy any of them into your project:
+
+```bash
+mkdir -p .lineup/tactics
+cp /path/to/lineup/examples/tactics/api-feature.yaml .lineup/tactics/
+```
+
+| Tactic | Stages | Use case |
+|--------|--------|----------|
+| [`brownfield-docs`](examples/tactics/brownfield-docs.yaml) | Research, Plan, Implement (documenter) | Generate missing docs for an existing codebase |
+| [`api-feature`](examples/tactics/api-feature.yaml) | Research, Plan, Implement, Verify | Add a new API endpoint following existing conventions |
+| [`targeted-refactor`](examples/tactics/targeted-refactor.yaml) | Research, Plan, Implement, Verify | Refactor a specific module with variable targeting |
+| [`bug-triage`](examples/tactics/bug-triage.yaml) | Research, Plan, Implement, Verify | Investigate and fix a reported bug with regression tests |
+
+The `targeted-refactor` and `bug-triage` tactics demonstrate **variables** -- the orchestrator prompts for values like `target_module` or `bug_description` before execution.
+
+### Adding `.lineup/` to .gitignore
+
+Tactics are project-specific configuration. Whether to commit them is up to your team:
+
+- **Commit them** if tactics are shared workflow standards for your project
+- **Gitignore them** if they are personal workflow preferences
 
 ## Customization
 

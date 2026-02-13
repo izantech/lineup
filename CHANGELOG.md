@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2026-02-13
 
 ### Added
+- Tactics: per-project reusable workflows in `.lineup/tactics/` (YAML)
+- Tactic schema template (`templates/tactic.yaml`)
+- Stage 0 (Tactic Resolution) in kick-off skill -- auto-discovers and presents tactics
+- Variable prompting for parameterized tactics
+- Custom verification criteria support in tactics
+- AskUserQuestion-based tactic selection when multiple tactics exist
+- brownfield-docs example tactic in README
 - Documenter agent (cyan, Opus) -- generates project documentation after implementation
 - Teacher agent (magenta, Opus) -- explains codebase components pedagogically
 - /lineup:explain skill -- standalone explanation workflow (researcher + teacher)
@@ -16,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explanation template (templates/teacher.yaml)
 
 ### Changed
+- kick-off skill description updated to mention tactics
+- AGENTS.md updated with Tactics architecture section
 - Pipeline expanded from 6 to 7 stages (Stage 7 is optional, user-prompted)
 - Configure skill now manages 6 agents (was 4)
 - Plugin description updated to include Document stage

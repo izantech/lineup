@@ -1,0 +1,45 @@
+# targeted-refactor -- Refactor a specific module with research-backed planning.
+# Uses a variable to target the module, skips clarification (scope is known),
+# and includes verification to catch regressions.
+
+name: targeted-refactor
+description: |
+  Refactor a specific module. Researches the module's current structure and
+  dependencies, plans the refactor, implements it, and verifies no regressions.
+
+variables:
+  - name: target_module
+    description: "Path to the module to refactor (e.g., src/auth/, lib/db.ts)"
+    default: "src/"
+  - name: refactor_goal
+    description: "What should the refactor achieve?"
+    default: "Improve readability and reduce complexity"
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Analyze ${target_module} thoroughly: file structure, public API surface,
+      internal dependencies, external consumers, and test coverage. Identify
+      code smells, complexity hotspots, and coupling issues. Map which files
+      import from this module so we understand the blast radius.
+  - type: plan
+    agent: architect
+    prompt: |
+      Plan the refactor of ${target_module} to ${refactor_goal}. Prioritize
+      changes that reduce complexity without changing the public API. Define
+      a safe execution order that keeps tests passing at each step.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+    prompt: |
+      Verify the refactor of ${target_module} did not break anything. Run the
+      full test suite. Check that the public API surface is unchanged. Confirm
+      the refactor goal was met: ${refactor_goal}.
+
+verification:
+  - "Public API of the module is unchanged"
+  - "All existing tests pass"
+  - "No new circular dependencies introduced"
+  - "Code complexity is reduced (fewer lines, simpler control flow)"

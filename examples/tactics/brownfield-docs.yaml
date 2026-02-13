@@ -1,0 +1,29 @@
+# brownfield-docs -- Generate missing documentation for an existing codebase.
+# Skips clarification and code implementation. Focuses on finding gaps,
+# planning doc structure, and writing the documentation.
+
+name: brownfield-docs
+description: |
+  Generate missing documentation for an existing codebase. Skips clarification
+  (docs are always needed) and implementation (no code changes). Focuses on finding
+  documentation gaps, planning doc structure, and writing the docs.
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Focus on documentation gaps: missing READMEs, undocumented public APIs,
+      stale architecture docs, missing setup guides. Catalog what exists and
+      what is missing.
+  - type: plan
+    agent: architect
+    prompt: |
+      Create a documentation plan based on the research findings. Prioritize
+      the most impactful gaps. Define what documents to create or update.
+  - type: implement
+    agent: documenter
+
+verification:
+  - "README.md exists and covers project setup"
+  - "All public API endpoints are documented"
+  - "Architecture overview document exists"

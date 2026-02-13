@@ -64,6 +64,19 @@ Skills are static SKILL.md files that provide slash commands.
 | Configure | `skills/configure/SKILL.md` | `/lineup:configure` | Interactive agent configurator |
 | Explain | `skills/explain/SKILL.md` | `/lineup:explain` | Explain project components via researcher + teacher |
 
+### Tactics (`.lineup/tactics/`)
+
+Tactics are per-project reusable workflow definitions. They let users define custom
+agent sequences that the kick-off skill can discover and execute.
+
+- Stored as YAML files in `.lineup/tactics/` within the project directory
+- Schema documented in `templates/tactic.yaml`
+- Discovered automatically by `/lineup:kick-off`
+- Each tactic defines: `name`, `description`, `stages`, `verification`, and optional `variables`
+- Stages reference existing agents (researcher, architect, developer, reviewer, documenter, teacher)
+- Custom prompts in stages are appended to agent defaults, not replacements
+- Example tactics available in `examples/tactics/` for common workflows
+
 ## Conventions
 
 - Agent names do not use a prefix — the `lineup:` namespace is provided by the plugin manifest
