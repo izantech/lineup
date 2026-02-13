@@ -129,6 +129,35 @@ Each stage in the `stages` list accepts the following fields:
 - Agent plugin files (`agents/*.md`) are immutable at runtime — never edited by skills or users directly
 - User customizations live in `~/.claude/lineup/agents/` as YAML override files
 
+## Release Process
+
+When releasing a new version:
+
+1. Update the version in `.claude-plugin/plugin.json`
+2. Add a new entry to `CHANGELOG.md` following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format
+3. Commit the changes with a conventional commit message
+4. Push to the remote repository
+5. Create a GitHub release using `gh`:
+   ```bash
+   gh release create <version> --title "<version>" --notes "$(cat <<'EOF'
+   ## <Descriptive Title>
+
+   <Paste the CHANGELOG content for this version here>
+   EOF
+   )"
+   ```
+
+Example:
+```bash
+gh release create 1.3.0 --title "1.3.0" --notes "$(cat <<'EOF'
+## Persistent Configuration and Built-in Tactics
+
+### Added
+- Feature descriptions...
+EOF
+)"
+```
+
 ## Document Conventions
 
 Agents produce structured documents during pipeline execution (research findings, plans, implementation reports, reviews). These follow a standardized YAML format for consistency and parseability.
