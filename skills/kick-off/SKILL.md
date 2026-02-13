@@ -66,15 +66,21 @@ If the selected tactic defines `variables`, prompt the user for each one before 
 When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence:
 
 1. Iterate over the tactic's `stages` array in order.
-2. For each stage, delegate to the specified `agent`.
-3. If the stage has a custom `prompt`, include it in the agent's instructions (appended after
-   the agent's default instructions, not replacing them).
-4. Pass context between stages the same way as the default pipeline (upstream output feeds downstream).
-5. After all stages complete, if `verification` criteria exist, present them to the user as a
+2. For each stage:
+   a. If the stage has `optional: true`, use **AskUserQuestion** to ask the user
+      whether to run it. If they decline, skip to the next stage.
+   b. Delegate to the specified `agent`.
+   c. If the stage has a custom `prompt`, include it in the agent's instructions
+      (appended after the agent's default instructions, not replacing them).
+   d. If the stage has `gate: approval`, present the agent's output to the user
+      and **wait for explicit approval** before proceeding to the next stage.
+      If the user rejects, return to this stage for revision.
+3. Pass context between stages the same way as the default pipeline (upstream output feeds downstream).
+4. After all stages complete, if `verification` criteria exist, present them to the user as a
    checklist and evaluate them:
    - If a `verify` stage was included in the tactic, the reviewer evaluates the criteria.
    - If no `verify` stage exists, the orchestrator presents them as a manual checklist.
-6. **Do not** fall through to the default Stage 1-7 pipeline -- tactic execution is complete.
+5. **Do not** fall through to the default Stage 1-7 pipeline -- tactic execution is complete.
 
 **Stage labels**: When running a tactic, use the stage count from the tactic, not the default
 7-stage numbering. For example, a 3-stage tactic shows "Stage 1/3", "Stage 2/3", "Stage 3/3".

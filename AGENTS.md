@@ -73,9 +73,18 @@ agent sequences that the kick-off skill can discover and execute.
 - Schema documented in `templates/tactic.yaml`
 - Discovered automatically by `/lineup:kick-off`
 - Each tactic defines: `name`, `description`, `stages`, `verification`, and optional `variables`
-- Stages reference existing agents (researcher, architect, developer, reviewer, documenter, teacher)
-- Custom prompts in stages are appended to agent defaults, not replacements
+- Stages support orchestration controls: `optional` (ask before running) and `gate: approval` (pause after)
 - Example tactics available in `examples/tactics/` for common workflows
+
+Each stage in the `stages` list accepts the following fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document` |
+| `agent` | Yes | Agent to invoke: `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
+| `prompt` | No | Custom instructions appended to agent defaults |
+| `optional` | No | If `true`, orchestrator asks user before running this stage (default: `false`) |
+| `gate` | No | If `approval`, orchestrator pauses for explicit user approval after this stage completes |
 
 ## Conventions
 

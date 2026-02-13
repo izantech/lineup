@@ -1,0 +1,38 @@
+# full-feature -- End-to-end feature development with orchestration controls.
+# Demonstrates optional stages and approval gates for maximum user control
+# over the pipeline flow.
+
+name: full-feature
+description: |
+  End-to-end feature development with user control over each phase. Research
+  is optional (skip if you already know the codebase), the plan requires
+  explicit approval, and documentation is opt-in after verification.
+
+stages:
+  - type: research
+    agent: researcher
+    optional: true
+    prompt: |
+      Explore the areas of the codebase relevant to the new feature. Identify
+      existing patterns, data models, and integration points that the feature
+      should follow.
+  - type: plan
+    agent: architect
+    gate: approval
+    prompt: |
+      Design the feature based on research findings (if available) and the
+      user's requirements. Include file changes, acceptance criteria, and
+      a parallelization strategy for implementation.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+  - type: document
+    agent: documenter
+    optional: true
+
+verification:
+  - "Feature works as described in the approved plan"
+  - "All new code has test coverage"
+  - "No existing tests are broken"
+  - "Code follows existing project conventions"

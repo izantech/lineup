@@ -21,7 +21,7 @@ This workflow adds structure:
 
 ## What's included
 
-```
+```text
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── agents/
@@ -51,7 +51,8 @@ This workflow adds structure:
 │       ├── brownfield-docs.yaml
 │       ├── api-feature.yaml
 │       ├── targeted-refactor.yaml
-│       └── bug-triage.yaml
+│       ├── bug-triage.yaml
+│       └── full-feature.yaml
 ```
 
 ## Quick start
@@ -100,7 +101,7 @@ claude --plugin-dir /path/to/lineup
 
 ## The pipeline
 
-```
+```text
      [USER REQUEST]
             │
             ▼
@@ -134,7 +135,7 @@ claude --plugin-dir /path/to/lineup
 ### When to use each tier
 
 | Tier | Pipeline | Use when |
-|------|----------|----------|
+| ------ | ---------- | ---------- |
 | **Full** | Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document? | Complex multi-file changes, unclear requirements, unfamiliar code |
 | **Lightweight** | Plan → Implement → Verify | Moderate tasks, scope is understood, single module |
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions from user |
@@ -142,7 +143,7 @@ claude --plugin-dir /path/to/lineup
 ## Agent roles
 
 | Role | File | Model | Tools | Purpose |
-|------|------|-------|-------|---------|
+| ------ | ------ | ------- | ------- | --------- |
 | Orchestrator | *(main session)* | — | All | Coordinates the pipeline, delegates work |
 | Researcher | `researcher.md` | Haiku | Read-only + Web | Explores code, reads docs, gathers context |
 | Architect | `architect.md` | Opus | Read-only + Write | Synthesizes findings into actionable plans |
@@ -158,7 +159,7 @@ All subagents have **persistent user-level memory** — they accumulate knowledg
 Skills are slash commands that trigger predefined workflows. The `lineup:` prefix is provided automatically by the plugin namespace.
 
 | Skill | Command | Description |
-|-------|---------|-------------|
+| ------- | --------- | ------------- |
 | Kick-off | `/lineup:kick-off` | Runs the full agentic pipeline (Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?) |
 | Configure | `/lineup:configure` | Interactively customize agent models, tools, and memory settings |
 | Explain | `/lineup:explain` | Get a structured explanation of any project component |
@@ -167,19 +168,19 @@ Skills are slash commands that trigger predefined workflows. The `lineup:` prefi
 
 Type `/lineup:kick-off` in a Claude Code session followed by your task description. The skill will walk the orchestrator through all pipeline stages, delegating to the appropriate subagents at each step.
 
-```
+```text
 /lineup:kick-off Refactor the authentication module to use JWT tokens
 ```
 
 Type `/lineup:configure` to interactively customize agent settings. The skill walks you through model, tool, and memory configuration, previews the changes, and applies them to the agent files.
 
-```
+```text
 /lineup:configure
 ```
 
 Type `/lineup:explain` followed by a question about any part of the codebase. The skill delegates to the teacher agent, which explores the code and returns a structured explanation.
 
-```
+```text
 /lineup:explain How does the authentication middleware work?
 ```
 
@@ -226,7 +227,7 @@ verification:
 
 ### Running a tactic
 
-```
+```text
 /lineup:kick-off brownfield-docs
 ```
 
@@ -235,7 +236,7 @@ Or run `/lineup:kick-off` with no arguments to see available tactics and choose 
 ### Tactic schema
 
 | Field | Required | Description |
-|-------|----------|-------------|
+| ------- | ---------- | ------------- |
 | `name` | Yes | Unique identifier in kebab-case (must match the filename without `.yaml`) |
 | `description` | Yes | One-paragraph summary shown during tactic selection |
 | `stages` | Yes | Ordered list of stages to execute (see below) |
@@ -245,20 +246,51 @@ Or run `/lineup:kick-off` with no arguments to see available tactics and choose 
 **Stage fields:**
 
 | Field | Required | Description |
-|-------|----------|-------------|
+| ------- | ---------- | ------------- |
 | `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document` |
 | `agent` | Yes | Agent to invoke: `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
 | `prompt` | No | Custom instructions appended to the agent's defaults (not a replacement) |
+| `optional` | No | If `true`, orchestrator asks the user before running this stage (default `false`) |
+| `gate` | No | Set to `"approval"` to pause for explicit user approval after this stage completes |
 
 **Variable fields:**
 
 | Field | Required | Description |
-|-------|----------|-------------|
+| ------- | ---------- | ------------- |
 | `name` | Yes | Variable identifier used in `${name}` substitutions within stage prompts |
 | `description` | Yes | Shown to the user when prompting for the value |
 | `default` | No | Default value offered as option 1 during prompting |
 
 Full annotated schema: [`templates/tactic.yaml`](templates/tactic.yaml)
+
+### Orchestration controls
+
+Two stage fields give tactics fine-grained control over the pipeline flow without turning the YAML into a scripting language:
+
+**`optional: true`** -- The orchestrator asks the user before running this stage. If the user declines, the stage is skipped and execution continues with the next one. Use this for stages that are valuable but not always needed, like research when the user already knows the codebase, or documentation when the changes are minor.
+
+```yaml
+- type: research
+  agent: researcher
+  optional: true       # "Would you like to run the Research stage?"
+```
+
+**`gate: approval`** -- After the stage completes, the orchestrator presents the agent's output and waits for the user to explicitly approve before moving on. If the user rejects, the stage is re-run for revision. Use this for checkpoint stages where the output shapes everything downstream, like plan approval before implementation.
+
+```yaml
+- type: plan
+  agent: architect
+  gate: approval       # User must approve the plan before implementation begins
+```
+
+Both fields can be combined on the same stage. For example, an optional research stage with an approval gate would first ask the user whether to run it, and if they say yes, require approval of the findings before proceeding:
+
+```yaml
+- type: research
+  agent: researcher
+  optional: true
+  gate: approval
+```
 
 ### Example tactics
 
@@ -270,13 +302,16 @@ cp /path/to/lineup/examples/tactics/api-feature.yaml .lineup/tactics/
 ```
 
 | Tactic | Stages | Use case |
-|--------|--------|----------|
+| -------- | -------- | ---------- |
 | [`brownfield-docs`](examples/tactics/brownfield-docs.yaml) | Research, Plan, Implement (documenter) | Generate missing docs for an existing codebase |
 | [`api-feature`](examples/tactics/api-feature.yaml) | Research, Plan, Implement, Verify | Add a new API endpoint following existing conventions |
 | [`targeted-refactor`](examples/tactics/targeted-refactor.yaml) | Research, Plan, Implement, Verify | Refactor a specific module with variable targeting |
 | [`bug-triage`](examples/tactics/bug-triage.yaml) | Research, Plan, Implement, Verify | Investigate and fix a reported bug with regression tests |
+| [`full-feature`](examples/tactics/full-feature.yaml) | Research?, Plan, Implement, Verify, Document? | End-to-end feature with optional stages and approval gate |
 
 The `targeted-refactor` and `bug-triage` tactics demonstrate **variables** -- the orchestrator prompts for values like `target_module` or `bug_description` before execution.
+
+The `api-feature` tactic demonstrates **`gate: approval`** -- the orchestrator pauses after the plan stage and waits for the user to approve before proceeding to implementation. The `full-feature` tactic demonstrates **`optional`** stages -- research and documentation are offered but can be skipped -- combined with an approval gate on the plan.
 
 ### Adding `.lineup/` to .gitignore
 
@@ -298,7 +333,7 @@ Run `/lineup:configure` inside Claude Code to customize agent settings interacti
 ### What's configurable
 
 | Setting | Scope | Description |
-|---------|-------|-------------|
+| --------- | ------- | ------------- |
 | Model | All agents or per-agent | `haiku`, `sonnet`, or `opus` |
 | Tools | Per-agent | Add, remove, or replace tools (e.g. swap `WebSearch` for Brave Search MCP) |
 | Memory | All agents or per-agent | `user`, `project`, or `local` |
@@ -313,9 +348,12 @@ Run `/agents` in your coding agent to view, create, edit, or delete subagents in
 Contributions are welcome! If you've created useful subagents, improved the workflow, or have feedback from real usage, please open an issue or PR.
 
 Ideas for contributions:
-- New subagent roles (e.g., `security-auditor`, `migration-planner`)
-- Workflow variations for specific domains (frontend, backend, data)
-- Performance benchmarks (tokens used, quality comparisons)
+
+- Improvements to existing agents (better prompts, edge case handling)
+- Bug fixes and performance optimizations
+- Documentation improvements and clarifications
+- Example tactics for common workflows (add to `examples/tactics/`)
+- Template schema enhancements
 
 ## Credits
 

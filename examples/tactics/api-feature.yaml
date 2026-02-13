@@ -17,6 +17,7 @@ stages:
       follows them consistently.
   - type: plan
     agent: architect
+    gate: approval
     prompt: |
       Design the new endpoint following the conventions found in research.
       Include: route path, HTTP method, request/response schemas, middleware
