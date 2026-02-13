@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-13
+
+### Added
+- Built-in tactics: plugin-shipped tactics available in every project (zero setup)
+- Built-in `explain` tactic (`tactics/explain.yaml`) -- consolidates /lineup:explain under the tactic system
+- Persistent agent configuration: customizations survive plugin updates
+- User override files stored in `~/.claude/lineup/agents/` (YAML, frontmatter-only)
+- Version tracking in override files for forward-compatibility
+- Override status indicators in configure summary table
+
+### Changed
+- /lineup:explain now routes to the built-in `explain` tactic via kick-off
+- Tactic resolution checks both project `.lineup/tactics/` and plugin `tactics/` (project wins)
+- /lineup:configure writes to user directory instead of editing plugin agent files
+- /lineup:kick-off reads user overrides before spawning agents
+- Plugin agent .md files are now immutable at runtime
+- Reset in configure deletes override files instead of rewriting plugin frontmatter
+
 ## [1.2.0] - 2026-02-13
 
 ### Added
@@ -62,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
+[1.3.0]: https://github.com/izantech/lineup/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/izantech/lineup/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/izantech/lineup/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/izantech/lineup/releases/tag/1.0.0

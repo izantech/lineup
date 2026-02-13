@@ -20,6 +20,36 @@ If the user wants to save a document (e.g., a plan for future reference), they c
 
 ---
 
+## Agent Configuration Overrides
+
+Before spawning any agent, check for user-level configuration overrides:
+
+1. Check if `~/.claude/lineup/agents/` exists.
+2. For each agent about to be spawned, look for `~/.claude/lineup/agents/<agent>.yaml`.
+3. If an override file exists, read it and apply the overridden values (model,
+   tools, memory) when spawning the agent. These values take precedence over
+   the agent's frontmatter defaults.
+4. If no override file exists, use the agent's plugin defaults as-is.
+
+Override files contain only the fields the user customized:
+
+```yaml
+plugin_version: "1.3.0"
+model: sonnet
+tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
+```
+
+When spawning an agent with overrides, specify the overridden model and tools
+in the agent invocation. For example, if the researcher's override sets
+`model: sonnet`, spawn the researcher with Sonnet instead of its default Haiku.
+
+**Version mismatch warning:** If the override file's `plugin_version` does not
+match the current plugin version (from `.claude-plugin/plugin.json`), note this
+in the agent spawn log but proceed normally. Suggest the user run
+`/lineup:configure` to review their customizations if the major version changed.
+
+---
+
 ## Stage 0 -- Tactic Resolution
 
 Before starting the pipeline, check if the project defines any **tactics** -- reusable
@@ -27,9 +57,11 @@ workflow definitions stored as YAML files in `.lineup/tactics/`.
 
 ### Discovery
 
-1. Check if `.lineup/tactics/` exists in the current working directory.
-2. If it does, read all `.yaml` files in that directory.
-3. Parse each file and extract: `name`, `description`, `stages`, `verification`, and `variables`.
+1. Read all `.yaml` files from the plugin's own `tactics/` directory (built-in tactics).
+2. Check if `.lineup/tactics/` exists in the current working directory.
+3. If it does, read all `.yaml` files in that directory (project tactics).
+4. Merge both lists. If a project tactic has the same `name` as a built-in tactic, the project version takes precedence (override).
+5. Parse each file and extract: `name`, `description`, `stages`, `verification`, and `variables`.
 
 ### Selection
 
@@ -51,7 +83,7 @@ Options:
 Each option shows the tactic `name` followed by a truncated `description`.
 Always include "Run the default pipeline" and "Other" as the last two options.
 
-- If no `.lineup/tactics/` directory exists, skip this stage silently and proceed to Stage 1.
+- If neither `.lineup/tactics/` nor plugin built-in tactics exist, skip this stage silently and proceed to Stage 1.
 
 ### Variable Prompting
 

@@ -1,0 +1,7 @@
+# Documentation website (hosted separately at lineup.izantech.app)
+docs/
+
+# Development files
+.git/
+.github/
+*.md.backup

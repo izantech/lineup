@@ -1,0 +1,16 @@
+# Cloudflare Pages configuration (optional - can also configure via dashboard)
+#
+# Dashboard settings:
+#   Build command: cd docs && npm install && npm run build
+#   Build output directory: docs/.vitepress/dist
+#   Root directory: /
+#   Node.js version: 20 (set via NODE_VERSION=20 env var)
+#
+# Deploy via CLI:
+#   npx wrangler pages deploy
+
+name = "lineup-docs"
+compatibility_date = "2026-02-13"
+
+[site]
+bucket = ".vitepress/dist"

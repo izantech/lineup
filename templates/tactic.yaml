@@ -7,7 +7,7 @@ description: |                     # One-paragraph summary shown during tactic s
 
 # Stage sequence -- ordered list of stages to execute.
 # Each stage maps to a pipeline stage with an agent and optional custom prompt.
-# Available stage types: clarify, research, clarification-gate, plan, implement, verify, document
+# Available stage types: clarify, research, clarification-gate, plan, implement, verify, document, explain
 # Available agents: researcher, architect, developer, reviewer, documenter, teacher
 stages:
   - type: research               # Stage type from the pipeline

@@ -23,7 +23,8 @@ Lineup is structured as a Claude Code plugin. The `.claude-plugin/plugin.json` m
 agents/*.md                   → Agent definitions (loaded as lineup:<name>)
 skills/kick-off/SKILL.md      → Skill: full pipeline entry point
 skills/configure/SKILL.md     → Skill: interactive agent configurator
-skills/explain/SKILL.md       → Skill: explain project components
+skills/explain/SKILL.md       → Skill: explain project components (alias for explain tactic)
+tactics/*.yaml                → Built-in tactics (shipped with plugin)
 templates/*.yaml              → YAML schemas for agent output documents
 ```
 
@@ -54,6 +55,28 @@ The frontmatter fields are:
 
 The body (everything after the second `---`) contains the agent's instructions and is preserved as-is during configuration.
 
+### Agent Configuration Overrides
+
+User customizations are stored as YAML override files in `~/.claude/lineup/agents/`.
+These files persist across plugin updates and contain only the frontmatter fields
+the user has changed (model, tools, memory).
+
+```
+~/.claude/lineup/agents/
+  researcher.yaml      ← Override for researcher (e.g., model: sonnet)
+  architect.yaml       ← Override for architect (if customized)
+```
+
+Override precedence: user override file > plugin agent frontmatter defaults.
+
+The `/lineup:configure` skill writes these files. The `/lineup:kick-off` skill
+reads them before spawning agents. If no override file exists for an agent,
+plugin defaults are used.
+
+Override files include a `plugin_version` field indicating which plugin version
+they were created against. This is informational — overrides are forward-compatible
+since they only contain model/tools/memory fields.
+
 ### Skills (`skills/`)
 
 Skills are static SKILL.md files that provide slash commands.
@@ -76,11 +99,23 @@ agent sequences that the kick-off skill can discover and execute.
 - Stages support orchestration controls: `optional` (ask before running) and `gate: approval` (pause after)
 - Example tactics available in `examples/tactics/` for common workflows
 
+### Built-in Tactics (`tactics/`)
+
+Built-in tactics are shipped with the plugin in the `tactics/` directory (distinct from
+per-project `.lineup/tactics/`). They provide common workflows out of the box.
+
+- Discovered automatically by `/lineup:kick-off` alongside project tactics
+- Project tactics with the same name override built-in tactics
+- Current built-in tactics: `explain`
+
+The explain skill (`/lineup:explain`) is an alias that runs the built-in `explain` tactic
+via kick-off.
+
 Each stage in the `stages` list accepts the following fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document` |
+| `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document`, `explain` |
 | `agent` | Yes | Agent to invoke: `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
 | `prompt` | No | Custom instructions appended to agent defaults |
 | `optional` | No | If `true`, orchestrator asks user before running this stage (default: `false`) |
@@ -91,6 +126,8 @@ Each stage in the `stages` list accepts the following fields:
 - Agent names do not use a prefix — the `lineup:` namespace is provided by the plugin manifest
 - Frontmatter fields use comma-space separation for tool lists
 - All configuration happens via the `/lineup:configure` skill — no external scripts
+- Agent plugin files (`agents/*.md`) are immutable at runtime — never edited by skills or users directly
+- User customizations live in `~/.claude/lineup/agents/` as YAML override files
 
 ## Document Conventions
 

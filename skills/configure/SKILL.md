@@ -3,15 +3,17 @@ name: configure
 description: Interactively customize Lineup agent settings (models, tools, memory)
 ---
 
-You are the orchestrator for the **Lineup agent configurator**. Walk the user through customizing agent settings, then apply changes directly to the agent `.md` files.
+You are the orchestrator for the **Lineup agent configurator**. Walk the user through customizing agent settings, then write override files to persist their preferences.
 
-The agent files live in this plugin's `agents/` directory — two levels up from this skill file.
+Customizations are stored as YAML override files in `~/.claude/lineup/agents/`. The plugin's agent `.md` files are **never modified** — they provide defaults, and overrides layer on top.
 
 ---
 
 ## Step 1 — Read current config
 
-Read all agent files from the plugin's `agents/` directory:
+### 1a. Read plugin defaults
+
+Read all agent files from the plugin's `agents/` directory (two levels up from this skill file):
 - `researcher.md`
 - `architect.md`
 - `developer.md`
@@ -19,42 +21,9 @@ Read all agent files from the plugin's `agents/` directory:
 - `documenter.md`
 - `teacher.md`
 
-Extract and display their current frontmatter in a summary table:
+Extract the frontmatter fields: `model`, `tools`, `memory`.
 
-| Agent | Model | Memory | Tools |
-|-------|-------|--------|-------|
-| researcher | haiku | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
-| architect | opus | user | Read, Grep, Glob, LS, Write |
-| ... | ... | ... | ... |
-
----
-
-## Step 2 — Ask what to change
-
-Present the configuration options using **AskUserQuestion**. Offer these categories:
-
-### Model
-- **Keep defaults** — no changes
-- **Set one model for all agents** — ask which: `haiku`, `sonnet`, or `opus`
-- **Set per-agent** — ask for each agent individually
-
-### Tools
-- **Replace tools** — swap one tool for another across all agents (e.g. `WebSearch` → `mcp__brave-search__brave_web_search`)
-- **Add tools** — append tools to specific agents
-- **Remove tools** — remove tools from specific agents
-- **No changes** — keep current tools
-
-### Memory
-- **Keep defaults** — no changes
-- **Set one scope for all agents** — ask which: `user`, `project`, or `local`
-- **Set per-agent** — ask for each agent individually
-
-### Reset
-- **Restore all agents to defaults** — rewrite frontmatter to the defaults listed below
-
-If the user chooses **Reset**, show the default frontmatter, ask for confirmation, apply it, skip the remaining steps, and report what was done.
-
-Default frontmatter values:
+These are the plugin defaults (used as reference if agent files cannot be read):
 
 | Agent | Model | Memory | Tools |
 |-------|-------|--------|-------|
@@ -65,24 +34,85 @@ Default frontmatter values:
 | documenter | opus | user | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
+### 1b. Read user overrides
+
+Check if `~/.claude/lineup/agents/` exists. For each agent, check if a corresponding override file exists (e.g. `~/.claude/lineup/agents/researcher.yaml`).
+
+Override files are YAML with this format:
+
+```yaml
+plugin_version: "1.3.0"
+model: sonnet
+tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
+```
+
+Only fields the user has changed from defaults are present (plus `plugin_version`).
+
+### 1c. Merge and display
+
+For each agent, merge: **override values win** over plugin defaults. Display the merged config in a summary table. Mark overridden fields with `*`:
+
+```
+Current agent configuration:
+
+| Agent       | Model    | Memory | Tools                                                          |
+|-------------|----------|--------|----------------------------------------------------------------|
+| researcher  | sonnet*  | user   | Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search* |
+| architect   | opus     | user   | Read, Grep, Glob, LS, Write                                   |
+| developer   | opus     | user   | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit         |
+| reviewer    | opus     | user   | Read, Grep, Glob, LS, Bash                                    |
+| documenter  | opus     | user   | Read, Grep, Glob, LS, Write, WebFetch                         |
+| teacher     | opus     | user   | Read, Grep, Glob, LS, WebFetch, WebSearch                     |
+
+Fields marked with * have user overrides.
+```
+
+If any overrides exist, note: "Run with **Reset** to restore all agents to plugin defaults."
+
+---
+
+## Step 2 — Ask what to change
+
+Present the configuration options using **AskUserQuestion**. Offer these categories:
+
+### Model
+- **Keep current** — no changes
+- **Set one model for all agents** — ask which: `haiku`, `sonnet`, or `opus`
+- **Set per-agent** — ask for each agent individually
+
+### Tools
+- **Replace tools** — swap one tool for another across all agents (e.g. `WebSearch` -> `mcp__brave-search__brave_web_search`)
+- **Add tools** — append tools to specific agents
+- **Remove tools** — remove tools from specific agents
+- **No changes** — keep current tools
+
+### Memory
+- **Keep current** — no changes
+- **Set one scope for all agents** — ask which: `user`, `project`, or `local`
+- **Set per-agent** — ask for each agent individually
+
+### Reset
+- **Restore all agents to plugin defaults** — delete all override files
+
+If the user chooses **Reset**, show the plugin default values, ask for confirmation, then:
+1. Delete all `.yaml` files in `~/.claude/lineup/agents/`
+2. Delete the `~/.claude/lineup/agents/` directory if it is empty
+3. Report which agents were restored to defaults and skip the remaining steps
+
 ---
 
 ## Step 3 — Preview
 
-Before writing anything, show the user the **final frontmatter** for each agent that will change. Format it clearly:
+Before writing anything, show the user what will change. For each agent with changes, show the override file that will be written:
 
 ```
-researcher.md:
----
-name: researcher
-description: <unchanged>
-tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
-model: sonnet
-memory: user
----
+researcher — override file will be written:
+  model: sonnet  (was: haiku)
+  tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search  (was: Read, Grep, Glob, LS, WebFetch, WebSearch)
 
-architect.md:
-  (no changes)
+architect — no changes
+
+developer — override file will be deleted (all fields match defaults)
 ```
 
 Ask the user to confirm before proceeding.
@@ -91,16 +121,31 @@ Ask the user to confirm before proceeding.
 
 ## Step 4 — Apply
 
-Edit each agent `.md` file that needs changes. **Only modify the frontmatter** (the YAML block between the two `---` lines). Preserve the body content (everything after the second `---`) exactly as-is.
+Read the plugin version from `.claude-plugin/plugin.json` (the `version` field). This is the `plugin_version` value to include in override files.
 
-Frontmatter fields and their format:
-- `name`: agent role name (string)
-- `description`: one-line description (string)
-- `tools`: comma-space separated list (e.g. `Read, Grep, Glob, LS`)
-- `model`: one of `haiku`, `sonnet`, `opus`
-- `memory`: one of `user`, `project`, `local`
+For each agent that has changes:
 
-When editing, replace the entire frontmatter block (from the first `---` to the second `---`, inclusive) with the updated version.
+### Write override file
+
+Create the `~/.claude/lineup/agents/` directory if it does not exist. Write a YAML override file containing **only the fields that differ from plugin defaults**, plus `plugin_version`. The file path is `~/.claude/lineup/agents/<agent>.yaml`.
+
+Format:
+
+```yaml
+plugin_version: "1.3.0"
+model: sonnet
+tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
+memory: user
+```
+
+Rules:
+- `plugin_version` is always the first field
+- Only include `model`, `tools`, or `memory` if they differ from the plugin default for that agent
+- Use the same comma-space separated format for tools as in agent frontmatter
+
+### Delete override file
+
+If the user's changes cause all fields for an agent to match plugin defaults (i.e., no overrides remain), delete that agent's override file if it exists.
 
 ---
 
@@ -108,16 +153,19 @@ When editing, replace the entire frontmatter block (from the first `---` to the 
 
 Report what was changed in a brief summary:
 
-- Which agents were modified
-- What fields changed (old → new)
+- Which agents had override files written or deleted
+- What fields changed (old -> new)
 - Remind the user they can run `/lineup:configure` again to make further changes, or reset to defaults
 
 ---
 
 ## Rules
 
-- **Never modify the body** of an agent file — only the frontmatter
+- **Never modify agent `.md` files** — all customizations go in override files under `~/.claude/lineup/agents/`
+- **Override files only contain changed fields** — do not write fields that match plugin defaults
+- **Always include `plugin_version`** in override files — read it from `.claude-plugin/plugin.json`
+- **Delete override files when unnecessary** — if all fields match defaults, remove the file
 - **Validate inputs**: models must be `haiku`, `sonnet`, or `opus`; memory must be `user`, `project`, or `local`
-- **Tools are comma-space separated** in frontmatter: `Read, Grep, Glob, LS`
+- **Tools are comma-space separated**: `Read, Grep, Glob, LS`
 - Always show a preview and get confirmation before writing
-- If the user asks to reset, rewrite frontmatter to the hardcoded defaults (do not depend on git)
+- If the user asks to reset, delete override files (do not modify agent `.md` files)

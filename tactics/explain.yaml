@@ -1,0 +1,17 @@
+name: explain
+description: |
+  Get a clear explanation of any project component, pattern, or decision.
+  Combines codebase research with pedagogical explanation.
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Focus the research on the specific component, pattern, or decision
+      the user wants to understand. Gather relevant code, relationships,
+      data flow, and architectural context.
+  - type: explain
+    agent: teacher
+    prompt: |
+      Produce a structured, pedagogical explanation based on the research
+      findings. Include the user's original question for focus.
