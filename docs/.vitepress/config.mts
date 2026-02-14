@@ -45,6 +45,7 @@ export default defineConfig({
             { text: 'Create a Tactic', link: '/guides/create-tactic' },
             { text: 'Customize Agents', link: '/guides/customize-agents' },
             { text: 'Use Explain', link: '/guides/use-explain' },
+            { text: 'Use Playbook', link: '/guides/use-playbook' },
             { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' }
           ]
         },
@@ -63,7 +64,11 @@ export default defineConfig({
           items: [
             { text: 'Feature Development', link: '/examples/feature-development' },
             { text: 'Bug Triage', link: '/examples/bug-triage' },
-            { text: 'Documentation Generation', link: '/examples/documentation-generation' }
+            { text: 'Documentation Generation', link: '/examples/documentation-generation' },
+            { text: 'Codebase Explanation', link: '/examples/codebase-explanation' },
+            { text: 'Security Audit', link: '/examples/security-audit' },
+            { text: 'Performance Optimization', link: '/examples/performance-optimization' },
+            { text: 'Test Coverage', link: '/examples/test-coverage' }
           ]
         },
         {

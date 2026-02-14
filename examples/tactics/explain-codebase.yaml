@@ -1,0 +1,28 @@
+# explain-codebase -- Get a guided tour of an unfamiliar codebase.
+# Uses a teacher agent to research and explain the architecture, key modules,
+# data flow, and conventions so you can onboard quickly.
+
+name: explain-codebase
+description: |
+  Get a guided tour of an unfamiliar codebase. Researches the project structure,
+  architecture, key modules, and conventions, then produces a structured explanation
+  designed for onboarding.
+
+stages:
+  - type: research
+    agent: researcher
+    prompt: |
+      Explore the entire codebase at a high level: project structure, entry points,
+      key modules, data flow, configuration, and dependency graph. Identify the
+      architectural patterns in use (MVC, hexagonal, microservices, etc.) and any
+      conventions encoded in linting rules, CI config, or contributing guides.
+  - type: explain
+    agent: teacher
+    prompt: |
+      Produce a structured onboarding guide based on the research findings. Cover:
+      1. Project purpose and high-level architecture
+      2. Directory structure and what each top-level folder contains
+      3. Key modules and how they interact
+      4. Data flow from input to output (request lifecycle, event pipeline, etc.)
+      5. Conventions and patterns the team follows
+      6. Where to start reading code for a new contributor

@@ -24,6 +24,7 @@ agents/*.md                   → Agent definitions (loaded as lineup:<name>)
 skills/kick-off/SKILL.md      → Skill: full pipeline entry point
 skills/configure/SKILL.md     → Skill: interactive agent configurator
 skills/explain/SKILL.md       → Skill: explain project components (alias for explain tactic)
+skills/playbook/SKILL.md      → Skill: interactive tactic management wizard
 tactics/*.yaml                → Built-in tactics (shipped with plugin)
 templates/*.yaml              → YAML schemas for agent output documents
 ```
@@ -86,6 +87,7 @@ Skills are static SKILL.md files that provide slash commands.
 | Kick-off | `skills/kick-off/SKILL.md` | `/lineup:kick-off` | Entry point for the full agentic pipeline |
 | Configure | `skills/configure/SKILL.md` | `/lineup:configure` | Interactive agent configurator |
 | Explain | `skills/explain/SKILL.md` | `/lineup:explain` | Explain project components via researcher + teacher |
+| Playbook | `skills/playbook/SKILL.md` | `/lineup:playbook` | Interactive tactic management wizard |
 
 ### Tactics (`.lineup/tactics/`)
 

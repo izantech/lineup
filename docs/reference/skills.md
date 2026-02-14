@@ -11,6 +11,7 @@ Skills are slash commands provided by the Lineup plugin. Each skill is a `SKILL.
 | `/lineup:kick-off` | `skills/kick-off/SKILL.md` | Run the agentic pipeline or a tactic |
 | `/lineup:configure` | `skills/configure/SKILL.md` | Customize agent settings interactively |
 | `/lineup:explain` | `skills/explain/SKILL.md` | Get a structured codebase explanation |
+| `/lineup:playbook` | `skills/playbook/SKILL.md` | Create, edit, import, or delete tactics |
 
 ## `/lineup:kick-off`
 
@@ -183,3 +184,102 @@ Questions about specific components, patterns, data flows, and architectural dec
 ### Override
 
 Create `.lineup/tactics/explain.yaml` in your project to override the built-in explain tactic with a custom workflow.
+
+## `/lineup:playbook`
+
+Interactive tactic management wizard.
+
+### Syntax
+
+```bash
+/lineup:playbook
+```
+
+### Arguments
+
+None. The skill is fully interactive.
+
+### Behavior
+
+The playbook skill walks through up to eight steps depending on the mode selected:
+
+| Step | What happens |
+| ---- | ------------ |
+| 1. Discover | Reads tactic schema, example templates, project tactics, and built-in tactics |
+| 2. Mode | Presents mode selection: Create, Import, Edit, Delete |
+| 3. Name/desc | Collects tactic name (kebab-case) and description |
+| 4. Stage builder | Guides through building an ordered list of stages |
+| 5. Verification | Collects human-readable verification criteria |
+| 6. Variables | Defines variables with cross-reference validation |
+| 7. Validate | Runs schema and semantic validation, shows YAML preview |
+| 8. Write | Writes the tactic to `.lineup/tactics/<name>.yaml` |
+
+Steps 3-7 are skipped or adapted depending on the mode.
+
+### Modes
+
+| Mode | Steps used | Description |
+| ---- | ---------- | ----------- |
+| Create | 3, 4, 5, 6, 7, 8 | Build a new tactic from scratch |
+| Import | Selection + optional 3-7, 8 | Copy an example template, optionally customize |
+| Edit | Selection + targeted 3-7, 8 | Modify an existing project tactic |
+| Delete | Selection, confirmation | Remove a project tactic |
+
+### Stage types and conventional agents
+
+The stage builder presents these type-agent pairings as defaults:
+
+| Type | Default agent |
+| ---- | ------------- |
+| `clarify` | `researcher` |
+| `research` | `researcher` |
+| `clarification-gate` | `architect` |
+| `plan` | `architect` |
+| `implement` | `developer` |
+| `verify` | `reviewer` |
+| `document` | `documenter` |
+| `explain` | `teacher` |
+
+Any agent can be paired with any stage type -- these are conventions, not constraints.
+
+### Common stage patterns
+
+The stage builder offers five pre-built patterns as starting points:
+
+| Pattern | Stages |
+| ------- | ------ |
+| Research-first | research, plan, implement, verify |
+| Quick fix | plan, implement, verify |
+| Documentation pass | research, plan, document |
+| Full pipeline with controls | research (optional), plan (gate: approval), implement, verify, document (optional) |
+| Investigation only | research, explain |
+
+### Validation
+
+**Schema validation** (blocks write):
+- Name is kebab-case, 3-50 characters, matches filename
+- Description is non-empty
+- At least one stage exists
+- Stage types and agent names are valid
+- Variable names are snake_case
+- All `${variable_name}` references resolve to defined variables
+
+**Semantic validation** (warns only):
+- `verify` stage without verification criteria
+- Verification criteria without a `verify` stage
+- `implement` stage without a preceding `plan` stage
+- `plan` stage without `gate: approval`
+- Unused defined variables
+- `implement` as the first stage
+
+### What it modifies
+
+Writes, renames, or deletes files in `.lineup/tactics/` only. Never modifies plugin example files (`examples/tactics/`) or built-in tactics (`tactics/`).
+
+### Rules
+
+- Preview and explicit confirmation are required before every write
+- Example tactics and built-in tactics are read-only
+- Rename in edit mode writes the new file before deleting the old one
+- YAML formatting matches the example tactics exactly (header comments, pipe-blocks, field order)
+- AskUserQuestion is used for all decisions

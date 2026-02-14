@@ -77,6 +77,16 @@ Both `/lineup:explain` and `/lineup:kick-off` accept a question or task as input
 
 Use `/lineup:explain` when you want to learn. Use `/lineup:kick-off` when you want to build.
 
+## Broad onboarding with explain-codebase
+
+If you want a full codebase tour rather than an answer to a specific question, use the `explain-codebase` example tactic instead. It produces a structured onboarding guide covering project purpose, directory structure, key modules, data flow, and conventions.
+
+```bash
+/lineup:kick-off explain-codebase
+```
+
+See the [Codebase Explanation](/examples/codebase-explanation) walkthrough for a complete example of this tactic in action.
+
 ## Overriding the built-in explain tactic
 
 If you want the explain workflow to behave differently in your project -- for example, adding a plan stage or changing the researcher's focus -- create a project tactic that overrides the built-in:

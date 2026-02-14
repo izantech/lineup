@@ -18,7 +18,8 @@ Now that you've seen the pipeline in action, here's where to go based on what yo
 ## Create reusable workflows
 
 - **Want to define custom workflows for your project?** [Tactics](/concepts/tactics) explains what tactics are and how they work.
-- **Want to build your own tactic?** The [Create a Tactic](/guides/create-tactic) guide has step-by-step instructions.
+- **Want a guided wizard to create tactics?** The [Use Playbook](/guides/use-playbook) guide walks through `/lineup:playbook` -- an interactive skill that builds, imports, edits, and deletes tactics for you.
+- **Want to author tactic YAML by hand?** The [Create a Tactic](/guides/create-tactic) guide has step-by-step instructions.
 - **Want to see what ships with Lineup?** [Built-in Tactics](/concepts/built-in-tactics) covers the tactics included in the plugin.
 
 ## Get a codebase explanation

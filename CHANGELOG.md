@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-14
+
+### Added
+- Playbook skill (`/lineup:playbook`) -- interactive wizard for creating and editing tactics
+- Playbook modes: Create from scratch, Import from examples, Edit existing, Delete
+- Full tactic validation: YAML syntax, schema compliance, agent verification, variable cross-references
+- Example tactic: `explain-codebase.yaml` -- demonstrates teacher agent and explain stage type
+- Example tactic: `dependency-security-audit.yaml` -- security workflows with 2 variables and 2 gates
+- Example tactic: `performance-profiling-cycle.yaml` -- performance optimization with 3 variables
+- Example tactic: `add-missing-test-coverage.yaml` -- test coverage improvement workflows
+- Documentation walkthroughs for all 4 new example tactics
+- Playbook skill guide with full wizard walkthrough
+
+### Changed
+- Example tactics count: 5 → 9 total
+- Agent coverage in examples: 83% → 100% (teacher agent now demonstrated)
+- Domains covered: added security, performance, testing, and learning workflows
+
 ## [1.3.0] - 2026-02-13
 
 ### Added

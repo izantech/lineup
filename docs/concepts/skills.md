@@ -1,6 +1,6 @@
 # Skills
 
-Skills are slash commands provided by a Claude Code plugin. Lineup ships three skills that serve as entry points into different workflows.
+Skills are slash commands provided by a Claude Code plugin. Lineup ships four skills that serve as entry points into different workflows.
 
 ## What is a skill?
 
@@ -63,6 +63,16 @@ Get a structured explanation of any project component, pattern, or decision. Thi
 
 Behind the scenes, this triggers a two-stage workflow: a researcher explores the relevant code, then a teacher produces a structured, pedagogical explanation. See [Use Explain](/guides/use-explain) for usage details.
 
+### `/lineup:playbook`
+
+Interactively manage your project's collection of [tactics](/concepts/tactics). Create new tactics from scratch, import from example templates, edit existing tactics, or delete ones you no longer need.
+
+```bash
+/lineup:playbook
+```
+
+The playbook skill is an 8-step wizard that handles naming, stage building, variable definitions, validation, and YAML formatting. It's the guided alternative to authoring tactic files by hand. See [Use Playbook](/guides/use-playbook) for a detailed walkthrough.
+
 ## When to use each skill
 
 | Situation | Skill |
@@ -71,6 +81,7 @@ Behind the scenes, this triggers a two-stage workflow: a researcher explores the
 | Running a defined project workflow | `/lineup:kick-off <tactic-name>` |
 | Changing agent models, tools, or memory | `/lineup:configure` |
 | Understanding unfamiliar code or architecture | `/lineup:explain` |
+| Creating, importing, editing, or deleting tactics | `/lineup:playbook` |
 
 ## Skill reference
 

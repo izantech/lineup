@@ -1,6 +1,10 @@
 # Create a Tactic
 
-This guide walks through creating a custom [tactic](/concepts/tactics) from scratch. By the end, you'll have a working tactic file that defines a reusable workflow for your project.
+This guide walks through creating a custom [tactic](/concepts/tactics) from scratch by writing YAML directly. By the end, you'll have a working tactic file that defines a reusable workflow for your project.
+
+::: tip
+Prefer a guided wizard? Run `/lineup:playbook` to create tactics interactively with validation and formatting handled for you. See [Use Playbook](/guides/use-playbook).
+:::
 
 ## Step 1: Create the directory
 

@@ -1,0 +1,57 @@
+# add-missing-test-coverage -- Find and fill gaps in test coverage for a target module.
+# Researches current coverage, plans which tests to add, implements them,
+# and verifies the coverage target is met.
+
+name: add-missing-test-coverage
+description: |
+  Find and fill gaps in test coverage. Researches the current coverage map,
+  identifies untested code paths, plans which tests to add for maximum impact,
+  implements them, and verifies the coverage target is met.
+
+variables:
+  - name: target_module
+    description: "Module or directory to improve coverage for (e.g., src/auth/, lib/utils/)"
+    default: "src/"
+  - name: coverage_target
+    description: "Target coverage percentage (e.g., 80%, 90%)"
+    default: "80%"
+
+stages:
+  - type: research
+    agent: researcher
+    gate: approval
+    prompt: |
+      Analyze test coverage for ${target_module}. Identify:
+      1. Current coverage percentage (line, branch, function)
+      2. Specific uncovered code paths and branches
+      3. Which untested areas carry the most risk (business logic, error handling,
+         edge cases, integrations)
+      4. Existing test patterns and frameworks used by the project
+      5. Any test infrastructure gaps (missing fixtures, helpers, mocks)
+      Prioritize uncovered areas by risk and impact.
+  - type: plan
+    agent: architect
+    prompt: |
+      Plan the tests needed to reach ${coverage_target} coverage for
+      ${target_module}. For each test:
+      1. Describe what code path or behavior it covers
+      2. Classify as unit, integration, or edge-case test
+      3. Note any test infrastructure needed (mocks, fixtures, factories)
+      Order by coverage impact: tests that cover the most uncovered lines first.
+      Avoid testing trivial getters/setters -- focus on meaningful behavior.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+    prompt: |
+      Verify the new tests: run the full test suite to confirm all tests pass
+      (old and new). Re-run coverage analysis for ${target_module} and confirm
+      progress toward the coverage target.
+
+verification:
+  - "All new tests pass"
+  - "All existing tests still pass"
+  - "Coverage for the target module meets or approaches the coverage target"
+  - "Tests cover meaningful behavior, not just trivial accessors"
+  - "Test names clearly describe what they verify"
+  - "No test relies on implementation details that would break during refactoring"

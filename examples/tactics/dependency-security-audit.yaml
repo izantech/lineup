@@ -1,0 +1,54 @@
+# dependency-security-audit -- Audit dependencies for known vulnerabilities and outdated packages.
+# Researches the dependency tree, plans remediation for findings above a target
+# severity, implements upgrades, and verifies nothing breaks.
+
+name: dependency-security-audit
+description: |
+  Audit project dependencies for known vulnerabilities and outdated packages.
+  Researches the dependency tree, plans remediation prioritized by severity,
+  implements upgrades and patches, and verifies no regressions.
+
+variables:
+  - name: minimum_severity
+    description: "Minimum vulnerability severity to act on (low, moderate, high, critical)"
+    default: "high"
+  - name: package_manager
+    description: "Package manager used by the project (npm, yarn, pnpm, pip, cargo, go)"
+    default: "npm"
+
+stages:
+  - type: research
+    agent: researcher
+    gate: approval
+    prompt: |
+      Run a dependency audit using ${package_manager}. Catalog all known
+      vulnerabilities at or above ${minimum_severity} severity. For each finding,
+      record: package name, current version, vulnerability ID, severity, and
+      whether a patched version exists. Also identify critically outdated
+      packages (more than two major versions behind) even if no CVE exists.
+  - type: plan
+    agent: architect
+    gate: approval
+    prompt: |
+      Create a remediation plan based on the audit findings. For each vulnerable
+      or outdated dependency:
+      1. Recommend upgrade, patch, or replacement
+      2. Note breaking changes in the upgrade path
+      3. Flag transitive dependencies that may resist upgrading
+      Prioritize by severity and blast radius. Group safe upgrades into a single
+      batch and isolate risky ones for individual attention.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+    prompt: |
+      Verify the dependency upgrades: re-run the audit to confirm vulnerabilities
+      are resolved, run the full test suite, and check for runtime errors caused
+      by breaking changes in upgraded packages.
+
+verification:
+  - "All vulnerabilities at or above the target severity are resolved"
+  - "Dependency audit returns clean at the target severity threshold"
+  - "All existing tests pass after upgrades"
+  - "No new vulnerabilities introduced by the upgrades"
+  - "Lock file is committed and consistent with package manifest"

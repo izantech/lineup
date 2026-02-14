@@ -64,6 +64,8 @@ Read access, Write, and web fetch. The documenter reads the codebase and impleme
 
 Same tools as the researcher -- read-only access plus web search. The teacher explores code to build understanding, then produces explanations. Like the researcher, it cannot modify anything.
 
+The teacher is used in the built-in `explain` tactic (via `/lineup:explain`) and in the `explain-codebase` example tactic for full codebase onboarding. See the [Codebase Explanation](/examples/codebase-explanation) walkthrough for a worked example.
+
 ## Agent memory
 
 All subagents have **persistent user-level memory**. They accumulate knowledge about your codebases across sessions in `~/.claude/agent-memory/<agent>/`.

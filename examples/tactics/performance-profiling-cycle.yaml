@@ -1,0 +1,60 @@
+# performance-profiling-cycle -- Profile, identify bottlenecks, and optimize a target component.
+# Researches current performance characteristics, plans targeted optimizations,
+# implements them, and verifies measurable improvement.
+
+name: performance-profiling-cycle
+description: |
+  Profile a component, identify bottlenecks, and implement targeted optimizations.
+  Researches current performance characteristics, plans optimizations with expected
+  impact, implements the changes, and verifies measurable improvement.
+
+variables:
+  - name: target_component
+    description: "Component or code path to profile (e.g., API handler, database queries, build pipeline)"
+    default: ""
+  - name: optimization_target
+    description: "What metric to optimize (e.g., response time, memory usage, bundle size, build time)"
+    default: "response time"
+  - name: improvement_goal
+    description: "Target improvement (e.g., 50% faster, under 200ms, below 500KB)"
+    default: ""
+
+stages:
+  - type: research
+    agent: researcher
+    gate: approval
+    prompt: |
+      Profile ${target_component} to establish a performance baseline. Identify:
+      1. Current metrics for ${optimization_target}
+      2. Hot code paths and bottlenecks
+      3. Resource usage patterns (CPU, memory, I/O, network)
+      4. Existing performance tests or benchmarks
+      5. Quick wins vs. structural changes needed
+      Document specific numbers so improvement can be measured.
+  - type: plan
+    agent: architect
+    gate: approval
+    prompt: |
+      Plan targeted optimizations for ${target_component} to improve
+      ${optimization_target}. For each optimization:
+      1. Describe the change and expected impact
+      2. Estimate effort vs. payoff
+      3. Note any trade-offs (readability, memory vs. speed, etc.)
+      Order by impact-to-effort ratio. Include a benchmark strategy to verify
+      each optimization delivers the expected improvement.
+  - type: implement
+    agent: developer
+  - type: verify
+    agent: reviewer
+    prompt: |
+      Verify the performance optimizations: re-run profiling to measure actual
+      improvement against the baseline from research. Confirm the test suite
+      passes and the optimizations do not degrade other quality attributes.
+
+verification:
+  - "Baseline metrics are documented before optimization"
+  - "Measurable improvement toward the optimization target is demonstrated"
+  - "The improvement goal is met or progress is clearly documented"
+  - "All existing tests pass"
+  - "No readability or maintainability regressions in optimized code"
+  - "Benchmarks or profiling commands are documented for future use"

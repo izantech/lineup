@@ -200,9 +200,18 @@ Whether to commit `.lineup/tactics/` is up to your team:
 - **Commit them** if tactics are shared workflow standards for your project
 - **Gitignore them** if they are personal workflow preferences
 
+## Creating tactics
+
+There are two ways to create tactics:
+
+- **Interactive wizard:** Run `/lineup:playbook` to create, import, edit, or delete tactics with guided prompts, validation, and formatting. See [Use Playbook](/guides/use-playbook).
+- **Manual authoring:** Write YAML files directly in `.lineup/tactics/`. See [Create a Tactic](/guides/create-tactic).
+
+Both produce identical files. The playbook skill is helpful when you want schema guidance and validation; manual editing is faster for small tweaks.
+
 ## Example tactics
 
-Lineup ships example tactics in the `examples/tactics/` directory. Copy any of them into your project:
+Lineup ships example tactics in the `examples/tactics/` directory. You can import them into your project using `/lineup:playbook` (Import mode) or copy them manually:
 
 ```bash
 mkdir -p .lineup/tactics
@@ -216,8 +225,14 @@ cp /path/to/lineup/examples/tactics/api-feature.yaml .lineup/tactics/
 | `targeted-refactor` | Research, Plan, Implement, Verify | Refactor a specific module with variable targeting |
 | `bug-triage` | Research, Plan, Implement, Verify | Investigate and fix a reported bug with regression tests |
 | `full-feature` | Research?, Plan, Implement, Verify, Document? | End-to-end feature with optional stages and approval gate |
+| `explain-codebase` | Research, Explain (teacher) | Get a guided tour of an unfamiliar codebase |
+| `dependency-security-audit` | Research!, Plan!, Implement, Verify | Audit dependencies for vulnerabilities and upgrade them |
+| `performance-profiling-cycle` | Research!, Plan!, Implement, Verify | Profile a component, find bottlenecks, and optimize |
+| `add-missing-test-coverage` | Research!, Plan, Implement, Verify | Find and fill gaps in test coverage |
 
-For step-by-step instructions on authoring your own tactics, see [Create a Tactic](/guides/create-tactic). For the full annotated schema, see [Tactic Schema](/reference/tactic-schema).
+Legend: `?` = optional stage, `!` = approval gate
+
+For a guided wizard, see [Use Playbook](/guides/use-playbook). For manual authoring, see [Create a Tactic](/guides/create-tactic). For the full annotated schema, see [Tactic Schema](/reference/tactic-schema).
 
 ## Built-in tactics
 

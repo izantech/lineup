@@ -47,7 +47,7 @@ for manual install and customization options.
 | --------- | ----------- |
 | 6 specialized agents | Researcher, Architect, Developer, Reviewer, Documenter, Teacher |
 | 7-stage pipeline | Clarify -> Research -> Gate -> Plan -> Implement -> Verify -> Document? |
-| 3 skills | `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain` |
+| 4 skills | `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook` |
 | Reusable tactics | Per-project custom workflows in YAML |
 
 ## Learn More
