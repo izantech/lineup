@@ -137,12 +137,12 @@ Writes override files to `~/.claude/lineup/agents/` containing only the fields y
 
 | Agent | Model | Memory | Tools |
 | ----- | ----- | ------ | ----- |
-| researcher | haiku | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
-| architect | opus | user | Read, Grep, Glob, LS, Write |
-| developer | opus | user | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | user | Read, Grep, Glob, LS, Bash |
-| documenter | opus | user | Read, Grep, Glob, LS, Write, WebFetch |
-| teacher | opus | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| architect | opus | project | Read, Grep, Glob, LS, Write |
+| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
+| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 ## `/lineup:explain`
 

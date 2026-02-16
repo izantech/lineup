@@ -17,13 +17,13 @@ The configurator walks through five steps: read current config, ask what to chan
 The configurator reads all agent files and displays a summary table:
 
 ```text
-Agent        Model    Memory   Tools
-researcher   haiku    user     Read, Grep, Glob, LS, WebFetch, WebSearch
-architect    opus     user     Read, Grep, Glob, LS, Write
-developer    opus     user     Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
-reviewer     opus     user     Read, Grep, Glob, LS, Bash
-documenter   opus     user     Read, Grep, Glob, LS, Write, WebFetch
-teacher      opus     user     Read, Grep, Glob, LS, WebFetch, WebSearch
+Agent        Model    Memory    Tools
+researcher   haiku    project   Read, Grep, Glob, LS, WebFetch, WebSearch
+architect    opus     project   Read, Grep, Glob, LS, Write
+developer    opus     project   Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
+reviewer     opus     project   Read, Grep, Glob, LS, Bash
+documenter   opus     project   Read, Grep, Glob, LS, Write, WebFetch
+teacher      opus     project   Read, Grep, Glob, LS, WebFetch, WebSearch
 ```
 
 This shows you the starting point before any changes.
@@ -133,12 +133,12 @@ Memory controls where agents store persistent knowledge across sessions:
 | Scope | Stored in | Shared across |
 | ----- | --------- | ------------- |
 | `user` | `~/.claude/agent-memory/<agent>/` | All projects for this user |
-| `project` | Project-scoped memory | Only this project |
-| `local` | Directory-scoped memory | Only the current directory |
+| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` | Only this project |
+| `local` | `.lineup/memory/<agent>/` | Only the current directory |
 
-**When to use `user` (default):** You want agents to accumulate knowledge across all your projects. The researcher remembers patterns from your React project when working on your Vue project.
+**When to use `project` (default):** Agents accumulate knowledge specific to the current project -- architecture decisions, file locations, build quirks, conventions. This is the best default for most workflows because project knowledge stays isolated and relevant.
 
-**When to use `project`:** You want memory scoped to a single project. Useful for team settings where project-specific conventions should be remembered but not leak to personal projects.
+**When to use `user`:** You want agents to carry knowledge across all your projects. The researcher remembers patterns from your React project when working on your Vue project. Useful for solo developers who work across similar codebases.
 
 **When to use `local`:** Rarely needed. Scopes memory to the exact directory, which is too narrow for most workflows.
 
@@ -207,11 +207,11 @@ Run `/lineup:configure` and choose "Reset". The configurator restores all agents
 
 | Agent | Model | Memory | Tools |
 | ----- | ----- | ------ | ----- |
-| researcher | haiku | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
-| architect | opus | user | Read, Grep, Glob, LS, Write |
-| developer | opus | user | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | user | Read, Grep, Glob, LS, Bash |
-| documenter | opus | user | Read, Grep, Glob, LS, Write, WebFetch |
-| teacher | opus | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| architect | opus | project | Read, Grep, Glob, LS, Write |
+| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
+| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 This is a hard reset -- it doesn't depend on git history, so it works even if you've modified agent files manually.

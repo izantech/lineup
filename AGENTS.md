@@ -218,4 +218,14 @@ If the user wants to save any document for future reference, they can copy it fr
 
 ### Agent Memory (Cross-Session Knowledge)
 
-Agents use `~/.claude/agent-memory/<agent>/` for persistent knowledge -- patterns, conventions, architectural decisions, and debugging insights. This is distinct from document output: memory captures reusable knowledge, not session-specific artifacts.
+Agents use persistent memory for cross-session knowledge -- patterns, conventions, architectural decisions, and debugging insights. This is distinct from document output: memory captures reusable knowledge, not session-specific artifacts.
+
+Memory scope defaults to `project` (scoped to the current project). The three scopes and their storage locations:
+
+| Scope | Storage location |
+| ----- | ---------------- |
+| `user` | `~/.claude/agent-memory/<agent>/` |
+| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` |
+| `local` | `.lineup/memory/<agent>/` |
+
+When the kick-off skill detects global memory (`~/.claude/agent-memory/<agent>/`) containing project-specific knowledge, it automatically migrates matching sections to the project-scoped memory path. This is a one-time migration per project.

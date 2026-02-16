@@ -13,7 +13,7 @@ color: blue
 description: Explores codebases, reads documentation, and gathers context.
 tools: Read, Grep, Glob, LS, WebFetch, WebSearch
 model: haiku
-memory: user
+memory: project
 ---
 
 (Agent instructions follow here)
@@ -54,8 +54,8 @@ memory: user
 | Value | Storage location | Shared across |
 | ----- | ---------------- | ------------- |
 | `user` | `~/.claude/agent-memory/<agent>/` | All projects for this user |
-| `project` | Project-scoped memory | Only the current project |
-| `local` | Directory-scoped memory | Only the current directory |
+| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` | Only the current project (default) |
+| `local` | `.lineup/memory/<agent>/` | Only the current directory |
 
 ## Default agent configurations
 
@@ -68,7 +68,7 @@ These are the factory defaults. Use `/lineup:configure` to customize, or reset t
 | Name | `researcher` |
 | Color | `blue` |
 | Model | `haiku` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, WebFetch, WebSearch` |
 
 Read-only codebase exploration with web search. Cannot modify files. Safe to run without supervision. Uses Haiku for cost-effective, high-volume file scanning.
@@ -80,7 +80,7 @@ Read-only codebase exploration with web search. Cannot modify files. Safe to run
 | Name | `architect` |
 | Color | `red` |
 | Model | `opus` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Write` |
 
 Reads the codebase and research findings, then writes implementation plans. Has Write to save plans when requested. No Bash or Edit -- planning doesn't require running commands or modifying existing files.
@@ -92,7 +92,7 @@ Reads the codebase and research findings, then writes implementation plans. Has 
 | Name | `developer` |
 | Color | `yellow` |
 | Model | `opus` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit` |
 
 Full tool access. Creates files, edits code, runs build commands, handles notebooks. The only agent with unrestricted tools.
@@ -104,7 +104,7 @@ Full tool access. Creates files, edits code, runs build commands, handles notebo
 | Name | `reviewer` |
 | Color | `green` |
 | Model | `opus` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Bash` |
 
 Read access plus Bash to run tests. Cannot modify code. Reports issues rather than fixing them.
@@ -116,7 +116,7 @@ Read access plus Bash to run tests. Cannot modify code. Reports issues rather th
 | Name | `documenter` |
 | Color | `cyan` |
 | Model | `opus` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Write, WebFetch` |
 
 Read access, Write (for creating documentation files), and WebFetch (for pulling in external references). No Bash -- documentation doesn't require running commands.
@@ -128,7 +128,7 @@ Read access, Write (for creating documentation files), and WebFetch (for pulling
 | Name | `teacher` |
 | Color | `magenta` |
 | Model | `opus` |
-| Memory | `user` |
+| Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, WebFetch, WebSearch` |
 
 Same tool set as the researcher -- read-only access plus web search. Explores code to build understanding, then produces explanations.
@@ -173,7 +173,7 @@ color: blue
 description: One-line summary.
 tools: Read, Grep, Glob, LS
 model: haiku
-memory: user
+memory: project
 ---
 
 (This is the agent's instruction body.

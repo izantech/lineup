@@ -115,19 +115,11 @@ For very large codebases, you can also:
 
 **Symptom:** An agent applies patterns or conventions from a different project. For example, the developer uses a testing framework you don't use, or the architect references an API pattern from another codebase.
 
-**Diagnosis:** Agent memory is stored in `~/.claude/agent-memory/<agent>/` and is shared across all projects by default (user-level memory). Patterns learned in one project may be applied to another.
+**Diagnosis:** This typically happens when agents are configured with `memory: user` instead of the default `memory: project`. User-scoped memory is stored in `~/.claude/agent-memory/<agent>/` and is shared across all projects, so patterns learned in one project may be applied to another.
 
 **Solution:**
 
-Agents that should operate with project-specific knowledge can be configured with `memory: project` or `memory: local` instead of `memory: user`.
-
-To change an agent's memory scope, run:
-
-```bash
-/lineup:configure
-```
-
-Select the agent and change its memory setting. See [Customize Agents](/guides/customize-agents) for details on memory scopes.
+If you changed agents to `memory: user`, consider switching back to the default `memory: project` so knowledge stays isolated per project. Run `/lineup:configure` and set memory scope to `project`.
 
 Alternatively, be explicit in your task description about which patterns to follow: "Use Vitest for testing, not Jest" or "Follow the existing Express middleware pattern in this project."
 

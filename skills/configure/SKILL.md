@@ -27,12 +27,12 @@ These are the plugin defaults (used as reference if agent files cannot be read):
 
 | Agent | Model | Memory | Tools |
 |-------|-------|--------|-------|
-| researcher | haiku | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
-| architect | opus | user | Read, Grep, Glob, LS, Write |
-| developer | opus | user | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | user | Read, Grep, Glob, LS, Bash |
-| documenter | opus | user | Read, Grep, Glob, LS, Write, WebFetch |
-| teacher | opus | user | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| architect | opus | project | Read, Grep, Glob, LS, Write |
+| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
+| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 ### 1b. Read user overrides
 
@@ -57,12 +57,12 @@ Current agent configuration:
 
 | Agent       | Model    | Memory | Tools                                                          |
 |-------------|----------|--------|----------------------------------------------------------------|
-| researcher  | sonnet*  | user   | Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search* |
-| architect   | opus     | user   | Read, Grep, Glob, LS, Write                                   |
-| developer   | opus     | user   | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit         |
-| reviewer    | opus     | user   | Read, Grep, Glob, LS, Bash                                    |
-| documenter  | opus     | user   | Read, Grep, Glob, LS, Write, WebFetch                         |
-| teacher     | opus     | user   | Read, Grep, Glob, LS, WebFetch, WebSearch                     |
+| researcher  | sonnet*  | project | Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search* |
+| architect   | opus     | project | Read, Grep, Glob, LS, Write                                   |
+| developer   | opus     | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit         |
+| reviewer    | opus     | project | Read, Grep, Glob, LS, Bash                                    |
+| documenter  | opus     | project | Read, Grep, Glob, LS, Write, WebFetch                         |
+| teacher     | opus     | project | Read, Grep, Glob, LS, WebFetch, WebSearch                     |
 
 Fields marked with * have user overrides.
 ```

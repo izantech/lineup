@@ -68,7 +68,7 @@ The teacher is used in the built-in `explain` tactic (via `/lineup:explain`) and
 
 ## Agent memory
 
-All subagents have **persistent user-level memory**. They accumulate knowledge about your codebases across sessions in `~/.claude/agent-memory/<agent>/`.
+All subagents have **persistent project-scoped memory** by default. They accumulate knowledge about the current project across sessions in `~/.claude/projects/<project-path>/agent-memory/<agent>/`.
 
 This means:
 - The researcher remembers architectural patterns it discovered in previous sessions
@@ -81,8 +81,8 @@ Memory scope can be changed per-agent with `/lineup:configure`:
 
 | Scope | What it means |
 | ----- | ------------- |
-| `user` | Memory persists across all projects for this user (default) |
-| `project` | Memory is scoped to the current project |
+| `user` | Memory persists across all projects for this user |
+| `project` | Memory is scoped to the current project (default) |
 | `local` | Memory is scoped to the current directory |
 
 ## Full configuration reference

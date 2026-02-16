@@ -50,6 +50,64 @@ in the agent spawn log but proceed normally. Suggest the user run
 
 ---
 
+## Memory Migration
+
+After reading agent configurations, check if any agents have **global memory** that contains
+project-specific knowledge which should be migrated to project-scoped memory. This is a one-time
+migration per project, triggered automatically when running the pipeline.
+
+### When to run
+
+Only run this check if ALL of these conditions are true:
+
+1. The project-scoped memory directory does not yet exist for at least one agent
+   (i.e., `~/.claude/projects/<project-path>/agent-memory/lineup-<agent>/` is missing or empty).
+2. The global memory directory exists and contains files
+   (i.e., `~/.claude/agent-memory/lineup-<agent>/MEMORY.md` exists).
+
+If project-scoped memory already exists for all agents, skip migration silently -- it was
+already done in a previous session.
+
+### How to migrate
+
+For each agent that needs migration:
+
+1. Read `~/.claude/agent-memory/lineup-<agent>/MEMORY.md`.
+2. Identify sections relevant to the current project. Agent memory files typically organize
+   knowledge under `## Project: <name>` headers. Match by:
+   - Project name appearing in the header (e.g., `## Project: Lineup`)
+   - Working directory path appearing in the content
+   - Use judgment for sections without explicit project headers
+3. Extract the matching section(s) and write them to
+   `~/.claude/projects/<project-path>/agent-memory/lineup-<agent>/MEMORY.md`.
+4. Remove the migrated section(s) from the global MEMORY.md.
+5. If the global MEMORY.md becomes empty after migration, delete it.
+6. If the agent has additional files beyond MEMORY.md in its global memory directory
+   (e.g., specialized research documents), note them in the migration log but do not
+   move them automatically -- the agent will handle them over time through normal
+   memory management.
+
+### Project path encoding
+
+Claude Code encodes project paths by replacing `/` with `-` and prepending `-`.
+For example: `/Users/izan/Dev/Projects/lineup` becomes `-Users-izan-Dev-Projects-lineup`.
+
+The full project memory path for an agent is:
+`~/.claude/projects/-Users-izan-Dev-Projects-lineup/agent-memory/lineup-researcher/MEMORY.md`
+
+### Migration log
+
+After migration, briefly report what was done:
+
+```
+Memory migration: migrated project-specific knowledge for researcher, architect, developer.
+3 agents migrated, 2 agents had no project-specific content, 1 agent already had project memory.
+```
+
+If nothing needed migration, skip the log entirely -- do not report "nothing to migrate".
+
+---
+
 ## Stage 0 -- Tactic Resolution
 
 Before starting the pipeline, check if the project defines any **tactics** -- reusable
