@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Automatic memory migration in kick-off skill -- transparently migrates project-specific knowledge from global agent memory to project-scoped memory on first run per project
 
+### Fixed
+- Tactic name collision now notified at runtime -- Stage 0 Discovery reports when a project tactic overrides a built-in tactic
+- Memory migration safety rules added -- prevents partial writes, duplicate content, and cascading failures during agent memory migration
+
 ## [1.4.0] - 2026-02-14
 
 ### Added
@@ -111,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Marketplace distribution via izantech marketplace
 
 [1.5.0]: https://github.com/izantech/lineup/compare/1.4.0...1.5.0
+[1.4.0]: https://github.com/izantech/lineup/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/izantech/lineup/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/izantech/lineup/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/izantech/lineup/compare/1.0.0...1.1.0

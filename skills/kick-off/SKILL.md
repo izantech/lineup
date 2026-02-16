@@ -87,6 +87,13 @@ For each agent that needs migration:
    move them automatically -- the agent will handle them over time through normal
    memory management.
 
+### Safety rules
+
+- **Read before write**: Read the full global MEMORY.md into context before making any changes. Do not alternate between reading and writing.
+- **Idempotency**: If project-scoped memory already contains a section with the same header as the global file, skip that section (already migrated in a partial previous run). Do not duplicate content.
+- **Preserve on failure**: If writing to project-scoped memory fails, leave the global memory unchanged. Report the failure and continue the pipeline without migration. The user can retry on the next run.
+- **One agent at a time**: Complete migration for one agent fully (read, write, clean) before starting the next. This limits the blast radius of any interruption.
+
 ### Project path encoding
 
 Claude Code encodes project paths by replacing `/` with `-` and prepending `-`.
@@ -119,7 +126,8 @@ workflow definitions stored as YAML files in `.lineup/tactics/`.
 2. Check if `.lineup/tactics/` exists in the current working directory.
 3. If it does, read all `.yaml` files in that directory (project tactics).
 4. Merge both lists. If a project tactic has the same `name` as a built-in tactic, the project version takes precedence (override).
-5. Parse each file and extract: `name`, `description`, `stages`, `verification`, and `variables`.
+5. If any project tactic overrode a built-in tactic, note it to the user: "Note: project tactic 'X' overrides the built-in 'X' tactic." Continue normally -- this is informational, not an error.
+6. Parse each file and extract: `name`, `description`, `stages`, `verification`, and `variables`.
 
 ### Selection
 
