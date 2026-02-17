@@ -48,6 +48,24 @@ match the current plugin version (from `.claude-plugin/plugin.json`), note this
 in the agent spawn log but proceed normally. Suggest the user run
 `/lineup:configure` to review their customizations if the major version changed.
 
+### Override validation
+
+When reading an override file:
+
+1. If the file is not valid YAML, report:
+   "Warning: ~/.claude/lineup/agents/<agent>.yaml is malformed. Using plugin
+   defaults for <agent>."
+   Proceed with plugin defaults for that agent.
+2. Validate known fields:
+   - `model` must be one of `haiku`, `sonnet`, `opus`
+   - `memory` must be one of `user`, `project`, `local`
+   - `tools` must be a non-empty comma-space separated string
+3. If a field has an invalid value, report and use the plugin default for
+   that field only:
+   "Warning: researcher override has model 'gpt-4' (invalid). Using default
+   'haiku'."
+4. Unknown fields are ignored silently.
+
 ---
 
 ## Memory Migration
@@ -158,6 +176,19 @@ If the selected tactic defines `variables`, prompt the user for each one before 
 - Show the variable `description` and `default` value
 - Use **AskUserQuestion** with the default as option 1 and a free-text option
 - Substitute resolved values into stage prompts using `${variable_name}` replacement
+
+### Variable Validation
+
+After resolving all variable values, scan all stage prompts for `${...}` patterns.
+If any `${variable_name}` reference does not match a defined variable:
+
+1. List the unresolved references and which stage prompts contain them.
+2. Use **AskUserQuestion** to ask:
+   - "Provide a value for this variable"
+   - "Continue with the literal string (agent will see '${variable_name}')"
+   - "Abort tactic execution"
+3. If the user provides values, substitute them. If they choose to continue,
+   proceed with a warning.
 
 ### Tactic Execution
 
