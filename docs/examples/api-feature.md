@@ -61,25 +61,23 @@ The orchestrator finds the `api-feature` tactic. This tactic has no variables, s
 
 The researcher agent receives a custom prompt focused on API patterns. Instead of a general codebase scan, it investigates routing conventions, middleware, schemas, and error handling.
 
-```text
-Stage 1/4: Research
+:::info Stage 1/4 -- Research
 
 Analyzing existing API patterns...
 
 Research complete. Key findings:
 
-- Routes defined in src/routes/*.ts, each exporting a Router
-- All routes mounted in src/routes/index.ts with consistent /api prefix
-- Request validation uses Zod schemas in src/schemas/
-- Responses follow a standard envelope: { data, error, meta }
-- Error responses use src/lib/errors.ts with AppError class
-  (status code, error code string, human-readable message)
-- Auth middleware in src/middleware/auth.ts -- applied per-route, not globally
-- Health-style endpoints: none exist yet, but src/routes/status.ts was
-  deleted in a previous commit (git log shows it was removed as unused)
-- Tests in src/routes/__tests__/*.test.ts using Vitest + supertest
-- Database access through src/lib/db.ts with a getPool() export
-```
+- Routes defined in `src/routes/*.ts`, each exporting a Router
+- All routes mounted in `src/routes/index.ts` with consistent `/api` prefix
+- Request validation uses Zod schemas in `src/schemas/`
+- Responses follow a standard envelope: `{ data, error, meta }`
+- Error responses use `src/lib/errors.ts` with AppError class (status code, error code string, human-readable message)
+- Auth middleware in `src/middleware/auth.ts` -- applied per-route, not globally
+- Health-style endpoints: none exist yet, but `src/routes/status.ts` was deleted in a previous commit (git log shows it was removed as unused)
+- Tests in `src/routes/__tests__/*.test.ts` using Vitest + supertest
+- Database access through `src/lib/db.ts` with a `getPool()` export
+
+:::
 
 The custom research prompt kept the investigation focused on API conventions rather than exploring unrelated parts of the codebase.
 
@@ -87,39 +85,41 @@ The custom research prompt kept the investigation focused on API conventions rat
 
 The architect agent receives the research findings and designs the endpoint. The custom plan prompt instructs it to include route path, HTTP method, schemas, middleware chain, error responses, and test cases.
 
-```text
-Stage 2/4: Plan
+:::tip Stage 2/4 -- Plan
 
 Here is the proposed endpoint specification:
 
-1. Create route handler in src/routes/health.ts
-   - GET /api/health -- public endpoint, no auth middleware
-   - Response schema: { data: { status, database, uptime } }
-     - status: "healthy" | "degraded" | "unhealthy"
-     - database: { connected: boolean, latencyMs: number }
+1. Create route handler in `src/routes/health.ts`
+   - GET `/api/health` -- public endpoint, no auth middleware
+   - Response schema: `{ data: { status, database, uptime } }`
+     - status: `"healthy"` | `"degraded"` | `"unhealthy"`
+     - database: `{ connected: boolean, latencyMs: number }`
      - uptime: number (seconds since process start)
-   - If database ping fails: return status "degraded" with 200
-     (service is running but not fully operational)
-   - If an unexpected error occurs: return standard AppError
-     with 503 status
+   - If database ping fails: return status `"degraded"` with 200 (service is running but not fully operational)
+   - If an unexpected error occurs: return standard AppError with 503 status
 
-2. Create schema in src/schemas/health.ts
+2. Create schema in `src/schemas/health.ts`
    - HealthResponseSchema using Zod for response type safety
    - Export TypeScript type for use in route handler
 
-3. Register route in src/routes/index.ts
-   - Mount health router at /api/health
+3. Register route in `src/routes/index.ts`
+   - Mount health router at `/api/health`
    - No auth middleware (health checks must be unauthenticated)
 
-4. Add tests in src/routes/__tests__/health.test.ts
-   - GET /api/health returns 200 with healthy status
-   - GET /api/health returns degraded when database is unreachable
+4. Add tests in `src/routes/__tests__/health.test.ts`
+   - GET `/api/health` returns 200 with healthy status
+   - GET `/api/health` returns degraded when database is unreachable
    - Response matches HealthResponseSchema
    - Endpoint is accessible without authentication
    - Uptime value is a positive number
 
+:::
+
+:::warning Approval Gate
+
 Do you approve this plan? (yes/no/suggest changes)
-```
+
+:::
 
 The `gate: approval` on this stage pauses the pipeline. You review the specification, confirm the public endpoint is appropriate for health checks, and type **yes**.
 
@@ -127,54 +127,47 @@ The `gate: approval` on this stage pauses the pipeline. You review the specifica
 
 The developer agent implements the approved plan:
 
-```text
-Stage 3/4: Implement
+:::details Stage 3/4 -- Implement
 
 Implementing the approved plan...
 
-Created src/schemas/health.ts
+- Created `src/schemas/health.ts`
   - HealthResponseSchema with status, database, uptime fields
   - Exported HealthResponse type
-
-Created src/routes/health.ts
+- Created `src/routes/health.ts`
   - GET handler that pings database and reports status
-  - Uses getPool() from src/lib/db.ts for connectivity check
+  - Uses `getPool()` from `src/lib/db.ts` for connectivity check
   - Returns "degraded" status on database failure, not 503
-  - Calculates uptime from process.uptime()
-
-Updated src/routes/index.ts
-  - Imported and mounted health router at /api/health
+  - Calculates uptime from `process.uptime()`
+- Updated `src/routes/index.ts`
+  - Imported and mounted health router at `/api/health`
   - No auth middleware applied (matches plan)
-
-Created src/routes/__tests__/health.test.ts
-  - 5 test cases: healthy response, degraded on db failure,
-    schema validation, no auth required, positive uptime
+- Created `src/routes/__tests__/health.test.ts`
+  - 5 test cases: healthy response, degraded on db failure, schema validation, no auth required, positive uptime
 
 Implementation complete. 3 files created, 1 file modified.
-```
+
+:::
 
 ## Stage 4/4: Verify
 
 The reviewer agent receives a custom verification prompt and checks the implementation against both the plan and the tactic's verification criteria.
 
-```text
-Stage 4/4: Verify
+:::tip Stage 4/4 -- Verify
 
 Verification report:
-- Build: PASS
+
+- Build: **PASS**
 - Tests: 22 run, 22 passed, 0 failed (5 new + 17 existing)
 - Verification criteria:
-  - New endpoint follows existing routing conventions: PASS
-    (Router export pattern, /api prefix, mounted in index.ts)
-  - Request and response schemas are validated: PASS
-    (HealthResponseSchema validates response structure)
-  - Error responses use the project's standard error format: PASS
-    (503 case uses AppError class from src/lib/errors.ts)
-  - Tests cover success, validation failure, and auth failure cases: PASS
-    (healthy, degraded, schema check, no-auth access tested)
-  - No existing tests are broken: PASS
-- Status: PASS
-```
+  - New endpoint follows existing routing conventions: **PASS** (Router export pattern, `/api` prefix, mounted in `index.ts`)
+  - Request and response schemas are validated: **PASS** (HealthResponseSchema validates response structure)
+  - Error responses use the project's standard error format: **PASS** (503 case uses AppError class from `src/lib/errors.ts`)
+  - Tests cover success, validation failure, and auth failure cases: **PASS** (healthy, degraded, schema check, no-auth access tested)
+  - No existing tests are broken: **PASS**
+- Status: **PASS**
+
+:::
 
 ## Final result
 

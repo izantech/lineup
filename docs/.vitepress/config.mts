@@ -57,7 +57,8 @@ export default withMermaid(defineConfig({
             { text: 'Tactic Schema', link: '/reference/tactic-schema' },
             { text: 'Skill Commands', link: '/reference/skills' },
             { text: 'Document Templates', link: '/reference/templates' },
-            { text: 'Plugin Manifest', link: '/reference/plugin-manifest' }
+            { text: 'Plugin Manifest', link: '/reference/plugin-manifest' },
+            { text: 'Stage Output Styling', link: '/reference/stage-output-styling' }
           ]
         },
         {

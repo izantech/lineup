@@ -45,12 +45,14 @@ Beyond these core fields, each document type has its own structure -- research f
 
 The orchestrator is responsible for passing documents between agents. When it delegates to a downstream agent, it includes the relevant upstream output in the prompt:
 
-```text
+:::info Context Flow
+
 Researcher findings → Architect (plan creation)
 Architect plan → Developer (implementation)
 Architect plan + Developer report → Reviewer (verification)
 Architect plan + Developer report + Review report → Documenter (documentation)
-```
+
+:::
 
 Each agent receives the structured YAML from previous stages as input context, uses it to inform its work, and produces its own YAML output for the next stage.
 

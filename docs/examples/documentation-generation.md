@@ -48,74 +48,76 @@ The orchestrator finds the tactic and begins. There are no variables to prompt f
 
 The researcher agent explores the codebase with a focus on documentation gaps.
 
-```text
-Stage 1/3: Research
+:::info Stage 1/3 -- Research
 
 Exploring documentation gaps in the authentication module...
 
 Research complete. Key findings:
 
 Existing documentation:
-- README.md: mentions "JWT-based auth" in one sentence, no details
+- `README.md`: mentions "JWT-based auth" in one sentence, no details
 - No dedicated auth documentation
 
 Authentication module structure:
-- src/auth/middleware.ts -- JWT verification middleware, 3 exported functions
-- src/auth/strategies/ -- local (password), OAuth (Google, GitHub), API key
-- src/auth/tokens.ts -- token generation, refresh, and revocation
-- src/auth/permissions.ts -- role-based access control with 4 roles
-- src/auth/index.ts -- public API re-exports 12 functions
+- `src/auth/middleware.ts` -- JWT verification middleware, 3 exported functions
+- `src/auth/strategies/` -- local (password), OAuth (Google, GitHub), API key
+- `src/auth/tokens.ts` -- token generation, refresh, and revocation
+- `src/auth/permissions.ts` -- role-based access control with 4 roles
+- `src/auth/index.ts` -- public API re-exports 12 functions
 
 Documentation gaps:
 - No overview of the authentication architecture or flow diagrams
 - No API reference for the 12 exported functions
-- No guide for adding a new OAuth provider (currently requires reading
-  existing providers and inferring the pattern)
+- No guide for adding a new OAuth provider (currently requires reading existing providers and inferring the pattern)
 - No documentation of the role/permission model
 - No setup guide for configuring OAuth credentials
-- Environment variables AUTH_SECRET, OAUTH_GOOGLE_ID, OAUTH_GOOGLE_SECRET,
-  OAUTH_GITHUB_ID, OAUTH_GITHUB_SECRET referenced but undocumented
-```
+- Environment variables `AUTH_SECRET`, `OAUTH_GOOGLE_ID`, `OAUTH_GOOGLE_SECRET`, `OAUTH_GITHUB_ID`, `OAUTH_GITHUB_SECRET` referenced but undocumented
+
+:::
 
 ## Stage 2: Plan
 
 The architect agent receives the research findings and creates a documentation plan.
 
-```text
-Stage 2/3: Plan
+:::tip Stage 2/3 -- Plan
 
 Here is the proposed documentation plan, ordered by impact:
 
-1. Create docs/auth/overview.md -- Authentication architecture
+1. Create `docs/auth/overview.md` -- Authentication architecture
    - High-level flow: request -> middleware -> strategy -> token
    - Diagram of how the three strategies interact
    - When each strategy is used (web sessions vs API calls vs OAuth)
 
-2. Create docs/auth/api-reference.md -- Public API reference
-   - Document all 12 exported functions from src/auth/index.ts
+2. Create `docs/auth/api-reference.md` -- Public API reference
+   - Document all 12 exported functions from `src/auth/index.ts`
    - Parameters, return types, and usage examples for each
    - Group by category: middleware, tokens, permissions
 
-3. Create docs/auth/setup.md -- Setup and configuration guide
+3. Create `docs/auth/setup.md` -- Setup and configuration guide
    - Required environment variables with descriptions and examples
    - OAuth provider configuration steps (Google, GitHub)
    - Local strategy password hashing configuration
 
-4. Create docs/auth/permissions.md -- Role and permission model
+4. Create `docs/auth/permissions.md` -- Role and permission model
    - The 4 roles and their hierarchy
    - How permissions are checked in route handlers
    - How to add a new role
 
-5. Create docs/auth/adding-oauth-provider.md -- How to add a new provider
+5. Create `docs/auth/adding-oauth-provider.md` -- How to add a new provider
    - Step-by-step guide based on the existing Google/GitHub patterns
    - Required files, configuration, and callback setup
 
-6. Update README.md -- Add auth section
+6. Update `README.md` -- Add auth section
    - Brief overview with links to the detailed docs above
    - Replace the one-sentence mention with a proper section
 
+:::
+
+:::warning Approval Gate
+
 Do you approve this plan? (yes/no/suggest changes)
-```
+
+:::
 
 You type **yes**.
 
@@ -123,41 +125,36 @@ You type **yes**.
 
 The documenter agent writes the planned documentation. Unlike the developer agent, the documenter focuses exclusively on creating and updating documentation files.
 
-```text
-Stage 3/3: Implement
+:::details Stage 3/3 -- Implement
 
 Writing documentation based on the approved plan...
 
-Created docs/auth/overview.md
+- Created `docs/auth/overview.md`
   - Authentication architecture overview
   - Request flow explanation with all three strategies
   - Strategy selection logic
-
-Created docs/auth/api-reference.md
+- Created `docs/auth/api-reference.md`
   - 12 functions documented with signatures, parameters, return types
   - Usage examples for each function
   - Grouped into middleware (3), tokens (5), permissions (4)
-
-Created docs/auth/setup.md
+- Created `docs/auth/setup.md`
   - 5 environment variables documented with descriptions and examples
   - OAuth provider setup instructions for Google and GitHub
   - Password hashing configuration options
-
-Created docs/auth/permissions.md
+- Created `docs/auth/permissions.md`
   - 4 roles documented: admin, editor, viewer, guest
   - Permission checking flow in route handlers
   - Guide for adding a new role
-
-Created docs/auth/adding-oauth-provider.md
+- Created `docs/auth/adding-oauth-provider.md`
   - Step-by-step guide with 6 steps
   - Template files based on existing Google provider
   - Callback URL configuration
-
-Updated README.md
+- Updated `README.md`
   - Added Authentication section with overview and links
 
 Documentation complete. 5 files created, 1 file updated.
-```
+
+:::
 
 ## Final result
 

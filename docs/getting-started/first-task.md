@@ -16,8 +16,7 @@ Type that into a Claude Code session with Lineup installed. Here's what happens 
 
 The orchestrator analyzes your request and asks targeted questions to fill in gaps. You'll see something like:
 
-```text
-Stage 1/7: Clarify
+::: info Stage 1/7 -- Clarify
 
 I have a few questions before we begin:
 
@@ -30,7 +29,8 @@ I have a few questions before we begin:
    a) Inline below each field
    b) Summary at the top of the form
    c) Both inline and summary
-```
+
+:::
 
 Pick the options that match your needs, or type a custom response. The orchestrator collects your answers and produces a requirements summary.
 
@@ -42,11 +42,11 @@ If your request is already specific enough, the orchestrator will acknowledge th
 
 The orchestrator spawns one or more **researcher** agents. These are read-only -- they explore your codebase without changing anything.
 
-```text
-Stage 2/7: Research
+::: info Stage 2/7 -- Research
 
 Spawning researcher to explore the login form implementation...
-```
+
+:::
 
 The researcher digs through your files, finds the login form component, identifies existing patterns, checks for validation libraries already in use, and reports back with structured findings. You'll see a YAML summary of what it found: key files, functions, patterns, and any gaps.
 
@@ -56,17 +56,17 @@ You don't need to do anything during this stage -- just wait for the findings.
 
 The orchestrator reviews the research findings and checks for remaining ambiguities. If the research turned up something unexpected, you might see:
 
-```text
-Stage 3/7: Clarification Gate
+::: warning Stage 3/7 -- Clarification Gate
 
-The research found that your project uses both Zod (in /api) and Yup (in /web).
+The research found that your project uses both Zod (in `/api`) and Yup (in `/web`).
 Which validation library should the login form use?
 
    a) Zod (consistent with the API layer)
    b) Yup (consistent with other web forms)
    c) Native HTML5 validation (no library)
    d) Other (please specify)
-```
+
+:::
 
 Answer the question and the orchestrator locks in the final requirements.
 
@@ -76,27 +76,31 @@ If the research was clean with no open questions, this stage is skipped automati
 
 The orchestrator spawns an **architect** agent to create an implementation plan based on everything gathered so far.
 
-```text
-Stage 4/7: Plan
+::: tip Stage 4/7 -- Plan
 
 Here's the proposed implementation plan:
 
-1. Create validation schema in src/lib/validation/login.ts
+1. Create validation schema in `src/lib/validation/login.ts`
    - Email format validation using Zod
    - Password minimum length (8 chars) with strength rules
 
-2. Update src/components/LoginForm.tsx
+2. Update `src/components/LoginForm.tsx`
    - Add validation on form submit
    - Add inline error display below each field
    - Add aria-invalid attributes for accessibility
 
-3. Add tests in src/components/__tests__/LoginForm.test.tsx
+3. Add tests in `src/components/__tests__/LoginForm.test.tsx`
    - Test valid submission
    - Test email format rejection
    - Test password strength rejection
 
+:::
+
+::: warning Approval Gate
+
 Do you approve this plan? (yes/no/suggest changes)
-```
+
+:::
 
 This is the key checkpoint. **Read the plan carefully.** You can:
 - **Approve** to move forward
@@ -109,11 +113,11 @@ Nothing gets implemented until you say yes.
 
 Once you approve, the orchestrator spawns **developer** agents to write the code.
 
-```text
-Stage 5/7: Implement
+::: info Stage 5/7 -- Implement
 
 Spawning developer to implement the approved plan...
-```
+
+:::
 
 The developer follows the plan exactly -- creating files, modifying components, adding tests. You'll see the changes appear in your project as they're made.
 
@@ -123,21 +127,22 @@ For larger plans, multiple developers may run in parallel on independent parts o
 
 After implementation, the orchestrator spawns a **reviewer** agent to check the work.
 
-```text
-Stage 6/7: Verify
+::: info Stage 6/7 -- Verify
 
 Spawning reviewer to validate the implementation...
-```
+
+:::
 
 The reviewer runs tests, reviews the diff against the plan, and checks for regressions. You'll see a verification report:
 
-```text
-Verification Report:
-- Build: PASS
+::: tip Verification Report
+
+- Build: **PASS**
 - Tests: 3 run, 3 passed, 0 failed
 - Plan compliance: All items implemented
-- Status: PASS
-```
+- Status: **PASS**
+
+:::
 
 If anything fails, the reviewer flags it and the orchestrator can loop back to fix issues.
 
@@ -145,13 +150,13 @@ If anything fails, the reviewer flags it and the orchestrator can loop back to f
 
 Finally, the orchestrator asks if you want documentation generated:
 
-```text
-Stage 7/7: Document (Optional)
+::: warning Stage 7/7 -- Document (optional)
 
 Would you like to generate documentation for these changes?
    a) Yes, generate documentation
    b) No, skip documentation
-```
+
+:::
 
 If you choose yes, a **documenter** agent writes or updates relevant docs in your project. If you skip, the pipeline is done.
 

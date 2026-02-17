@@ -63,33 +63,39 @@ You type:
 
 The orchestrator finds the tactic and sees it defines two variables. Before executing any stages, it prompts you for each one:
 
-```text
+:::warning Variable Input Required
+
 This tactic requires input before starting.
 
-target_module: Path to the module to refactor (e.g., src/auth/, lib/db.ts)
-[default: src/]
->
-```
+target_module: Path to the module to refactor (e.g., `src/auth/`, `lib/db.ts`)
+[default: `src/`]
+
+:::
 
 You type:
 
-```text
-src/auth/
-```
+:::info User Input
+
+`src/auth/`
+
+:::
 
 The orchestrator prompts for the second variable:
 
-```text
+:::warning Variable Input Required
+
 refactor_goal: What should the refactor achieve?
 [default: Improve readability and reduce complexity]
->
-```
+
+:::
 
 You type:
 
-```text
+:::info User Input
+
 Separate token, session, and password concerns into independent files with no cross-dependencies
-```
+
+:::
 
 The orchestrator substitutes both values into every stage prompt that references them and begins.
 
@@ -97,36 +103,30 @@ The orchestrator substitutes both values into every stage prompt that references
 
 The researcher agent receives a prompt with `${target_module}` replaced by `src/auth/`. It analyzes the module's structure, public API, dependencies, and blast radius.
 
-```text
-Stage 1/4: Research
+:::info Stage 1/4 -- Research
 
-Analyzing src/auth/ thoroughly...
+Analyzing `src/auth/` thoroughly...
 
 Research complete. Key findings:
 
 - File structure:
-  - src/auth/index.ts -- re-exports public API (login, logout, register,
-    refreshToken, hashPassword, verifyPassword)
-  - src/auth/auth.ts -- 340 lines, contains all logic in one file
-  - src/auth/types.ts -- TypeScript interfaces for tokens and sessions
-- Public API surface: 6 functions exported from index.ts
+  - `src/auth/index.ts` -- re-exports public API (login, logout, register, refreshToken, hashPassword, verifyPassword)
+  - `src/auth/auth.ts` -- 340 lines, contains all logic in one file
+  - `src/auth/types.ts` -- TypeScript interfaces for tokens and sessions
+- Public API surface: 6 functions exported from `index.ts`
 - Internal issues:
-  - auth.ts has 3 concerns mixed: token generation (JWT), session
-    management (Redis), and password hashing (bcrypt)
-  - Token functions call session functions directly and vice versa,
-    creating circular internal dependencies
-  - hashPassword and verifyPassword are pure functions but import the
-    Redis client because they share a file with session logic
-  - Cyclomatic complexity of auth.ts: 24 (high)
-- External consumers: 8 files import from src/auth/
-  - src/routes/login.ts, src/routes/register.ts, src/routes/logout.ts
-  - src/routes/refresh.ts, src/middleware/auth.ts
-  - src/routes/__tests__/login.test.ts, register.test.ts, auth.test.ts
-- Test coverage: 78% on auth.ts, but tests are fragile because mocking
-  Redis for password tests (password functions don't use Redis)
-- No circular dependencies at the module level, but internal coupling
-  makes the file hard to modify safely
-```
+  - `auth.ts` has 3 concerns mixed: token generation (JWT), session management (Redis), and password hashing (bcrypt)
+  - Token functions call session functions directly and vice versa, creating circular internal dependencies
+  - hashPassword and verifyPassword are pure functions but import the Redis client because they share a file with session logic
+  - Cyclomatic complexity of `auth.ts`: 24 (high)
+- External consumers: 8 files import from `src/auth/`
+  - `src/routes/login.ts`, `src/routes/register.ts`, `src/routes/logout.ts`
+  - `src/routes/refresh.ts`, `src/middleware/auth.ts`
+  - `src/routes/__tests__/login.test.ts`, `register.test.ts`, `auth.test.ts`
+- Test coverage: 78% on `auth.ts`, but tests are fragile because mocking Redis for password tests (password functions don't use Redis)
+- No circular dependencies at the module level, but internal coupling makes the file hard to modify safely
+
+:::
 
 The researcher mapped the blast radius: 8 files import from `src/auth/`, all through the `index.ts` barrel export.
 
@@ -134,37 +134,35 @@ The researcher mapped the blast radius: 8 files import from `src/auth/`, all thr
 
 The architect agent receives the research findings. Its prompt includes both substituted variables: plan the refactor of `src/auth/` to `Separate token, session, and password concerns into independent files with no cross-dependencies`.
 
-```text
-Stage 2/4: Plan
+:::tip Stage 2/4 -- Plan
 
 Here is the proposed refactor plan:
 
 Execution order (tests pass after each step):
 
 1. Extract password functions
-   - Create src/auth/password.ts with hashPassword, verifyPassword
+   - Create `src/auth/password.ts` with hashPassword, verifyPassword
    - These are pure functions with only a bcrypt dependency
-   - Remove them from auth.ts, add import in auth.ts temporarily
-   - Update index.ts to re-export from password.ts
+   - Remove them from `auth.ts`, add import in `auth.ts` temporarily
+   - Update `index.ts` to re-export from `password.ts`
    - Run tests -- should pass (public API unchanged)
 
 2. Extract token functions
-   - Create src/auth/token.ts with generateToken, refreshToken, verifyToken
+   - Create `src/auth/token.ts` with generateToken, refreshToken, verifyToken
    - Dependencies: JWT library only
-   - Remove from auth.ts, update internal references
-   - Update index.ts to re-export from token.ts
+   - Remove from `auth.ts`, update internal references
+   - Update `index.ts` to re-export from `token.ts`
    - Run tests -- should pass
 
 3. Extract session functions
-   - Create src/auth/session.ts with createSession, destroySession,
-     getSession
+   - Create `src/auth/session.ts` with createSession, destroySession, getSession
    - Dependencies: Redis client
-   - auth.ts now only contains login/logout/register orchestration
-   - Update index.ts to re-export from session.ts
+   - `auth.ts` now only contains login/logout/register orchestration
+   - Update `index.ts` to re-export from `session.ts`
    - Run tests -- should pass
 
-4. Simplify auth.ts to orchestration only
-   - Rename to src/auth/auth.ts (keep name, reduce to ~60 lines)
+4. Simplify `auth.ts` to orchestration only
+   - Rename to `src/auth/auth.ts` (keep name, reduce to ~60 lines)
    - login, logout, register compose token + session + password
    - No direct Redis or bcrypt imports -- only imports from sibling files
    - Run tests -- should pass
@@ -174,8 +172,13 @@ Execution order (tests pass after each step):
    - Token tests no longer need Redis mocks
    - Update test files to remove stale mock setup
 
+:::
+
+:::warning Approval Gate
+
 Do you approve this plan? (yes/no/suggest changes)
-```
+
+:::
 
 The plan defines a safe execution order where tests pass after each step, and it preserves the public API by keeping `index.ts` as the barrel export. You type **yes**.
 
@@ -183,71 +186,61 @@ The plan defines a safe execution order where tests pass after each step, and it
 
 The developer agent follows the plan step by step:
 
-```text
-Stage 3/4: Implement
+:::details Stage 3/4 -- Implement
 
 Implementing the approved plan...
 
-Step 1: Extract password functions
-  Created src/auth/password.ts
-    - hashPassword and verifyPassword moved from auth.ts
+- Step 1: Extract password functions
+  - Created `src/auth/password.ts`
+    - hashPassword and verifyPassword moved from `auth.ts`
     - Only dependency: bcrypt
-  Updated src/auth/index.ts
-    - Re-exports hashPassword, verifyPassword from password.ts
-
-Step 2: Extract token functions
-  Created src/auth/token.ts
-    - generateToken, refreshToken, verifyToken moved from auth.ts
+  - Updated `src/auth/index.ts`
+    - Re-exports hashPassword, verifyPassword from `password.ts`
+- Step 2: Extract token functions
+  - Created `src/auth/token.ts`
+    - generateToken, refreshToken, verifyToken moved from `auth.ts`
     - Only dependency: jsonwebtoken
-  Updated src/auth/index.ts
-    - Re-exports token functions from token.ts
-
-Step 3: Extract session functions
-  Created src/auth/session.ts
-    - createSession, destroySession, getSession moved from auth.ts
+  - Updated `src/auth/index.ts`
+    - Re-exports token functions from `token.ts`
+- Step 3: Extract session functions
+  - Created `src/auth/session.ts`
+    - createSession, destroySession, getSession moved from `auth.ts`
     - Only dependency: Redis client
-  Updated src/auth/index.ts
-    - Re-exports session functions from session.ts
-
-Step 4: Simplify auth.ts
-  Updated src/auth/auth.ts
+  - Updated `src/auth/index.ts`
+    - Re-exports session functions from `session.ts`
+- Step 4: Simplify `auth.ts`
+  - Updated `src/auth/auth.ts`
     - Reduced from 340 lines to 58 lines
     - login, logout, register now compose from sibling imports
     - No direct bcrypt, JWT, or Redis imports
-
-Step 5: Clean up tests
-  Updated src/routes/__tests__/auth.test.ts
+- Step 5: Clean up tests
+  - Updated `src/routes/__tests__/auth.test.ts`
     - Removed unnecessary Redis mock from password test cases
-  Updated src/routes/__tests__/login.test.ts
+  - Updated `src/routes/__tests__/login.test.ts`
     - Removed stale Redis mock setup
 
 Implementation complete. 3 files created, 4 files modified.
-```
+
+:::
 
 ## Stage 4/4: Verify
 
 The reviewer agent receives a prompt with both variables substituted. It checks that `src/auth/` was not broken and that the refactor goal was met.
 
-```text
-Stage 4/4: Verify
+:::tip Stage 4/4 -- Verify
 
 Verification report:
-- Build: PASS
+
+- Build: **PASS**
 - Tests: 31 run, 31 passed, 0 failed
 - Verification criteria:
-  - Public API of the module is unchanged: PASS
-    (index.ts exports the same 6 functions, all 8 consumer files
-    unchanged)
-  - All existing tests pass: PASS
-    (31 tests, 0 failures, 0 skipped)
-  - No new circular dependencies introduced: PASS
-    (password.ts, token.ts, session.ts have no cross-imports;
-    auth.ts imports from siblings only)
-  - Code complexity is reduced: PASS
-    (auth.ts: 340 lines -> 58 lines, cyclomatic complexity: 24 -> 4;
-    largest new file is session.ts at 85 lines with complexity 6)
-- Status: PASS
-```
+  - Public API of the module is unchanged: **PASS** (`index.ts` exports the same 6 functions, all 8 consumer files unchanged)
+  - All existing tests pass: **PASS** (31 tests, 0 failures, 0 skipped)
+  - No new circular dependencies introduced: **PASS** (`password.ts`, `token.ts`, `session.ts` have no cross-imports; `auth.ts` imports from siblings only)
+  - Code complexity is reduced: **PASS** (`auth.ts`: 340 lines -> 58 lines, cyclomatic complexity: 24 -> 4; largest new file is `session.ts` at 85 lines with complexity 6)
+- Status: **PASS**
+
+:::
 
 ## Final result
 

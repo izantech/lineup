@@ -91,11 +91,13 @@ The configurator writes override YAML files to `~/.claude/lineup/agents/`, never
 
 You'll see a summary of what changed:
 
-```text
+:::tip Changes Applied
+
 Changes applied:
 - researcher: model haiku -> sonnet, WebSearch -> mcp__brave-search__brave_web_search
 - teacher: model opus -> sonnet, WebSearch -> mcp__brave-search__brave_web_search
-```
+
+:::
 
 ## When to change models
 
@@ -117,9 +119,11 @@ The defaults (Haiku for researcher, Opus for everything else) are a good startin
 
 The most common tool change is swapping the built-in `WebSearch` for a dedicated search tool like the Brave Search MCP:
 
-```text
+:::info
+
 Replace WebSearch with mcp__brave-search__brave_web_search for all agents
-```
+
+:::
 
 The configurator handles the swap across all agents that currently have `WebSearch` (researcher and teacher by default).
 

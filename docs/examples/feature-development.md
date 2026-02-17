@@ -44,27 +44,29 @@ The orchestrator finds the `full-feature` tactic and begins executing its stages
 
 Because research is marked `optional: true`, the orchestrator asks first:
 
-```text
-Stage 1/5: Research (optional)
+:::warning Stage 1/5 -- Research (optional)
 
 Would you like to run the Research stage? (yes/no)
-```
+
+:::
 
 You're new to this part of the codebase, so you type **yes**. The orchestrator spawns a researcher agent.
 
 The researcher explores the project and reports back with structured findings:
 
-```text
+:::info Stage 1/5 -- Research
+
 Research complete. Key findings:
 
-- Existing endpoints follow REST conventions in src/routes/*.ts
-- User model defined in src/models/user.ts with a preferences JSONB column already present
-- Validation uses Zod schemas in src/schemas/
-- Authentication middleware in src/middleware/auth.ts extracts user ID from JWT
+- Existing endpoints follow REST conventions in `src/routes/*.ts`
+- User model defined in `src/models/user.ts` with a preferences JSONB column already present
+- Validation uses Zod schemas in `src/schemas/`
+- Authentication middleware in `src/middleware/auth.ts` extracts user ID from JWT
 - Tests use Vitest with supertest for HTTP assertions
 - No existing preferences endpoint -- this is a new addition
-- Similar endpoint: src/routes/profile.ts (good model to follow)
-```
+- Similar endpoint: `src/routes/profile.ts` (good model to follow)
+
+:::
 
 The findings flow automatically to the next stage as context.
 
@@ -72,27 +74,24 @@ The findings flow automatically to the next stage as context.
 
 The orchestrator spawns an architect agent, which receives the research findings and your requirements.
 
-```text
-Stage 2/5: Plan
+:::tip Stage 2/5 -- Plan
 
 Here is the proposed implementation plan:
 
-1. Create Zod schema in src/schemas/preferences.ts
-   - Define PreferencesSchema with fields: notifications (object with
-     email, push, sms booleans), theme (enum: light, dark, system),
-     language (ISO 639-1 string)
+1. Create Zod schema in `src/schemas/preferences.ts`
+   - Define PreferencesSchema with fields: notifications (object with email, push, sms booleans), theme (enum: light, dark, system), language (ISO 639-1 string)
    - Define UpdatePreferencesSchema as a partial version for PATCH
 
-2. Create route handler in src/routes/preferences.ts
-   - GET /api/users/:id/preferences -- return current preferences
-   - PATCH /api/users/:id/preferences -- update specific fields
+2. Create route handler in `src/routes/preferences.ts`
+   - GET `/api/users/:id/preferences` -- return current preferences
+   - PATCH `/api/users/:id/preferences` -- update specific fields
    - Apply auth middleware, verify user owns the resource
-   - Follow the same pattern as src/routes/profile.ts
+   - Follow the same pattern as `src/routes/profile.ts`
 
-3. Register routes in src/routes/index.ts
+3. Register routes in `src/routes/index.ts`
    - Import and mount preferences router
 
-4. Add tests in src/routes/__tests__/preferences.test.ts
+4. Add tests in `src/routes/__tests__/preferences.test.ts`
    - GET returns default preferences for new user
    - GET returns saved preferences
    - PATCH updates individual fields without overwriting others
@@ -100,8 +99,13 @@ Here is the proposed implementation plan:
    - PATCH rejects unauthenticated request
    - PATCH rejects request for another user's preferences
 
+:::
+
+:::warning Approval Gate
+
 Do you approve this plan? (yes/no/suggest changes)
-```
+
+:::
 
 The `gate: approval` on this stage means the orchestrator pauses here. You read the plan, notice it looks solid, and type **yes**.
 
@@ -109,47 +113,45 @@ The `gate: approval` on this stage means the orchestrator pauses here. You read 
 
 With the plan approved, the orchestrator spawns a developer agent. The developer follows the plan step by step:
 
-```text
-Stage 3/5: Implement
+:::details Stage 3/5 -- Implement
 
 Implementing the approved plan...
 
-Created src/schemas/preferences.ts
+- Created `src/schemas/preferences.ts`
   - PreferencesSchema with notifications, theme, language fields
   - UpdatePreferencesSchema (partial) for PATCH validation
-
-Created src/routes/preferences.ts
-  - GET /api/users/:id/preferences handler
-  - PATCH /api/users/:id/preferences handler
+- Created `src/routes/preferences.ts`
+  - GET `/api/users/:id/preferences` handler
+  - PATCH `/api/users/:id/preferences` handler
   - Auth middleware applied, ownership check included
-
-Updated src/routes/index.ts
-  - Imported and mounted preferences router at /api/users
-
-Created src/routes/__tests__/preferences.test.ts
+- Updated `src/routes/index.ts`
+  - Imported and mounted preferences router at `/api/users`
+- Created `src/routes/__tests__/preferences.test.ts`
   - 6 test cases covering success, validation, auth, and ownership
 
 Implementation complete. 3 files created, 1 file modified.
-```
+
+:::
 
 ## Stage 4: Verify
 
 The orchestrator spawns a reviewer agent, which receives both the plan and the implementation report. The reviewer runs the test suite and checks the implementation against the plan's criteria:
 
-```text
-Stage 4/5: Verify
+:::tip Stage 4/5 -- Verify
 
 Verification report:
-- Build: PASS
+
+- Build: **PASS**
 - Tests: 14 run, 14 passed, 0 failed (6 new + 8 existing)
 - Plan compliance: All 4 items implemented as specified
 - Verification criteria:
-  - Feature works as described: PASS
-  - All new code has test coverage: PASS
-  - No existing tests broken: PASS
-  - Code follows existing project conventions: PASS
-- Status: PASS
-```
+  - Feature works as described: **PASS**
+  - All new code has test coverage: **PASS**
+  - No existing tests broken: **PASS**
+  - Code follows existing project conventions: **PASS**
+- Status: **PASS**
+
+:::
 
 Everything passes. The pipeline continues.
 
@@ -157,23 +159,25 @@ Everything passes. The pipeline continues.
 
 Documentation is marked `optional: true`, so the orchestrator asks:
 
-```text
-Stage 5/5: Document (optional)
+:::warning Stage 5/5 -- Document (optional)
 
 Would you like to generate documentation for these changes? (yes/no)
-```
+
+:::
 
 You type **yes**. The documenter agent reviews the implementation and writes documentation:
 
-```text
+:::details Documentation Report
+
 Documentation complete.
 
-Updated docs/api/preferences.md
-  - GET /api/users/:id/preferences endpoint reference
-  - PATCH /api/users/:id/preferences endpoint reference
+- Updated `docs/api/preferences.md`
+  - GET `/api/users/:id/preferences` endpoint reference
+  - PATCH `/api/users/:id/preferences` endpoint reference
   - Request/response examples
   - Authentication requirements
-```
+
+:::
 
 ## Final result
 

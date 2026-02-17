@@ -63,3 +63,63 @@
   font-style: italic;
   margin-left: 8px;
 }
+
+/* ============================================================
+   Pipeline Stage Output Blocks
+   Enhances VitePress built-in containers with left-border
+   accents and pipeline-themed typography for example pages.
+   ============================================================ */
+
+/* Shared: left-border accent on all container types */
+.vp-doc .custom-block.info,
+.vp-doc .custom-block.tip,
+.vp-doc .custom-block.warning,
+.vp-doc .custom-block.important,
+.vp-doc .custom-block.danger,
+.vp-doc .custom-block.details {
+  border-left: 4px solid;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Per-type left-border colors */
+.vp-doc .custom-block.info {
+  border-left-color: var(--vp-c-brand-1);
+}
+
+.vp-doc .custom-block.tip {
+  border-left-color: var(--vp-c-success-1);
+}
+
+.vp-doc .custom-block.warning {
+  border-left-color: var(--vp-c-warning-1);
+}
+
+.vp-doc .custom-block.important {
+  border-left-color: var(--vp-c-important-1);
+}
+
+.vp-doc .custom-block.danger {
+  border-left-color: var(--vp-c-danger-1);
+}
+
+.vp-doc .custom-block.details {
+  border-left-color: var(--vp-c-default-2);
+}
+
+/* Stage header titles: monospace uppercase */
+.vp-doc .custom-block .custom-block-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* PASS indicators: green bold in tip containers */
+.vp-doc .custom-block.tip strong {
+  color: var(--vp-c-success-1);
+}
+
+/* FAIL indicators: red bold in danger containers */
+.vp-doc .custom-block.danger strong {
+  color: var(--vp-c-danger-1);
+}

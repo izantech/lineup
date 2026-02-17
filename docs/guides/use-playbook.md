@@ -35,7 +35,8 @@ The skill takes no arguments. It discovers your current tactics, example templat
 
 The playbook reads the current state and shows a summary:
 
-```text
+:::info Playbook Inventory
+
 Playbook inventory:
 
 Project tactics (.lineup/tactics/):
@@ -47,7 +48,8 @@ Built-in tactics (plugin):
 
 Example templates available:
   - brownfield-docs, api-feature, targeted-refactor, bug-triage, full-feature
-```
+
+:::
 
 If you have no project tactics yet, it shows "No project tactics defined yet."
 
@@ -82,7 +84,8 @@ Validation rules:
 
 This is the core of the wizard. You start by choosing a common stage pattern or building from scratch:
 
-```text
+:::info Stage Patterns
+
 Start from a common pattern or build from scratch?
 
   1. Research-first (research -> plan -> implement -> verify)
@@ -91,7 +94,8 @@ Start from a common pattern or build from scratch?
   4. Full pipeline with controls
   5. Investigation only (research -> explain)
   6. Build from scratch
-```
+
+:::
 
 For each stage, the wizard collects four pieces of information:
 
@@ -109,9 +113,11 @@ After each stage, you can add more or move on.
 
 Define human-readable checks that the reviewer evaluates after execution:
 
-```text
+:::info Verification Criteria
+
 Criteria so far: ["All tests pass", "No lint errors"]. Add another?
-```
+
+:::
 
 If your tactic includes a `verify` stage, the wizard warns if you skip this step.
 
@@ -154,11 +160,13 @@ You can approve, go back to make changes, or cancel.
 
 Once confirmed, the wizard creates `.lineup/tactics/` if it doesn't exist and writes the YAML file. You'll see:
 
-```text
+:::tip Tactic Created
+
 Tactic written to .lineup/tactics/code-review.yaml
 
 You can run it with: /lineup:kick-off code-review
-```
+
+:::
 
 ## Mode: Import from examples
 

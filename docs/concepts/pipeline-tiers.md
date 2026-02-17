@@ -12,9 +12,11 @@ Not every task needs the full 7-stage pipeline. Lineup supports three tiers that
 
 ### Full
 
-```text
+:::info Full Pipeline
+
 Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?
-```
+
+:::
 
 The complete pipeline. Every stage runs (except Document, which is always optional). Use this when the task is complex, the requirements are unclear, or you're working in unfamiliar code.
 
@@ -25,9 +27,11 @@ The complete pipeline. Every stage runs (except Document, which is always option
 
 ### Lightweight
 
-```text
+:::info Lightweight Pipeline
+
 Plan → Implement → Verify
-```
+
+:::
 
 Skips clarification and research. Starts directly with planning. Use this when you already understand the scope and the codebase -- you just need a plan, execution, and validation.
 
@@ -38,9 +42,11 @@ Skips clarification and research. Starts directly with planning. Use this when y
 
 ### Direct
 
-```text
+:::info Direct
+
 Just do it
-```
+
+:::
 
 No pipeline stages at all. The orchestrator delegates directly to a developer (or handles it inline). Use this for trivial changes where the overhead of planning would exceed the work itself.
 

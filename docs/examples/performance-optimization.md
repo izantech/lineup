@@ -78,28 +78,29 @@ You type:
 
 The orchestrator prompts for three variables:
 
-```text
-This tactic requires input before starting.
+:::warning Variable Input Required
 
-target_component: Component or code path to profile (e.g., API handler, database queries, build pipeline)
->
-```
+`target_component`: Component or code path to profile (e.g., API handler, database queries, build pipeline)
+
+:::
 
 You type: **src/routes/users/search.ts and its downstream service calls**
 
-```text
-optimization_target: What metric to optimize (e.g., response time, memory usage, bundle size, build time)
-  1. response time (default)
-  2. Enter custom value
->
-```
+:::warning Variable Input Required
+
+`optimization_target`: What metric to optimize (e.g., response time, memory usage, bundle size, build time)
+1. response time (default)
+2. Enter custom value
+
+:::
 
 You accept the default **response time**.
 
-```text
-improvement_goal: Target improvement (e.g., 50% faster, under 200ms, below 500KB)
->
-```
+:::warning Variable Input Required
+
+`improvement_goal`: Target improvement (e.g., 50% faster, under 200ms, below 500KB)
+
+:::
 
 You type: **under 200ms at p95**
 
@@ -109,46 +110,50 @@ The orchestrator substitutes all three values and begins execution.
 
 The researcher profiles the search endpoint and establishes a performance baseline.
 
-```text
-Stage 1/4: Research
+:::info Stage 1/4 -- Research
 
-Profiling src/routes/users/search.ts and downstream calls...
+Profiling `src/routes/users/search.ts` and downstream calls...
 
 Research complete. Performance baseline:
 
 Current metrics (response time, 100 concurrent requests):
-  p50: 420ms
-  p95: 830ms
-  p99: 1,200ms
+- p50: 420ms
+- p95: 830ms
+- p99: 1,200ms
 
 Hot code paths (time breakdown for a single request):
-  1. Database query (Prisma findMany with joins): 380ms average
-     - Full table scan on users table (no index on search columns)
-     - Eager-loading 3 relations: profile, roles, preferences
-  2. Response serialization: 180ms average
-     - Serializing full user objects with all relations
-     - No field filtering -- returns everything regardless of what's needed
-  3. Input validation + middleware: 15ms average
-     - Not a bottleneck
+1. Database query (Prisma findMany with joins): 380ms average
+   - Full table scan on users table (no index on search columns)
+   - Eager-loading 3 relations: profile, roles, preferences
+2. Response serialization: 180ms average
+   - Serializing full user objects with all relations
+   - No field filtering -- returns everything regardless of what's needed
+3. Input validation + middleware: 15ms average
+   - Not a bottleneck
 
 Resource usage:
-  - Memory spikes to 450MB during search (loading full relation graphs)
-  - CPU usage normal
-  - No caching layer -- every search hits the database
+- Memory spikes to 450MB during search (loading full relation graphs)
+- CPU usage normal
+- No caching layer -- every search hits the database
 
 Existing benchmarks: None found.
 
 Quick wins:
-  - Add database index on users.name and users.email (search columns)
-  - Select only needed fields instead of full user objects
-  - Add response pagination (currently returns all matches)
+- Add database index on `users.name` and `users.email` (search columns)
+- Select only needed fields instead of full user objects
+- Add response pagination (currently returns all matches)
 
 Structural changes:
-  - Add a search-specific query with minimal joins
-  - Implement Redis caching for repeated searches
+- Add a search-specific query with minimal joins
+- Implement Redis caching for repeated searches
+
+:::
+
+:::warning Approval Gate
 
 Do you approve these findings? (yes/no)
-```
+
+:::
 
 The baseline numbers are concrete: p95 at 830ms against a goal of under 200ms. You type **yes**.
 
@@ -156,45 +161,48 @@ The baseline numbers are concrete: p95 at 830ms against a goal of under 200ms. Y
 
 The architect creates an optimization plan ordered by impact-to-effort ratio.
 
-```text
-Stage 2/4: Plan
+:::tip Stage 2/4 -- Plan
 
 Planning optimizations for response time...
 
 Optimization Plan (ordered by impact/effort):
 
-1. Add database indexes                     [Est. impact: -200ms, Effort: low]
-   - CREATE INDEX idx_users_name ON users(name)
-   - CREATE INDEX idx_users_email ON users(email)
+1. Add database indexes -- [Est. impact: -200ms, Effort: low]
+   - `CREATE INDEX idx_users_name ON users(name)`
+   - `CREATE INDEX idx_users_email ON users(email)`
    - Trade-off: slightly slower writes (negligible for this table size)
    - Expected p95 after: ~630ms
 
-2. Optimize query -- select only needed fields  [Est. impact: -150ms, Effort: low]
+2. Optimize query -- select only needed fields -- [Est. impact: -150ms, Effort: low]
    - Replace findMany with select-specific query
    - Only load profile relation (drop roles, preferences from search results)
-   - Trade-off: search results won't include role/preference data (not needed
-     for search result cards)
+   - Trade-off: search results won't include role/preference data (not needed for search result cards)
    - Expected p95 after: ~480ms
 
-3. Add pagination (limit 20, cursor-based)   [Est. impact: -200ms, Effort: medium]
+3. Add pagination (limit 20, cursor-based) -- [Est. impact: -200ms, Effort: medium]
    - Limit result set to 20 per page
    - Use cursor-based pagination for stable ordering
    - Trade-off: clients need to handle pagination
    - Expected p95 after: ~280ms
 
-4. Add Redis cache for repeated queries      [Est. impact: -150ms, Effort: medium]
+4. Add Redis cache for repeated queries -- [Est. impact: -150ms, Effort: medium]
    - Cache search results for 30 seconds
    - Invalidate on user create/update
    - Trade-off: stale results for up to 30 seconds after changes
    - Expected p95 after: ~130ms (cache hit), ~280ms (cache miss)
 
 Benchmark strategy:
-  - Run k6 load test (100 concurrent users, 30s duration) before and after
-  - Measure p50, p95, p99 after each optimization to validate impact
-  - Save k6 script at tests/performance/search-benchmark.js
+- Run k6 load test (100 concurrent users, 30s duration) before and after
+- Measure p50, p95, p99 after each optimization to validate impact
+- Save k6 script at `tests/performance/search-benchmark.js`
+
+:::
+
+:::warning Approval Gate
 
 Do you approve this plan? (yes/no)
-```
+
+:::
 
 The plan shows a clear path from 830ms to under 200ms through four incremental optimizations. You type **yes**.
 
@@ -202,72 +210,70 @@ The plan shows a clear path from 830ms to under 200ms through four incremental o
 
 The developer implements the optimizations in the order specified.
 
-```text
-Stage 3/4: Implement
+:::details Stage 3/4 -- Implement
 
 Implementing performance optimizations...
 
 1. Database indexes:
-   Created prisma/migrations/20240315_search_indexes/migration.sql
-   - Added idx_users_name and idx_users_email indexes
+   - Created `prisma/migrations/20240315_search_indexes/migration.sql`
+   - Added `idx_users_name` and `idx_users_email` indexes
 
 2. Optimized query:
-   Updated src/services/user-search.ts
-   - Replaced findMany({ include: { profile, roles, preferences } })
-     with findMany({ select: { id, name, email, avatar, profile: { select: { bio } } } })
+   - Updated `src/services/user-search.ts`
+   - Replaced `findMany({ include: { profile, roles, preferences } })` with `findMany({ select: { id, name, email, avatar, profile: { select: { bio } } } })`
 
 3. Pagination:
-   Updated src/routes/users/search.ts
-   - Added cursor and limit query parameters
-   - Default limit: 20, max: 100
-   Updated src/services/user-search.ts
-   - Added cursor-based pagination to query
-   Updated src/schemas/user-search.ts
-   - Added pagination params to request schema
-   - Added pagination metadata to response schema
+   - Updated `src/routes/users/search.ts`
+     - Added cursor and limit query parameters
+     - Default limit: 20, max: 100
+   - Updated `src/services/user-search.ts`
+     - Added cursor-based pagination to query
+   - Updated `src/schemas/user-search.ts`
+     - Added pagination params to request schema
+     - Added pagination metadata to response schema
 
 4. Redis cache:
-   Updated src/services/user-search.ts
-   - Added 30-second cache with search query as key
-   - Cache invalidation on user create/update hooks
-   Updated src/services/user.ts
-   - Added cache invalidation calls in create() and update()
+   - Updated `src/services/user-search.ts`
+     - Added 30-second cache with search query as key
+     - Cache invalidation on user create/update hooks
+   - Updated `src/services/user.ts`
+     - Added cache invalidation calls in `create()` and `update()`
 
 5. Benchmark:
-   Created tests/performance/search-benchmark.js
-   - k6 script with 100 virtual users, 30s duration
-   - Measures p50, p95, p99 response times
-   - Outputs comparison table
+   - Created `tests/performance/search-benchmark.js`
+     - k6 script with 100 virtual users, 30s duration
+     - Measures p50, p95, p99 response times
+     - Outputs comparison table
 
 Implementation complete. 6 files modified, 2 files created.
-```
+
+:::
 
 ## Stage 4: Verify
 
 The reviewer runs the benchmarks and the test suite.
 
-```text
-Stage 4/4: Verify
+:::tip Stage 4/4 -- Verify
 
 Verification report:
 
 Performance results (k6, 100 concurrent users, 30s):
-  Before:  p50=420ms  p95=830ms  p99=1200ms
-  After:   p50=45ms   p95=120ms  p99=190ms
-  Change:  -89%       -86%       -84%
+- Before:  p50=420ms  p95=830ms  p99=1200ms
+- After:   p50=45ms   p95=120ms  p99=190ms
+- Change:  -89%       -86%       -84%
 
-- Build: PASS
+- Build: **PASS**
 - Tests: 62 run, 62 passed, 0 failed (4 new pagination tests)
 - Verification criteria:
-  - Baseline metrics documented before optimization: PASS
-  - Measurable improvement demonstrated: PASS (p95: 830ms -> 120ms)
-  - Improvement goal met (under 200ms at p95): PASS (120ms)
-  - All existing tests pass: PASS
-  - No readability or maintainability regressions: PASS
-  - Benchmarks documented for future use: PASS
-    (tests/performance/search-benchmark.js)
-- Status: PASS
-```
+  - Baseline metrics documented before optimization: **PASS**
+  - Measurable improvement demonstrated: **PASS** (p95: 830ms -> 120ms)
+  - Improvement goal met (under 200ms at p95): **PASS** (120ms)
+  - All existing tests pass: **PASS**
+  - No readability or maintainability regressions: **PASS**
+  - Benchmarks documented for future use: **PASS** (`tests/performance/search-benchmark.js`)
+- Status: **PASS**
+
+:::
 
 ## Final result
 

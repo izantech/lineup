@@ -52,8 +52,7 @@ The orchestrator finds the tactic and begins immediately -- no variable prompts,
 
 The researcher agent explores the codebase at a high level, guided by the custom prompt.
 
-```text
-Stage 1/2: Research
+:::info Stage 1/2 -- Research
 
 Exploring project structure and architecture...
 
@@ -61,9 +60,9 @@ Research complete. Key findings:
 
 Project structure:
 - TypeScript monorepo using Turborepo with 3 packages:
-  packages/api/     -- Express REST API (main backend)
-  packages/web/     -- Next.js frontend
-  packages/shared/  -- Shared types, utilities, and validation schemas
+  - `packages/api/` -- Express REST API (main backend)
+  - `packages/web/` -- Next.js frontend
+  - `packages/shared/` -- Shared types, utilities, and validation schemas
 
 Architecture:
 - Backend follows layered architecture: routes -> controllers -> services -> repositories
@@ -71,22 +70,23 @@ Architecture:
 - Shared package provides Zod schemas used by both API validation and form validation
 
 Entry points:
-- API: packages/api/src/server.ts -> packages/api/src/routes/index.ts
-- Web: packages/web/src/app/layout.tsx (root layout)
+- API: `packages/api/src/server.ts` -> `packages/api/src/routes/index.ts`
+- Web: `packages/web/src/app/layout.tsx` (root layout)
 
 Key modules:
-- Authentication: packages/api/src/services/auth/ (JWT + OAuth)
-- Database: packages/api/src/repositories/ (Prisma ORM)
-- Event system: packages/api/src/events/ (async job queue via BullMQ)
-- UI components: packages/web/src/components/ (Radix + Tailwind)
+- Authentication: `packages/api/src/services/auth/` (JWT + OAuth)
+- Database: `packages/api/src/repositories/` (Prisma ORM)
+- Event system: `packages/api/src/events/` (async job queue via BullMQ)
+- UI components: `packages/web/src/components/` (Radix + Tailwind)
 
 Conventions:
-- Barrel exports in every module index.ts
-- Zod schemas colocated with their routes in packages/api/src/schemas/
+- Barrel exports in every module `index.ts`
+- Zod schemas colocated with their routes in `packages/api/src/schemas/`
 - ESLint strict mode with no-explicit-any
-- Tests colocated with source: *.test.ts next to *.ts
+- Tests colocated with source: `*.test.ts` next to `*.ts`
 - CI: GitHub Actions with lint, typecheck, test, build stages
-```
+
+:::
 
 The findings are passed automatically to the next stage.
 
@@ -94,80 +94,76 @@ The findings are passed automatically to the next stage.
 
 The teacher agent receives the research findings and produces a structured onboarding guide. This is the **explain** stage type, paired with the **teacher** agent -- a combination unique to explanation workflows.
 
-```text
-Stage 2/2: Explain
+:::tip Stage 2/2 -- Explain
 
 Producing onboarding guide...
 
-# Onboarding Guide
+### Onboarding Guide
 
-## Project Purpose and Architecture
+#### Project Purpose and Architecture
 
-This is a full-stack TypeScript application built as a monorepo with three
-packages. The architecture separates concerns across layers:
+This is a full-stack TypeScript application built as a monorepo with three packages. The architecture separates concerns across layers:
 
-  Request → Route → Controller → Service → Repository → Database
+Request -> Route -> Controller -> Service -> Repository -> Database
 
-The frontend uses Next.js server components that call the API directly.
-A shared package provides type-safe schemas used by both sides.
+The frontend uses Next.js server components that call the API directly. A shared package provides type-safe schemas used by both sides.
 
-## Directory Structure
+#### Directory Structure
 
-  packages/api/        Backend REST API (Express)
-    src/routes/        HTTP route definitions
-    src/controllers/   Request/response handling
-    src/services/      Business logic
-    src/repositories/  Database access (Prisma)
-    src/events/        Async job processing (BullMQ)
-    src/schemas/       Zod validation schemas
+- `packages/api/` -- Backend REST API (Express)
+  - `src/routes/` -- HTTP route definitions
+  - `src/controllers/` -- Request/response handling
+  - `src/services/` -- Business logic
+  - `src/repositories/` -- Database access (Prisma)
+  - `src/events/` -- Async job processing (BullMQ)
+  - `src/schemas/` -- Zod validation schemas
+- `packages/web/` -- Frontend (Next.js App Router)
+  - `src/app/` -- Pages and layouts
+  - `src/components/` -- UI components (Radix + Tailwind)
+  - `src/hooks/` -- Custom React hooks
+  - `src/lib/` -- Client utilities
+- `packages/shared/` -- Shared between API and web
+  - `src/types/` -- TypeScript type definitions
+  - `src/schemas/` -- Zod schemas used by both packages
+  - `src/utils/` -- Shared utility functions
 
-  packages/web/        Frontend (Next.js App Router)
-    src/app/           Pages and layouts
-    src/components/    UI components (Radix + Tailwind)
-    src/hooks/         Custom React hooks
-    src/lib/           Client utilities
-
-  packages/shared/     Shared between API and web
-    src/types/         TypeScript type definitions
-    src/schemas/       Zod schemas used by both packages
-    src/utils/         Shared utility functions
-
-## Key Modules and Interactions
+#### Key Modules and Interactions
 
 Authentication flows through three layers:
-  Route (packages/api/src/routes/auth.ts)
-  → Service (packages/api/src/services/auth/)
-  → Repository (packages/api/src/repositories/user.ts)
+- Route (`packages/api/src/routes/auth.ts`)
+- Service (`packages/api/src/services/auth/`)
+- Repository (`packages/api/src/repositories/user.ts`)
 
 The event system decouples long-running work:
-  Service creates event → BullMQ queue → Worker processes async
+- Service creates event -> BullMQ queue -> Worker processes async
 
-## Data Flow
+#### Data Flow
 
 A typical API request:
-  1. Express route matches the path
-  2. Auth middleware validates JWT, attaches user to request
-  3. Zod schema validates the request body
-  4. Controller extracts validated data, calls service
-  5. Service contains business logic, calls repository
-  6. Repository executes Prisma query
-  7. Response flows back up the chain
+1. Express route matches the path
+2. Auth middleware validates JWT, attaches user to request
+3. Zod schema validates the request body
+4. Controller extracts validated data, calls service
+5. Service contains business logic, calls repository
+6. Repository executes Prisma query
+7. Response flows back up the chain
 
-## Conventions
+#### Conventions
 
-- Every module has an index.ts that re-exports its public API
+- Every module has an `index.ts` that re-exports its public API
 - Validation schemas live next to the routes that use them
-- Tests are colocated: auth.test.ts sits next to auth.ts
+- Tests are colocated: `auth.test.ts` sits next to `auth.ts`
 - No explicit any -- the ESLint config enforces strict typing
 - Commits follow conventional commit format
 
-## Where to Start Reading
+#### Where to Start Reading
 
-1. packages/shared/src/schemas/ -- understand the data shapes first
-2. packages/api/src/routes/index.ts -- see what endpoints exist
-3. packages/api/src/routes/auth.ts -- trace a complete request lifecycle
-4. packages/web/src/app/layout.tsx -- understand the frontend structure
-```
+1. `packages/shared/src/schemas/` -- understand the data shapes first
+2. `packages/api/src/routes/index.ts` -- see what endpoints exist
+3. `packages/api/src/routes/auth.ts` -- trace a complete request lifecycle
+4. `packages/web/src/app/layout.tsx` -- understand the frontend structure
+
+:::
 
 ## Final result
 

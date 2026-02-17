@@ -4,9 +4,11 @@ This is the reference for Lineup's plugin manifest file. The manifest tells Clau
 
 ## File location
 
-```text
-.claude-plugin/plugin.json
-```
+:::info File Location
+
+`.claude-plugin/plugin.json`
+
+:::
 
 The file must be in a `.claude-plugin/` directory at the plugin root. Claude Code discovers plugins by looking for this path.
 

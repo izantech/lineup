@@ -32,14 +32,16 @@ Run the command with no arguments to see what's available:
 
 If your project has tactics defined, the orchestrator presents a selection menu:
 
-```text
+:::info Tactic Selection Menu
+
 This project has tactics defined. Which workflow would you like to run?
 
   1. brownfield-docs -- Generate missing documentation for an existing codebase
   2. api-feature -- Full pipeline with API-focused research and testing
   3. Run the default pipeline (Clarify -> Research -> ... -> Document?)
   4. Other (please specify)
-```
+
+:::
 
 Pick a number or type a custom response. Options 3 and 4 are always present at the bottom.
 
@@ -61,14 +63,16 @@ You will not see explicit output from this phase unless there is a warning (e.g.
 
 The orchestrator analyzes your request and asks structured questions to fill in gaps. You'll see multiple-choice questions with 3-5 options each, plus a free-text option.
 
-```text
+:::info Stage 1/7 -- Clarify
+
 Stage 1/7: Clarify
 
 1. What validation rules do you need?
    a) Email format + password length (minimum 8 chars)
    b) Email format + strong password
    c) Custom rules (please specify)
-```
+
+:::
 
 **What you do:** Pick the options that match your needs, or type a custom answer. Related questions are batched together so you answer them all at once.
 
@@ -84,7 +88,8 @@ One or more researcher agents explore your codebase. They're read-only, so nothi
 
 The orchestrator reviews research findings and checks for remaining ambiguities. If the research uncovered something unexpected, you'll get follow-up questions.
 
-```text
+:::warning Stage 3/7 -- Clarification Gate
+
 Stage 3/7: Clarification Gate
 
 The research found that your project uses both Zod and Yup.
@@ -93,7 +98,8 @@ Which validation library should the new code use?
    a) Zod (consistent with the API layer)
    b) Yup (consistent with other web forms)
    c) Other (please specify)
-```
+
+:::
 
 **What you do:** Answer any questions that come up.
 
@@ -126,11 +132,13 @@ A reviewer agent runs tests, reviews the diff against the plan, and checks for r
 
 The orchestrator asks if you want documentation generated:
 
-```text
+:::warning Stage 7/7 -- Document (optional)
+
 Would you like to generate documentation for these changes?
    a) Yes, generate documentation
    b) No, skip documentation
-```
+
+:::
 
 **What you do:** Choose yes or no. If yes, a documenter agent writes or updates docs in your project. If no, the pipeline is done.
 
@@ -151,9 +159,11 @@ You can respond by:
 
 When a tactic defines a stage as `optional: true`, the orchestrator asks before running it:
 
-```text
+:::warning Optional Stage
+
 Would you like to run the Research stage? (yes/no)
-```
+
+:::
 
 Type "no" or "skip" to skip the stage. Execution continues with the next stage in the sequence.
 

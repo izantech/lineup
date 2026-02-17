@@ -72,23 +72,23 @@ You type:
 
 The orchestrator finds the tactic and sees two variables. Before executing any stages, it prompts for each one:
 
-```text
-This tactic requires input before starting.
+:::warning Variable Input Required
 
-minimum_severity: Minimum vulnerability severity to act on (low, moderate, high, critical)
-  1. high (default)
-  2. Enter custom value
->
-```
+`minimum_severity`: Minimum vulnerability severity to act on (low, moderate, high, critical)
+1. high (default)
+2. Enter custom value
+
+:::
 
 You accept the default **high**. Then:
 
-```text
-package_manager: Package manager used by the project (npm, yarn, pnpm, pip, cargo, go)
-  1. npm (default)
-  2. Enter custom value
->
-```
+:::warning Variable Input Required
+
+`package_manager`: Package manager used by the project (npm, yarn, pnpm, pip, cargo, go)
+1. npm (default)
+2. Enter custom value
+
+:::
 
 Your project uses pnpm, so you type **pnpm**. The orchestrator substitutes both values into the stage prompts and begins.
 
@@ -96,8 +96,7 @@ Your project uses pnpm, so you type **pnpm**. The orchestrator substitutes both 
 
 The researcher agent runs the audit with the substituted variables.
 
-```text
-Stage 1/4: Research
+:::info Stage 1/4 -- Research
 
 Running dependency audit using pnpm...
 
@@ -120,8 +119,13 @@ Transitive vulnerability:
 - axios is used directly and also pulled in by @octokit/rest
 - xml2js is transitive via aws-sdk (not used directly)
 
+:::
+
+:::warning Approval Gate
+
 Do you approve these findings? (yes/no)
-```
+
+:::
 
 The `gate: approval` on the research stage pauses execution here. You review the findings, confirm they match your expectations, and type **yes**.
 
@@ -129,35 +133,37 @@ The `gate: approval` on the research stage pauses execution here. You review the
 
 The architect receives the audit findings and creates a remediation plan.
 
-```text
-Stage 2/4: Plan
+:::tip Stage 2/4 -- Plan
 
 Creating remediation plan...
 
 Remediation Plan
 
 Batch 1 -- Safe upgrades (no breaking changes expected):
-  - axios: 0.21.4 -> 1.6.2
-    Minor API differences in error handling, but your usage is standard.
-    Also resolves the transitive copy from @octokit/rest.
-  - xml2js: 0.4.23 -> 0.5.0
-    This is transitive via aws-sdk. Upgrade aws-sdk to latest v3 which
-    bundles its own XML parser. If aws-sdk is not directly used, consider
-    removing it entirely.
+- axios: 0.21.4 -> 1.6.2
+  - Minor API differences in error handling, but your usage is standard.
+  - Also resolves the transitive copy from @octokit/rest.
+- xml2js: 0.4.23 -> 0.5.0
+  - This is transitive via aws-sdk. Upgrade aws-sdk to latest v3 which bundles its own XML parser. If aws-sdk is not directly used, consider removing it entirely.
 
 Batch 2 -- Breaking changes (individual attention):
-  - jsonwebtoken: 8.5.1 -> 9.0.0
-    Breaking: verify() no longer accepts the complete callback signature.
-    The second argument changed from (err, decoded) to (err, payload).
-    Affected files: src/middleware/auth.ts, src/services/token.ts
-    Migration: update callback signatures, add explicit type annotations.
+- jsonwebtoken: 8.5.1 -> 9.0.0
+  - Breaking: `verify()` no longer accepts the complete callback signature.
+  - The second argument changed from `(err, decoded)` to `(err, payload)`.
+  - Affected files: `src/middleware/auth.ts`, `src/services/token.ts`
+  - Migration: update callback signatures, add explicit type annotations.
 
 Deferred (not security-related):
-  - webpack 4 -> 5: significant migration, recommend separate task
-  - typescript 4.9 -> 5.3: recommend separate task after tests are green
+- webpack 4 -> 5: significant migration, recommend separate task
+- typescript 4.9 -> 5.3: recommend separate task after tests are green
+
+:::
+
+:::warning Approval Gate
 
 Do you approve this plan? (yes/no)
-```
+
+:::
 
 Again, the approval gate pauses. You read the plan, see that the webpack and TypeScript upgrades are correctly deferred, and type **yes**.
 
@@ -165,50 +171,49 @@ Again, the approval gate pauses. You read the plan, see that the webpack and Typ
 
 The developer agent implements the approved remediation plan.
 
-```text
-Stage 3/4: Implement
+:::details Stage 3/4 -- Implement
 
 Implementing remediation plan...
 
 Batch 1:
-  Updated pnpm-lock.yaml
-  - axios: 0.21.4 -> 1.6.2 (updated import in 3 files for error type changes)
-  - Removed aws-sdk (confirmed unused -- only transitive dependency origin)
-  - xml2js vulnerability resolved by removing aws-sdk
+- Updated `pnpm-lock.yaml`
+- axios: 0.21.4 -> 1.6.2 (updated import in 3 files for error type changes)
+- Removed aws-sdk (confirmed unused -- only transitive dependency origin)
+- xml2js vulnerability resolved by removing aws-sdk
 
 Batch 2:
-  Updated package.json: jsonwebtoken 8.5.1 -> 9.0.0
-  Updated src/middleware/auth.ts:
-    - Changed verify() callback from (err, decoded) to (err, payload)
-    - Added JwtPayload type import
-  Updated src/services/token.ts:
-    - Same callback signature update
-    - Updated token options to use new API
-
-  Updated pnpm-lock.yaml
+- Updated `package.json`: jsonwebtoken 8.5.1 -> 9.0.0
+- Updated `src/middleware/auth.ts`:
+  - Changed `verify()` callback from `(err, decoded)` to `(err, payload)`
+  - Added `JwtPayload` type import
+- Updated `src/services/token.ts`:
+  - Same callback signature update
+  - Updated token options to use new API
+- Updated `pnpm-lock.yaml`
 
 Implementation complete. 5 files modified, 0 files created.
-```
+
+:::
 
 ## Stage 4: Verify
 
 The reviewer re-runs the audit and the test suite.
 
-```text
-Stage 4/4: Verify
+:::tip Stage 4/4 -- Verify
 
 Verification report:
-- Dependency audit (pnpm audit --severity high): 0 vulnerabilities found
-- Build: PASS
+- Dependency audit (`pnpm audit --severity high`): 0 vulnerabilities found
+- Build: **PASS**
 - Tests: 89 run, 89 passed, 0 failed
 - Verification criteria:
-  - All vulnerabilities at or above high severity resolved: PASS
-  - Dependency audit returns clean at high threshold: PASS
-  - All existing tests pass after upgrades: PASS
-  - No new vulnerabilities introduced: PASS
-  - Lock file consistent with package manifest: PASS
-- Status: PASS
-```
+  - All vulnerabilities at or above high severity resolved: **PASS**
+  - Dependency audit returns clean at high threshold: **PASS**
+  - All existing tests pass after upgrades: **PASS**
+  - No new vulnerabilities introduced: **PASS**
+  - Lock file consistent with package manifest: **PASS**
+- Status: **PASS**
+
+:::
 
 ## Final result
 
