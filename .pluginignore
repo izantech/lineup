@@ -4,4 +4,9 @@ docs/
 # Development files
 .git/
 .github/
+.local/
 *.md.backup
+
+# Other AI tool instructions
+CODEX.md
+GEMINI.md

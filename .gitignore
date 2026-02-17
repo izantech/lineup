@@ -3,5 +3,11 @@ docs/node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
+# Claude Code
+.claude/
+
+# Local working files
+.local/
+
 # OS
 .DS_Store
