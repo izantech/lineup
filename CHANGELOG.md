@@ -13,9 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent instructions now include dual-memory guidance (project-specific vs cross-project knowledge)
 - Concrete storage paths defined for all 3 memory scopes: `user` (`~/.claude/agent-memory/<agent>/`), `project` (`~/.claude/projects/<project-path>/agent-memory/<agent>/`), `local` (`.lineup/memory/<agent>/`)
 - Documentation updated across all references (AGENTS.md, concepts, reference, guides, troubleshooting, skills)
+- Kick-off orchestrator prompt reduced 52% (16.3KB → 7.8KB) by extracting initialization infrastructure into `skills/kick-off/INIT.md`
+- Agent files reduced 25-66% each by centralizing shared "Persistent Memory" and "Document Output" sections into AGENTS.md
+- Inter-stage context flow restructured with explicit snapshot definitions -- each stage now receives only the upstream YAML sections it needs, not full accumulated context
+- Verbose agent prose compressed across researcher, developer, documenter, reviewer, and teacher without losing behavioral constraints
+- AskUserQuestion examples removed from kick-off stages 1 and 3 (behavioral instructions retained)
+- Tactic template `optional: false` and `gate: null` defaults moved to comment block
 
 ### Added
 - Automatic memory migration in kick-off skill -- transparently migrates project-specific knowledge from global agent memory to project-scoped memory on first run per project
+- `skills/kick-off/INIT.md` -- dedicated initialization file for agent configuration overrides, memory migration, and tactic resolution
+- Context snapshot table in kick-off defining exactly what context flows between each stage transition
 
 ### Fixed
 - Tactic name collision now notified at runtime -- Stage 0 Discovery reports when a project tactic overrides a built-in tactic

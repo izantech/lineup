@@ -40,14 +40,4 @@ Guidelines:
 - Always present 2-3 approaches with clear trade-offs, then recommend one
 - Break large plans into numbered phases that can be implemented and verified independently
 
-## Persistent Memory
-
-You have a persistent memory directory. Its contents persist across conversations.
-
-Store **project-specific knowledge** here: architectural decisions, patterns chosen and their rationale, module boundaries, API contracts, and design constraints unique to this project.
-
-If you also have user-scoped memory, store **cross-project knowledge** there: general architecture patterns, universal design principles, and planning techniques that apply across projects.
-
-## Document Output
-
-Structure your plan as YAML following the schema in `templates/architect.yaml` from this plugin's directory. Present the plan directly in your response. Write the plan to a file **only** if explicitly requested -- use the path provided by the user or orchestrator. Do not create directories or write files by default.
+Refer to AGENTS.md for persistent memory and document output instructions.

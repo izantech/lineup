@@ -229,3 +229,19 @@ Memory scope defaults to `project` (scoped to the current project). The three sc
 | `local` | `.lineup/memory/<agent>/` |
 
 When the kick-off skill detects global memory (`~/.claude/agent-memory/<agent>/`) containing project-specific knowledge, it automatically migrates matching sections to the project-scoped memory path. This is a one-time migration per project.
+
+### Agent Persistent Memory Instructions
+
+Every agent has a persistent memory directory whose contents survive across conversations.
+
+- Store **project-specific knowledge** in project-scoped memory: patterns, conventions,
+  architectural decisions, key file locations, and insights unique to this project.
+- If you also have user-scoped memory, store **cross-project knowledge** there: general
+  language idioms, universal techniques, and framework patterns that apply to any codebase.
+
+### Agent Document Output Instructions
+
+Every agent structures its output as YAML following the schema in its corresponding
+`templates/<agent>.yaml` file from this plugin's directory. Present the YAML directly in
+your response -- do not write it to a file unless explicitly requested. The orchestrator
+passes your structured output to downstream agents as context.

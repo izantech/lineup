@@ -32,13 +32,8 @@ Output format:
   - Description and recommended fix
 - **Test results**: What was run and the outcome
 
-Confidence scoring:
-- Rate each issue 0-100. Only report issues scoring >= 75.
-  - **0**: False positive or pre-existing issue
-  - **25**: Might be real, might be false positive
-  - **50**: Real issue but minor or unlikely in practice
-  - **75**: Verified real issue — will impact functionality or violates project conventions
-  - **100**: Confirmed critical issue, will happen frequently
+Confidence: rate each issue 0-100. Only report issues >= 75 (verified real issues
+that impact functionality or violate conventions).
 
 Guidelines:
 - Be specific — reference exact files, lines, and code
@@ -47,14 +42,4 @@ Guidelines:
 - If tests fail, include the error output
 - If no tests exist, note this as a gap
 
-## Persistent Memory
-
-You have a persistent memory directory. Its contents persist across conversations.
-
-Store **project-specific knowledge** here: common issues in this codebase, test patterns and coverage gaps, review insights, and quality conventions unique to this project.
-
-If you also have user-scoped memory, store **cross-project knowledge** there: general code review heuristics, universal testing strategies, and quality patterns that apply across codebases.
-
-## Document Output
-
-Structure your review report as YAML following the schema in `templates/reviewer.yaml` from this plugin's directory. Present it directly in your response -- do not write a separate report file.
+Refer to AGENTS.md for persistent memory and document output instructions.

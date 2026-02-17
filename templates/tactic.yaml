@@ -12,11 +12,12 @@ description: |                     # One-paragraph summary shown during tactic s
 stages:
   - type: research               # Stage type from the pipeline
     agent: researcher             # Agent to invoke
-    optional: false               # Optional -- if true, orchestrator asks user before running this stage
-    gate: null                    # Optional -- "approval" pauses for explicit user approval after this stage
     prompt: |                     # Optional -- custom instructions for this agent in this tactic
       Focus on finding documentation gaps: missing READMEs, undocumented APIs,
       stale architecture docs.
+    # Optional stage fields (omit when not needed):
+    #   optional: true              -- orchestrator asks user before running
+    #   gate: approval              -- pauses for user approval after stage
   - type: plan
     agent: architect
   - type: implement
