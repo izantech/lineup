@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'Lineup',
   description: 'Structured multi-agent workflow for Claude Code',
   cleanUrls: true,
@@ -66,6 +67,8 @@ export default defineConfig({
             { text: 'Bug Triage', link: '/examples/bug-triage' },
             { text: 'Documentation Generation', link: '/examples/documentation-generation' },
             { text: 'Codebase Explanation', link: '/examples/codebase-explanation' },
+            { text: 'API Feature', link: '/examples/api-feature' },
+            { text: 'Targeted Refactor', link: '/examples/targeted-refactor' },
             { text: 'Security Audit', link: '/examples/security-audit' },
             { text: 'Performance Optimization', link: '/examples/performance-optimization' },
             { text: 'Test Coverage', link: '/examples/test-coverage' }
@@ -89,5 +92,10 @@ export default defineConfig({
     editLink: {
       pattern: 'https://github.com/izantech/lineup/edit/main/docs/:path'
     }
+  },
+
+  mermaid: {},
+  mermaidPlugin: {
+    class: 'mermaid'
   }
-})
+}))

@@ -181,6 +181,8 @@ Neither the body nor the frontmatter are modified by /lineup:configure.
 User customizations are stored as override files in ~/.claude/lineup/agents/.)
 ```
 
+Centralized instructions for agent memory behavior and document output formatting are defined in `AGENTS.md` at the plugin root. These instructions apply to all agents uniformly and cover persistent memory guidelines (what to store, when to update) and document output requirements (YAML format, ephemeral presentation). See the "Agent Persistent Memory Instructions" and "Agent Document Output Instructions" sections in AGENTS.md for details.
+
 ## The orchestrator
 
 The orchestrator is the main Claude Code session itself. It coordinates the pipeline, delegates to subagents, and interacts with the user. It is not a subagent file -- there is no `orchestrator.md`.

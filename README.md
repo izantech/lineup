@@ -36,7 +36,7 @@ Run your first task:
 ```
 
 That's it. The pipeline will walk you through clarification, research, planning,
-implementation, and verification.
+implementation, and verification. On first run, Lineup automatically configures agents, migrates memory, and discovers available tactics.
 
 See the [installation guide](https://lineup.izantech.app/getting-started/installation)
 for manual install and customization options.
@@ -46,7 +46,7 @@ for manual install and customization options.
 | Component | Description |
 | --------- | ----------- |
 | 6 specialized agents | Researcher, Architect, Developer, Reviewer, Documenter, Teacher |
-| 7-stage pipeline | Clarify -> Research -> Gate -> Plan -> Implement -> Verify -> Document? |
+| Flexible pipeline | 3 tiers (Full, Lightweight, Direct) with up to 7 stages. Define custom workflows with reusable tactics. |
 | 4 skills | `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook` |
 | Reusable tactics | Per-project custom workflows in YAML |
 

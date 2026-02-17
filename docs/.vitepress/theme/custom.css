@@ -1,0 +1,65 @@
+/* File Tree Container */
+.vp-doc .file-tree {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.vp-doc .file-tree ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.vp-doc .file-tree ul ul {
+  padding-left: 20px;
+}
+
+.vp-doc .file-tree li {
+  position: relative;
+  padding-left: 20px;
+}
+
+.vp-doc .file-tree li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--vp-c-divider);
+}
+
+.vp-doc .file-tree li::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 12px;
+  height: 1px;
+  background-color: var(--vp-c-divider);
+}
+
+.vp-doc .file-tree li:last-child::before {
+  bottom: auto;
+  height: 12px;
+}
+
+.vp-doc .file-tree .tree-folder::before {
+  content: '📁 ';
+}
+
+.vp-doc .file-tree .tree-file::before {
+  content: '📄 ';
+}
+
+.vp-doc .file-tree .tree-comment {
+  color: var(--vp-c-text-2);
+  font-style: italic;
+  margin-left: 8px;
+}

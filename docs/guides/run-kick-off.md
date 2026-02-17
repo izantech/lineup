@@ -45,6 +45,16 @@ Pick a number or type a custom response. Options 3 and 4 are always present at t
 
 If no tactics exist, the orchestrator prompts you to describe your task directly.
 
+## What happens before the stages
+
+Every time you run `/lineup:kick-off`, the orchestrator runs an initialization sequence before the first stage begins:
+
+1. **Agent configuration** -- reads your override files from `~/.claude/lineup/agents/` (if any) and merges them with plugin defaults. If you customized agent models or tools via `/lineup:configure`, those customizations are applied here.
+2. **Memory migration** -- checks if any agent has global memory that should be migrated to project-scoped memory. This is a one-time operation per project, and it runs silently if there is nothing to migrate.
+3. **Tactic discovery** -- scans `.lineup/tactics/` (your project) and the plugin's `tactics/` directory for available tactics. This is what powers the menu mode selection and tactic-by-name invocation.
+
+You will not see explicit output from this phase unless there is a warning (e.g., a malformed override file or a version mismatch). It happens automatically in the background.
+
 ## What to expect at each stage
 
 ### Stage 1: Clarify

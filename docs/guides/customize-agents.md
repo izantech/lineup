@@ -16,15 +16,14 @@ The configurator walks through five steps: read current config, ask what to chan
 
 The configurator reads all agent files and displays a summary table:
 
-```text
-Agent        Model    Memory    Tools
-researcher   haiku    project   Read, Grep, Glob, LS, WebFetch, WebSearch
-architect    opus     project   Read, Grep, Glob, LS, Write
-developer    opus     project   Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
-reviewer     opus     project   Read, Grep, Glob, LS, Bash
-documenter   opus     project   Read, Grep, Glob, LS, Write, WebFetch
-teacher      opus     project   Read, Grep, Glob, LS, WebFetch, WebSearch
-```
+| Agent | Model | Memory | Tools |
+| ----- | ----- | ------ | ----- |
+| researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
+| architect | opus | project | Read, Grep, Glob, LS, Write |
+| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
+| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 This shows you the starting point before any changes.
 
@@ -152,7 +151,7 @@ Each override file contains only the fields you changed:
 
 ```yaml
 # ~/.claude/lineup/agents/researcher.yaml
-plugin_version: "1.3.0"
+plugin_version: "1.5.0"
 model: sonnet
 tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
 memory: user

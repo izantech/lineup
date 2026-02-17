@@ -52,6 +52,16 @@ If no argument is provided, the skill enters menu mode.
 /lineup:kick-off
 ```
 
+### Initialization
+
+Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in `skills/kick-off/INIT.md`:
+
+1. **Agent configuration overrides** -- reads user override files from `~/.claude/lineup/agents/`, validates them, and merges with plugin defaults
+2. **Memory migration** -- one-time migration of global agent memory to project-scoped memory (skipped silently if already done)
+3. **Tactic resolution** -- discovers tactics from `.lineup/tactics/` and the plugin's `tactics/` directory, presents selection if available
+
+This initialization runs on every kick-off invocation, before any stages execute.
+
 ### Pipeline stages
 
 When running the default pipeline, kick-off executes up to 7 stages:

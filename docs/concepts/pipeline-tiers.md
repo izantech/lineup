@@ -53,31 +53,29 @@ No pipeline stages at all. The orchestrator delegates directly to a developer (o
 
 Use this to pick the right tier for your task:
 
-```text
-Is the scope clear and well-defined?
-  |
-  +-- No → Full (you need clarification)
-  |
-  +-- Yes
-       |
-       Do you understand the relevant codebase?
-         |
-         +-- No → Full (you need research)
-         |
-         +-- Yes
-              |
-              Is it a multi-file change?
-                |
-                +-- Yes → Lightweight (plan it, then build it)
-                |
-                +-- No
-                     |
-                     Is the change trivial (< 5 minutes of work)?
-                       |
-                       +-- Yes → Direct
-                       |
-                       +-- No → Lightweight
+<div style="display: flex; justify-content: center;">
+
+```mermaid
+flowchart TD
+    Q1{Is the scope clear and well-defined?}
+    Q2{Do you understand the relevant codebase?}
+    Q3{Is it a multi-file change?}
+    Q4{Is the change trivial?}
+    FULL([Full])
+    LIGHT([Lightweight])
+    DIRECT([Direct])
+
+    Q1 -->|No| FULL
+    Q1 -->|Yes| Q2
+    Q2 -->|No| FULL
+    Q2 -->|Yes| Q3
+    Q3 -->|Yes| LIGHT
+    Q3 -->|No| Q4
+    Q4 -->|Yes| DIRECT
+    Q4 -->|No| LIGHT
 ```
+
+</div>
 
 ## How the orchestrator chooses
 

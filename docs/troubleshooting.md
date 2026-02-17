@@ -54,12 +54,14 @@ claude --plugin-dir /path/to/lineup/.claude-plugin
 
 Verify the directory structure:
 
-```text
-your-project/
-  .lineup/          <-- dot prefix required
-    tactics/
-      my-tactic.yaml
-```
+<div class="file-tree">
+
+- <span class="tree-folder">your-project/</span>
+  - <span class="tree-folder">.lineup/</span> <span class="tree-comment">dot prefix required</span>
+    - <span class="tree-folder">tactics/</span>
+      - <span class="tree-file">my-tactic.yaml</span>
+
+</div>
 
 Also check:
 - The file extension is `.yaml` (not `.yml`)
@@ -143,7 +145,7 @@ For manual installs, pull the latest changes:
 cd /path/to/lineup && git pull
 ```
 
-Verify the plugin version by checking `.claude-plugin/plugin.json` -- the `version` field should be `1.3.0` or later.
+Verify the plugin version by checking `.claude-plugin/plugin.json` -- the `version` field should be `1.5.0` or later.
 
 ## VitePress build errors (for contributors)
 

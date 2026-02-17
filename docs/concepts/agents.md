@@ -85,6 +85,10 @@ Memory scope can be changed per-agent with `/lineup:configure`:
 | `project` | Memory is scoped to the current project (default) |
 | `local` | Memory is scoped to the current directory |
 
+### Memory migration
+
+When you first run the pipeline in a project, the kick-off skill checks whether any agents have global memory (from `user`-scoped usage) that contains knowledge relevant to the current project. If so, it automatically migrates those sections to project-scoped memory. This is a one-time operation -- subsequent runs skip it silently. The migration ensures that project-specific knowledge ends up in the right scope even if agents previously used `user` memory.
+
 ## Full configuration reference
 
 For the complete specification of agent frontmatter fields, default tool lists, and configuration options, see the [Agent Configuration](/reference/agents) reference.

@@ -50,14 +50,16 @@ This tactic runs three stages (Research, Plan, Implement) instead of the full se
 
 Create a `.lineup/tactics/` directory in your project root and add YAML files there:
 
-```text
-your-project/
-  .lineup/
-    tactics/
-      brownfield-docs.yaml
-      api-feature.yaml
-      targeted-refactor.yaml
-```
+<div class="file-tree">
+
+- <span class="tree-folder">your-project/</span>
+  - <span class="tree-folder">.lineup/</span>
+    - <span class="tree-folder">tactics/</span>
+      - <span class="tree-file">brownfield-docs.yaml</span>
+      - <span class="tree-file">api-feature.yaml</span>
+      - <span class="tree-file">targeted-refactor.yaml</span>
+
+</div>
 
 The kick-off skill discovers tactics automatically -- no registration or configuration needed.
 
@@ -77,6 +79,10 @@ Three ways to run a tactic:
 ```
 
 When you run `/lineup:kick-off` without arguments and tactics exist, the orchestrator presents a selection menu showing each tactic's name and description, plus options for the default pipeline and custom input.
+
+### Stage labels
+
+When running a tactic, stage labels use the tactic's stage count, not the default 7-stage numbering. A 4-stage tactic displays "Stage 1/4", "Stage 2/4", "Stage 3/4", "Stage 4/4". This makes it clear how many stages remain in the tactic's workflow, regardless of how many stages the default pipeline has.
 
 ## The YAML schema
 

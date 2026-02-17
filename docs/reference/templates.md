@@ -6,6 +6,8 @@ This is the complete reference for Lineup's document template schemas. For a con
 
 Templates define the YAML structure that agents follow when producing output. They are located in the plugin's `templates/` directory and serve as format references -- agents structure their conversation output according to these schemas, but no files are written to your project (except documentation files from the documenter agent).
 
+Agents receive their output formatting instructions from two sources: the template schemas in `templates/` define the YAML structure, and the centralized instructions in `AGENTS.md` (sections "Agent Document Output Instructions" and "Agent Persistent Memory Instructions") define how agents present output and manage persistent memory.
+
 | Template | Agent | Document type |
 | -------- | ----- | ------------- |
 | `templates/researcher.yaml` | Researcher | Research findings |

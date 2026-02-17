@@ -16,7 +16,7 @@ The file must be in a `.claude-plugin/` directory at the plugin root. Claude Cod
 {
   "name": "lineup",
   "description": "Structured multi-agent workflow: Clarify, Research, Plan, Implement, Verify, Document",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "author": { "name": "izantech" },
   "repository": "https://github.com/izantech/lineup"
 }
@@ -68,36 +68,43 @@ The version is informational -- Claude Code doesn't enforce version constraints 
 
 The manifest sits at the root of the plugin directory alongside all other components:
 
-```text
-.claude-plugin/
-  plugin.json          <-- Manifest
-agents/
-  researcher.md        <-- Loaded as lineup:researcher
-  architect.md
-  developer.md
-  reviewer.md
-  documenter.md
-  teacher.md
-skills/
-  kick-off/
-    SKILL.md           <-- Loaded as /lineup:kick-off
-  configure/
-    SKILL.md           <-- Loaded as /lineup:configure
-  explain/
-    SKILL.md           <-- Loaded as /lineup:explain
-tactics/
-  explain.yaml         <-- Built-in tactic
-templates/
-  researcher.yaml      <-- Document template schemas
-  architect.yaml
-  developer.yaml
-  reviewer.yaml
-  documenter.yaml
-  teacher.yaml
-  tactic.yaml
-examples/
-  tactics/             <-- Example tactics for users to copy
-```
+<div class="file-tree">
+
+- <span class="tree-folder">.claude-plugin/</span>
+  - <span class="tree-file">plugin.json</span> <span class="tree-comment">Plugin manifest</span>
+- <span class="tree-folder">agents/</span> <span class="tree-comment">Loaded as lineup:{name}</span>
+  - <span class="tree-file">researcher.md</span>
+  - <span class="tree-file">architect.md</span>
+  - <span class="tree-file">developer.md</span>
+  - <span class="tree-file">reviewer.md</span>
+  - <span class="tree-file">documenter.md</span>
+  - <span class="tree-file">teacher.md</span>
+- <span class="tree-folder">skills/</span> <span class="tree-comment">Loaded as /lineup:{name}</span>
+  - <span class="tree-folder">kick-off/</span>
+    - <span class="tree-file">SKILL.md</span>
+  - <span class="tree-folder">configure/</span>
+    - <span class="tree-file">SKILL.md</span>
+  - <span class="tree-folder">explain/</span>
+    - <span class="tree-file">SKILL.md</span>
+- <span class="tree-folder">tactics/</span> <span class="tree-comment">Built-in tactics</span>
+  - <span class="tree-file">explain.yaml</span>
+- <span class="tree-folder">templates/</span> <span class="tree-comment">YAML schemas for agent output</span>
+  - <span class="tree-file">researcher.yaml</span>
+  - <span class="tree-file">architect.yaml</span>
+  - <span class="tree-file">developer.yaml</span>
+  - <span class="tree-file">reviewer.yaml</span>
+  - <span class="tree-file">documenter.yaml</span>
+  - <span class="tree-file">teacher.yaml</span>
+  - <span class="tree-file">tactic.yaml</span>
+- <span class="tree-folder">examples/</span>
+  - <span class="tree-folder">tactics/</span> <span class="tree-comment">User-copyable examples</span>
+    - <span class="tree-file">brownfield-docs.yaml</span>
+    - <span class="tree-file">api-feature.yaml</span>
+    - <span class="tree-file">targeted-refactor.yaml</span>
+    - <span class="tree-file">bug-triage.yaml</span>
+    - <span class="tree-comment">...</span>
+
+</div>
 
 Claude Code discovers agents by scanning the `agents/` directory for `.md` files, and skills by scanning `skills/*/SKILL.md`. Templates, tactics, and examples are referenced by the agents and skills but are not directly loaded by the plugin system.
 

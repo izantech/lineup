@@ -4,36 +4,34 @@ Lineup organizes work into a 7-stage pipeline. Each stage has a specific purpose
 
 ## Overview
 
-```text
-        [USER REQUEST]
-               |
-               v
-   1. CLARIFY ────────── Orchestrator asks questions to refine requirements
-               |
-               v
-   2. RESEARCH ───────── Researcher agents explore the codebase (parallel OK)
-               |
-               v
-   3. CLARIFICATION GATE ── Orchestrator resolves ambiguities with user
-               |
-               v
-   4. PLAN ───────────── Architect agent creates an implementation plan
-               |
-               v
-   [USER APPROVAL] ───── User reviews and approves the plan
-               |
-               v
-   5. IMPLEMENT ──────── Developer agents write code (parallel OK)
-               |
-               v
-   6. VERIFY ─────────── Reviewer agent runs tests and reviews the diff
-               |
-               v
-   7. DOCUMENT? ──────── Documenter agent writes project docs (optional)
-               |
-               v
-        [USER REVIEWS] ── User sees the final result
+<div style="display: flex; justify-content: center;">
+
+```mermaid
+flowchart TD
+    REQ([User Request])
+    S1[1. Clarify]
+    S2[2. Research]
+    S3[3. Clarification Gate]
+    S4[4. Plan]
+    APPROVE{User Approval}
+    S5[5. Implement]
+    S6[6. Verify]
+    S7[7. Document?]
+    DONE([Done])
+
+    REQ --> S1
+    S1 -->|Requirements summary| S2
+    S2 -->|Structured findings| S3
+    S3 -->|Resolved requirements| S4
+    S4 --> APPROVE
+    APPROVE -->|Approved| S5
+    APPROVE -->|Revise| S4
+    S5 -->|Implementation report| S6
+    S6 --> S7
+    S7 --> DONE
 ```
+
+</div>
 
 ## Stage-by-stage breakdown
 
@@ -133,3 +131,13 @@ The orchestrator makes these decisions based on the task description and what it
 ## Tactics override the pipeline
 
 [Tactics](/concepts/tactics) let you define custom stage sequences for recurring task patterns. When a tactic is selected, its stage list replaces the default 7-stage pipeline entirely. The same agents and context-passing mechanisms apply, but the stages and their order come from the tactic definition.
+
+## Context snapshots
+
+When the orchestrator passes output from one stage to the next, it does not forward the entire conversation history. Instead, it creates a **context snapshot** -- a curated subset of the upstream output that contains only the sections relevant to the downstream agent.
+
+For example, when transitioning from Research to Plan, the snapshot includes the full research YAML. But when transitioning from Plan to Implement, the snapshot includes only the `changes`, `parallelization_strategy`, and `acceptance_criteria` sections of the plan -- not the approaches analysis or risk assessment.
+
+This selective forwarding keeps downstream agents focused on what they need and reduces token cost. The user can always ask to see any document from any stage -- snapshots control what agents receive, not what the user can access.
+
+See the kick-off skill's stage snapshot table in `skills/kick-off/SKILL.md` for the complete list of what each transition includes.

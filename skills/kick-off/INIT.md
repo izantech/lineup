@@ -19,7 +19,7 @@ Before spawning any agent, check for user-level configuration overrides:
 Override files contain only the fields the user customized:
 
 ```yaml
-plugin_version: "1.3.0"
+plugin_version: "1.5.0"
 model: sonnet
 tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
 ```

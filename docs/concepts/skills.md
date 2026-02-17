@@ -43,6 +43,8 @@ Or run it with no arguments to see available [tactics](/concepts/tactics) and ch
 
 The orchestrator decides how much of the pipeline to run based on the task complexity. Simple tasks may skip straight to implementation; complex tasks get the full treatment. See [Pipeline Tiers](/concepts/pipeline-tiers) for details.
 
+Before running any stages, the kick-off skill also performs automatic initialization: loading agent configuration overrides, running one-time memory migration, and discovering available tactics. The orchestrator then selects a pipeline tier (Full, Lightweight, or Direct) based on the task complexity.
+
 ### `/lineup:configure`
 
 Interactively customize agent settings. Walks you through changing models, tools, and memory scope for any or all agents.

@@ -56,6 +56,8 @@ Each agent receives the structured YAML from previous stages as input context, u
 
 This chain means that every agent builds on verified, structured context rather than starting from scratch. The researcher's findings directly shape the architect's plan, which directly shapes the developer's implementation.
 
+To optimize token usage, the orchestrator does not forward complete documents between stages. Instead, it creates **context snapshots** -- curated subsets containing only the sections each downstream agent needs. For example, the developer receives only the `changes`, `parallelization_strategy`, and `acceptance_criteria` sections of the plan, not the full approaches analysis. This keeps each agent's context focused and reduces cost without losing the information needed for the task.
+
 ## Document lifecycle
 
 | Document | Produced by | Consumed by | Storage |

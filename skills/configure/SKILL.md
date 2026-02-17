@@ -41,7 +41,7 @@ Check if `~/.claude/lineup/agents/` exists. For each agent, check if a correspon
 Override files are YAML with this format:
 
 ```yaml
-plugin_version: "1.3.0"
+plugin_version: "1.5.0"
 model: sonnet
 tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
 ```
@@ -132,7 +132,7 @@ Create the `~/.claude/lineup/agents/` directory if it does not exist. Write a YA
 Format:
 
 ```yaml
-plugin_version: "1.3.0"
+plugin_version: "1.5.0"
 model: sonnet
 tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
 memory: user
