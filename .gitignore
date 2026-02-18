@@ -3,6 +3,14 @@ docs/node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
+# CLI package
+cli/node_modules/
+cli/dist/
+
+# Generated host outputs (CLI artifacts)
+skills/
+.agents/skills/
+
 # Claude Code
 .claude/
 
