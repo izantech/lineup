@@ -1,0 +1,68 @@
+{
+  "name": "@izantech/lineup-cli",
+  "version": "2.0.0-alpha.0",
+  "private": false,
+  "description": "Lineup multi-host installer and manager for Claude Code and Codex",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/izantech/lineup"
+  },
+  "homepage": "https://github.com/izantech/lineup",
+  "bugs": {
+    "url": "https://github.com/izantech/lineup/issues"
+  },
+  "keywords": [
+    "lineup",
+    "cli",
+    "claude",
+    "codex",
+    "agentic"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "import": "./dist/cli.js"
+    }
+  },
+  "bin": {
+    "lineup": "bin/lineup.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "schemas",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup src/cli.ts src/index.ts --format esm --target node20 --out-dir dist --clean --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "schema:check": "tsx src/scripts/schema-check.ts",
+    "generate:check": "tsx src/scripts/generate-check.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "commander": "^14.0.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

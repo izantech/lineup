@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/json/release-manifest.schema.json",
+  "title": "Lineup Release Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tag", "tarball_url", "sha256"],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tarball_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

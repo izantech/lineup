@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/tactic.schema.json",
+  "title": "Lineup Tactic",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "description", "stages", "verification"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "agent"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "clarify",
+              "research",
+              "clarification-gate",
+              "plan",
+              "implement",
+              "verify",
+              "document",
+              "explain"
+            ]
+          },
+          "agent": {
+            "type": "string",
+            "enum": ["researcher", "architect", "developer", "reviewer", "documenter", "teacher"]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "gate": {
+            "type": ["string", "null"],
+            "enum": ["approval", null]
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

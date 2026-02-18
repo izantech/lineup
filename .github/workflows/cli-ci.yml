@@ -1,0 +1,41 @@
+name: CLI CI
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+  pull_request:
+
+jobs:
+  cli-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix cli ci
+
+      - name: Typecheck
+        run: npm --prefix cli run typecheck
+
+      - name: Test
+        run: npm --prefix cli test
+
+      - name: Schema check
+        run: npm --prefix cli run schema:check
+
+      - name: Generation check
+        run: npm --prefix cli run generate:check
+
+      - name: Build
+        run: npm --prefix cli run build

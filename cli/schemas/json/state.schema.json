@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/json/state.schema.json",
+  "title": "Lineup CLI State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "hosts"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updated_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude": {
+          "$ref": "#/$defs/hostState"
+        },
+        "codex": {
+          "$ref": "#/$defs/hostState"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hostState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installed", "last_action", "last_updated_at"],
+      "properties": {
+        "installed": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "source": {
+          "type": ["string", "null"]
+        },
+        "skills_dir": {
+          "type": ["string", "null"]
+        },
+        "last_action": {
+          "type": ["string", "null"],
+          "enum": ["install", "update", "uninstall", null]
+        },
+        "last_updated_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

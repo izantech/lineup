@@ -15,3 +15,7 @@ stages:
     prompt: |
       Produce a structured, pedagogical explanation based on the research
       findings. Include the user's original question for focus.
+
+verification:
+  - "Explanation directly addresses the original user question."
+  - "Key code references and relationships are included."
