@@ -1,5 +1,3 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
 name: explain
 description: Get a clear explanation of any project component, pattern, or decision

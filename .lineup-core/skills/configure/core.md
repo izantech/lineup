@@ -1,19 +1,17 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
-name: configure
+name: {{SKILL_NAME_CONFIGURE}}
 description: Interactively customize Lineup agent settings (models, tools, memory)
 ---
 
 You are the orchestrator for the **Lineup agent configurator**. Walk the user through customizing agent settings, then write override files to persist their preferences.
 
-Customizations are stored as YAML override files in `~/.claude/lineup/agents/`. The plugin's agent `.md` files are **never modified** — they provide defaults, and overrides layer on top.
+Customizations are stored as YAML override files in `{{OVERRIDES_DIR}}`. The {{HOST_TERM_PLUGIN_POSSESSIVE}} agent `.md` files are **never modified** — they provide defaults, and overrides layer on top.
 
 ---
 
 ## Step 1 — Read current config
 
-### 1a. Read plugin defaults
+### 1a. Read {{HOST_DEFAULTS_TERM}}
 
 Read all agent files from the repository's `agents/` directory:
 - `researcher.md`
@@ -25,7 +23,7 @@ Read all agent files from the repository's `agents/` directory:
 
 Extract the frontmatter fields: `model`, `tools`, `memory`.
 
-These are the plugin defaults (used as reference if agent files cannot be read):
+These are the {{HOST_DEFAULTS_TERM}} (used as reference if agent files cannot be read):
 
 | Agent | Model | Memory | Tools |
 |-------|-------|--------|-------|
@@ -38,7 +36,7 @@ These are the plugin defaults (used as reference if agent files cannot be read):
 
 ### 1b. Read user overrides
 
-Check if `~/.claude/lineup/agents/` exists. For each agent, check if a corresponding override file exists (e.g. `~/.claude/lineup/agents/researcher.yaml`).
+Check if `{{OVERRIDES_DIR}}` exists. For each agent, check if a corresponding override file exists (e.g. `{{OVERRIDES_DIR}}researcher.yaml`).
 
 Override files are YAML with this format:
 
@@ -52,7 +50,7 @@ Only fields the user has changed from defaults are present (plus `plugin_version
 
 ### 1c. Merge and display
 
-For each agent, merge: **override values win** over plugin defaults. Display the merged config in a summary table. Mark overridden fields with `*`:
+For each agent, merge: **override values win** over {{HOST_DEFAULTS_TERM}}. Display the merged config in a summary table. Mark overridden fields with `*`:
 
 ```
 Current agent configuration:
@@ -69,13 +67,13 @@ Current agent configuration:
 Fields marked with * have user overrides.
 ```
 
-If any overrides exist, note: "Run with **Reset** to restore all agents to plugin defaults."
+If any overrides exist, note: "Run with **Reset** to restore all agents to {{HOST_DEFAULTS_TERM}}."
 
 ---
 
 ## Step 2 — Ask what to change
 
-Present the configuration options using **AskUserQuestion**. Offer these categories:
+Present the configuration options using **{{QUESTION_PRIMITIVE}}**. Offer these categories:
 
 ### Model
 - **Keep current** — no changes
@@ -94,11 +92,11 @@ Present the configuration options using **AskUserQuestion**. Offer these categor
 - **Set per-agent** — ask for each agent individually
 
 ### Reset
-- **Restore all agents to plugin defaults** — delete all override files
+- **Restore all agents to {{HOST_DEFAULTS_TERM}}** — delete all override files
 
-If the user chooses **Reset**, show the plugin defaults, ask for confirmation, then:
-1. Delete all `.yaml` files in `~/.claude/lineup/agents/`
-2. Delete the `~/.claude/lineup/agents/` directory if it is empty
+If the user chooses **Reset**, show the {{HOST_DEFAULTS_TERM}}, ask for confirmation, then:
+1. Delete all `.yaml` files in `{{OVERRIDES_DIR}}`
+2. Delete the `{{OVERRIDES_DIR}}` directory if it is empty
 3. Report which agents were restored to defaults and skip the remaining steps
 
 ---
@@ -129,7 +127,7 @@ For each agent that has changes:
 
 ### Write override file
 
-Create the `~/.claude/lineup/agents/` directory if it does not exist. Write a YAML override file containing **only the fields that differ from plugin defaults**, plus `plugin_version`. The file path is `~/.claude/lineup/agents/<agent>.yaml`.
+Create the `{{OVERRIDES_DIR}}` directory if it does not exist. Write a YAML override file containing **only the fields that differ from {{HOST_DEFAULTS_TERM}}**, plus `plugin_version`. The file path is `{{OVERRIDES_DIR}}<agent>.yaml`.
 
 Format:
 
@@ -142,12 +140,12 @@ memory: user
 
 Rules:
 - `plugin_version` is always the first field
-- Only include `model`, `tools`, or `memory` if they differ from the plugin defaults for that agent
+- Only include `model`, `tools`, or `memory` if they differ from the {{HOST_DEFAULTS_TERM}} for that agent
 - Use the same comma-space separated format for tools as in agent frontmatter
 
 ### Delete override file
 
-If the user's changes cause all fields for an agent to match plugin defaults (i.e., no overrides remain), delete that agent's override file if it exists.
+If the user's changes cause all fields for an agent to match {{HOST_DEFAULTS_TERM}} (i.e., no overrides remain), delete that agent's override file if it exists.
 
 ---
 
@@ -157,14 +155,14 @@ Report what was changed in a brief summary:
 
 - Which agents had override files written or deleted
 - What fields changed (old -> new)
-- Remind the user they can run `/lineup:configure` again to make further changes, or reset to defaults
+- Remind the user they can run `{{CMD_CONFIGURE}}` again to make further changes, or reset to defaults
 
 ---
 
 ## Rules
 
-- **Never modify agent `.md` files** — all customizations go in override files under `~/.claude/lineup/agents/`
-- **Override files only contain changed fields** — do not write fields that match plugin defaults
+- **Never modify agent `.md` files** — all customizations go in override files under `{{OVERRIDES_DIR}}`
+- **Override files only contain changed fields** — do not write fields that match {{HOST_DEFAULTS_TERM}}
 - **Always include `plugin_version`** in override files — read it from `.claude-plugin/plugin.json`
 - **Delete override files when unnecessary** — if all fields match defaults, remove the file
 - **Validate inputs**: models must be `haiku`, `sonnet`, or `opus`; memory must be `user`, `project`, or `local`

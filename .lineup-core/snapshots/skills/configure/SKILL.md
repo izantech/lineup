@@ -1,5 +1,3 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
 name: configure
 description: Interactively customize Lineup agent settings (models, tools, memory)
@@ -15,7 +13,7 @@ Customizations are stored as YAML override files in `~/.claude/lineup/agents/`. 
 
 ### 1a. Read plugin defaults
 
-Read all agent files from the repository's `agents/` directory:
+Read all agent files from the plugin's `agents/` directory (two levels up from this skill file):
 - `researcher.md`
 - `architect.md`
 - `developer.md`
@@ -96,7 +94,7 @@ Present the configuration options using **AskUserQuestion**. Offer these categor
 ### Reset
 - **Restore all agents to plugin defaults** — delete all override files
 
-If the user chooses **Reset**, show the plugin defaults, ask for confirmation, then:
+If the user chooses **Reset**, show the plugin default values, ask for confirmation, then:
 1. Delete all `.yaml` files in `~/.claude/lineup/agents/`
 2. Delete the `~/.claude/lineup/agents/` directory if it is empty
 3. Report which agents were restored to defaults and skip the remaining steps
@@ -142,7 +140,7 @@ memory: user
 
 Rules:
 - `plugin_version` is always the first field
-- Only include `model`, `tools`, or `memory` if they differ from the plugin defaults for that agent
+- Only include `model`, `tools`, or `memory` if they differ from the plugin default for that agent
 - Use the same comma-space separated format for tools as in agent frontmatter
 
 ### Delete override file

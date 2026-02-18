@@ -1,5 +1,3 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
 name: kick-off
 description: Run the full Lineup agentic pipeline for complex tasks, with optional per-project tactics
@@ -41,7 +39,7 @@ conversation history. This keeps downstream agents focused and reduces token cos
 ## Initialization
 
 Before starting the pipeline stages, run the initialization sequence defined in
-`skills/kick-off/INIT.md` from this repository. This covers:
+`skills/kick-off/INIT.md` from this plugin's directory. This covers:
 
 1. **Agent Configuration Overrides** -- read user override files from
    `~/.claude/lineup/agents/`, validate, and merge with plugin defaults.

@@ -10,3 +10,8 @@ docs/
 # Other AI tool instructions
 CODEX.md
 GEMINI.md
+
+# Multi-host generation internals
+.agents/
+.lineup-core/
+scripts/

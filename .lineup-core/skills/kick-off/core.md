@@ -1,7 +1,5 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
-name: kick-off
+name: {{SKILL_NAME_KICKOFF}}
 description: Run the full Lineup agentic pipeline for complex tasks, with optional per-project tactics
 ---
 
@@ -41,17 +39,17 @@ conversation history. This keeps downstream agents focused and reduces token cos
 ## Initialization
 
 Before starting the pipeline stages, run the initialization sequence defined in
-`skills/kick-off/INIT.md` from this repository. This covers:
+`{{KICKOFF_INIT_PATH}}` from this repository. This covers:
 
 1. **Agent Configuration Overrides** -- read user override files from
-   `~/.claude/lineup/agents/`, validate, and merge with plugin defaults.
+   `{{OVERRIDES_DIR}}`, validate, and merge with {{HOST_DEFAULTS_TERM}}.
 2. **Memory Migration** -- one-time migration of global agent memory to
    project-scoped memory (skipped silently if already done).
 3. **Tactic Resolution** -- discover, select, and configure tactics from
-   `.lineup/tactics/` and the plugin's `tactics/` directory. If a tactic is
+   `.lineup/tactics/` and the {{HOST_TERM_PLUGIN_POSSESSIVE}} `tactics/` directory. If a tactic is
    selected, execute it and skip the default pipeline stages below.
 
-Read and follow `skills/kick-off/INIT.md` before proceeding to Stage 1.
+Read and follow `{{KICKOFF_INIT_PATH}}` before proceeding to Stage 1.
 
 ---
 
@@ -62,7 +60,7 @@ Read and follow `skills/kick-off/INIT.md` before proceeding to Stage 1.
 Refine the request before any work begins using **structured questions**.
 
 - Analyze the user's request and identify gaps: missing requirements, ambiguous scope, edge cases, non-functional constraints.
-- Use **AskUserQuestion** to present targeted, context-aware questions with predefined options. For each question:
+- Use **{{QUESTION_PRIMITIVE}}** to present targeted, context-aware questions with predefined options. For each question:
   - Provide 3-5 concrete options covering the most likely answers
   - Always include a free-text option (e.g., "Other (please specify)") as the last choice
   - Batch related questions together -- do not ask one at a time
@@ -87,7 +85,7 @@ Spawn one or more `researcher` agents to explore the codebase and gather context
 Review the research findings and identify any remaining ambiguities.
 
 - Look for: unresolved edge cases, scope boundaries, conflicting patterns, integration decisions.
-- Use **AskUserQuestion** to present each ambiguity as a structured question with concrete resolution options. For each ambiguity:
+- Use **{{QUESTION_PRIMITIVE}}** to present each ambiguity as a structured question with concrete resolution options. For each ambiguity:
   - Explain the context briefly (what the research found)
   - Offer 2-4 resolution options based on the research findings
   - Always include a free-text option for custom resolution
@@ -135,7 +133,7 @@ Spawn a `reviewer` agent to validate the implementation.
 
 After verification passes, ask the user if they want documentation generated for the changes.
 
-- Use **AskUserQuestion** to offer:
+- Use **{{QUESTION_PRIMITIVE}}** to offer:
   1. Generate documentation for the new changes
   2. Skip documentation
 - If the user chooses to generate documentation, spawn a `documenter` agent.
@@ -172,6 +170,6 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Never implement code yourself** -- always delegate to `developer`.
 - **Never do deep exploration yourself** -- always delegate to `researcher`.
 - **Always get user approval** before moving from Plan to Implement.
-- **Always use AskUserQuestion** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
+- **Always use {{QUESTION_PRIMITIVE}}** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
 - **Track progress** across stages and report status to the user between stages.
 - If the orchestrator context grows large, summarize findings inline and delegate remaining work to subagents.

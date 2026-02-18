@@ -1,7 +1,7 @@
 <!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
 
 ---
-name: playbook
+name: lineup-playbook
 description: Create, edit, or import tactic workflows for your project's playbook
 ---
 
@@ -34,7 +34,7 @@ The canonical field reference:
 
 ### 1b. Read example tactics
 
-Read all `.yaml` files from the plugin's `examples/tactics/` directory. These serve as formatting references and starting-point templates for new tactics.
+Read all `.yaml` files from the skill pack's `examples/tactics/` directory. These serve as formatting references and starting-point templates for new tactics.
 
 ### 1c. Read existing project tactics
 
@@ -42,7 +42,7 @@ Check if `.lineup/tactics/` exists in the current working directory. If it does,
 
 ### 1d. Read built-in tactics
 
-Read all `.yaml` files from the plugin's `tactics/` directory. These are built-in tactics shipped with the plugin. Note them separately -- they cannot be edited or deleted through this skill, but the user can override them by creating a project tactic with the same name.
+Read all `.yaml` files from the skill pack's `tactics/` directory. These are built-in tactics shipped with the skill pack. Note them separately -- they cannot be edited or deleted through this skill, but the user can override them by creating a project tactic with the same name.
 
 ### 1e. Present inventory
 
@@ -55,7 +55,7 @@ Project tactics (.lineup/tactics/):
   - brownfield-docs -- Generate missing documentation for an existing codebase
   - api-feature -- Add a new API endpoint or service
 
-Built-in tactics (plugin):
+Built-in tactics (skill pack):
   - explain -- Get a clear explanation of any project component
 
 Example templates available:
@@ -68,7 +68,7 @@ If no project tactics exist, show "No project tactics defined yet."
 
 ## Step 2 -- Choose mode
 
-Use **AskUserQuestion** to present the available modes:
+Use **structured multiple-choice prompts** to present the available modes:
 
 ```
 Question: "What would you like to do?"
@@ -85,7 +85,7 @@ If no project tactics exist, omit options 3 and 4.
 
 If the user chooses **Import**:
 
-1. Present the example templates with descriptions using **AskUserQuestion**.
+1. Present the example templates with descriptions using **structured multiple-choice prompts**.
 2. After selection, read the chosen example file from `examples/tactics/`.
 3. Show the full YAML content and ask: "Use this as-is, or customize it?"
 4. If **as-is**: copy to `.lineup/tactics/<name>.yaml` and skip to Step 8 (Write).
@@ -95,10 +95,10 @@ If the user chooses **Import**:
 
 If the user chooses **Edit**:
 
-1. Present the list of project tactics using **AskUserQuestion**.
+1. Present the list of project tactics using **structured multiple-choice prompts**.
 2. Read the selected tactic file.
 3. Show the current YAML content.
-4. Ask which aspect to edit using **AskUserQuestion**:
+4. Ask which aspect to edit using **structured multiple-choice prompts**:
 
 ```
 Question: "What would you like to change?"
@@ -118,7 +118,7 @@ Options:
 
 If the user chooses **Delete**:
 
-1. Present the list of project tactics using **AskUserQuestion**.
+1. Present the list of project tactics using **structured multiple-choice prompts**.
 2. Show the selected tactic's full YAML content.
 3. Ask for confirmation: "Delete `.lineup/tactics/<name>.yaml`? This cannot be undone."
 4. If confirmed, delete the file.
@@ -135,7 +135,7 @@ Proceed to Step 3.
 
 ### Name
 
-Ask the user for a tactic name using **AskUserQuestion** with a free-text option.
+Ask the user for a tactic name using **structured multiple-choice prompts** with a free-text option.
 
 **Validation rules:**
 - Must be kebab-case: lowercase letters, digits, and hyphens only
@@ -187,7 +187,7 @@ Common stage patterns:
 You can use any combination of stages. These are starting suggestions.
 ```
 
-Use **AskUserQuestion** to ask if the user wants to start from one of these patterns or build from scratch:
+Use **structured multiple-choice prompts** to ask if the user wants to start from one of these patterns or build from scratch:
 
 ```
 Question: "Start from a common pattern or build from scratch?"
@@ -208,7 +208,7 @@ For each stage (whether pre-populated or added from scratch), collect four piece
 
 **1. Stage type and agent**
 
-Use **AskUserQuestion** to ask for the stage type. Show the conventional type-agent pairing as the default:
+Use **structured multiple-choice prompts** to ask for the stage type. Show the conventional type-agent pairing as the default:
 
 ```
 Question: "Stage 1 -- which type?"
@@ -468,21 +468,21 @@ Report the result:
 ```
 Tactic written to .lineup/tactics/<name>.yaml
 
-You can run it with: /lineup:kick-off <name>
+You can run it with: $lineup-kick-off <name>
 ```
 
-If this is a new tactic, briefly remind the user that `/lineup:kick-off` will auto-discover it.
+If this is a new tactic, briefly remind the user that `$lineup-kick-off` will auto-discover it.
 
 ---
 
 ## Rules
 
-- **Never modify plugin example files** -- examples in `examples/tactics/` are read-only references. Only write to `.lineup/tactics/` in the project directory.
-- **Never modify built-in tactics** -- files in the plugin's `tactics/` directory are read-only. The user can override them by creating a project tactic with the same name.
+- **Never modify skill pack example files** -- examples in `examples/tactics/` are read-only references. Only write to `.lineup/tactics/` in the project directory.
+- **Never modify built-in tactics** -- files in the skill pack's `tactics/` directory are read-only. The user can override them by creating a project tactic with the same name.
 - **Always preview before writing** -- show the complete YAML and get explicit confirmation before writing to disk.
 - **Support rename in edit mode** -- if the name changes, write the new file and delete the old one.
 - **Use exact YAML formatting from examples** -- header comments, pipe-blocks, indentation, quoting, and field order must match the example tactics.
 - **Validate all inputs** -- names (kebab-case), variable names (snake_case), agent names, stage types, and variable cross-references.
 - **Warn but do not block on semantic issues** -- missing verification criteria, unused variables, and unconventional stage ordering are warnings, not errors.
-- **Always use AskUserQuestion** for user decisions -- never assume choices. Provide concrete options with a free-text fallback where appropriate.
+- **Always use structured multiple-choice prompts** for user decisions -- never assume choices. Provide concrete options with a free-text fallback where appropriate.
 - **Omit default values** -- do not write `optional: false` or `gate: null` to the YAML. Only include fields with non-default values.

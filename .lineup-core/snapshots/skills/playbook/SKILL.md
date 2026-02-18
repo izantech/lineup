@@ -1,5 +1,3 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 ---
 name: playbook
 description: Create, edit, or import tactic workflows for your project's playbook
@@ -15,7 +13,7 @@ Gather the current state before presenting options to the user.
 
 ### 1a. Read the tactic schema
 
-Read `templates/tactic.yaml` from the repository root. Extract the field definitions, available stage types, and available agents. Use this as the validation reference throughout the session.
+Read `templates/tactic.yaml` from this plugin's directory (two levels up from this skill file). Extract the field definitions, available stage types, and available agents. Use this as the validation reference throughout the session.
 
 The canonical field reference:
 

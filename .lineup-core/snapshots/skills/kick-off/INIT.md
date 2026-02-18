@@ -1,5 +1,3 @@
-<!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
-
 # Kick-off Initialization
 
 This file contains the initialization sequence for the kick-off pipeline.
@@ -31,7 +29,7 @@ in the agent invocation. For example, if the researcher's override sets
 `model: sonnet`, spawn the researcher with Sonnet instead of its default Haiku.
 
 **Version mismatch warning:** If the override file's `plugin_version` does not
-match the current Lineup version (from `.claude-plugin/plugin.json`), note this
+match the current plugin version (from `.claude-plugin/plugin.json`), note this
 in the agent spawn log but proceed normally. Suggest the user run
 `/lineup:configure` to review their customizations if the major version changed.
 
@@ -40,14 +38,14 @@ in the agent spawn log but proceed normally. Suggest the user run
 When reading an override file:
 
 1. If the file is not valid YAML, report:
-   "Warning: ~/.claude/lineup/agents/<agent>.yaml is malformed. Using plugin defaults
-   for <agent>."
+   "Warning: ~/.claude/lineup/agents/<agent>.yaml is malformed. Using plugin
+   defaults for <agent>."
    Proceed with plugin defaults for that agent.
 2. Validate known fields:
    - `model` must be one of `haiku`, `sonnet`, `opus`
    - `memory` must be one of `user`, `project`, `local`
    - `tools` must be a non-empty comma-space separated string
-3. If a field has an invalid value, report and use the plugin defaults for
+3. If a field has an invalid value, report and use the plugin default for
    that field only:
    "Warning: researcher override has model 'gpt-4' (invalid). Using default
    'haiku'."

@@ -11,12 +11,12 @@ The orchestrator reads this before starting the pipeline stages.
 
 Before spawning any agent, check for user-level configuration overrides:
 
-1. Check if `~/.claude/lineup/agents/` exists.
-2. For each agent about to be spawned, look for `~/.claude/lineup/agents/<agent>.yaml`.
+1. Check if `~/.codex/lineup/agents/` exists.
+2. For each agent about to be spawned, look for `~/.codex/lineup/agents/<agent>.yaml`.
 3. If an override file exists, read it and apply the overridden values (model,
    tools, memory) when spawning the agent. These values take precedence over
    the agent's frontmatter defaults.
-4. If no override file exists, use the agent's plugin defaults as-is.
+4. If no override file exists, use the agent's skill pack defaults as-is.
 
 Override files contain only the fields the user customized:
 
@@ -33,21 +33,21 @@ in the agent invocation. For example, if the researcher's override sets
 **Version mismatch warning:** If the override file's `plugin_version` does not
 match the current Lineup version (from `.claude-plugin/plugin.json`), note this
 in the agent spawn log but proceed normally. Suggest the user run
-`/lineup:configure` to review their customizations if the major version changed.
+`$lineup-configure` to review their customizations if the major version changed.
 
 ### Override validation
 
 When reading an override file:
 
 1. If the file is not valid YAML, report:
-   "Warning: ~/.claude/lineup/agents/<agent>.yaml is malformed. Using plugin defaults
+   "Warning: ~/.codex/lineup/agents/<agent>.yaml is malformed. Using skill pack defaults
    for <agent>."
-   Proceed with plugin defaults for that agent.
+   Proceed with skill pack defaults for that agent.
 2. Validate known fields:
    - `model` must be one of `haiku`, `sonnet`, `opus`
    - `memory` must be one of `user`, `project`, `local`
    - `tools` must be a non-empty comma-space separated string
-3. If a field has an invalid value, report and use the plugin defaults for
+3. If a field has an invalid value, report and use the skill pack defaults for
    that field only:
    "Warning: researcher override has model 'gpt-4' (invalid). Using default
    'haiku'."
@@ -66,9 +66,9 @@ migration per project, triggered automatically when running the pipeline.
 Only run this check if ALL of these conditions are true:
 
 1. The project-scoped memory directory does not yet exist for at least one agent
-   (i.e., `~/.claude/projects/<project-path>/agent-memory/lineup-<agent>/` is missing or empty).
+   (i.e., `~/.codex/lineup/memory/projects/<project-path>/agent-memory/lineup-<agent>/` is missing or empty).
 2. The global memory directory exists and contains files
-   (i.e., `~/.claude/agent-memory/lineup-<agent>/MEMORY.md` exists).
+   (i.e., `~/.codex/lineup/memory/user/lineup-<agent>/MEMORY.md` exists).
 
 If project-scoped memory already exists for all agents, skip migration silently -- it was
 already done in a previous session.
@@ -77,14 +77,14 @@ already done in a previous session.
 
 For each agent that needs migration:
 
-1. Read `~/.claude/agent-memory/lineup-<agent>/MEMORY.md`.
+1. Read `~/.codex/lineup/memory/user/lineup-<agent>/MEMORY.md`.
 2. Identify sections relevant to the current project. Agent memory files typically organize
    knowledge under `## Project: <name>` headers. Match by:
    - Project name appearing in the header (e.g., `## Project: Lineup`)
    - Working directory path appearing in the content
    - Use judgment for sections without explicit project headers
 3. Extract the matching section(s) and write them to
-   `~/.claude/projects/<project-path>/agent-memory/lineup-<agent>/MEMORY.md`.
+   `~/.codex/lineup/memory/projects/<project-path>/agent-memory/lineup-<agent>/MEMORY.md`.
 4. Remove the migrated section(s) from the global MEMORY.md.
 5. If the global MEMORY.md becomes empty after migration, delete it.
 6. If the agent has additional files beyond MEMORY.md in its global memory directory
@@ -105,7 +105,7 @@ Claude Code encodes project paths by replacing `/` with `-` and prepending `-`.
 For example: `/Users/izan/Dev/Projects/lineup` becomes `-Users-izan-Dev-Projects-lineup`.
 
 The full project memory path for an agent is:
-`~/.claude/projects/-Users-izan-Dev-Projects-lineup/agent-memory/lineup-researcher/MEMORY.md`
+`~/.codex/lineup/memory/projects/-Users-izan-Dev-Projects-lineup/agent-memory/lineup-researcher/MEMORY.md`
 
 ### Migration log
 
@@ -127,7 +127,7 @@ workflow definitions stored as YAML files in `.lineup/tactics/`.
 
 ### Discovery
 
-1. Read all `.yaml` files from the plugin's own `tactics/` directory (built-in tactics).
+1. Read all `.yaml` files from the skill pack's own `tactics/` directory (built-in tactics).
 2. Check if `.lineup/tactics/` exists in the current working directory.
 3. If it does, read all `.yaml` files in that directory (project tactics).
 4. Merge both lists. If a project tactic has the same `name` as a built-in tactic, the project version takes precedence (override).
@@ -136,11 +136,11 @@ workflow definitions stored as YAML files in `.lineup/tactics/`.
 
 ### Selection
 
-- If the user provided a tactic name as an argument (e.g., `/lineup:kick-off brownfield-docs`),
+- If the user provided a tactic name as an argument (e.g., `$lineup-kick-off brownfield-docs`),
   look for `.lineup/tactics/brownfield-docs.yaml`. If found, load it. If not found, report the
   error and list available tactics.
 
-- If the user provided NO argument AND tactics exist, use **AskUserQuestion** to present them:
+- If the user provided NO argument AND tactics exist, use **structured multiple-choice prompts** to present them:
 
 ```
 Question: "This project has tactics defined. Which workflow would you like to run?"
@@ -154,14 +154,14 @@ Options:
 Each option shows the tactic `name` followed by a truncated `description`.
 Always include "Run the default pipeline" and "Other" as the last two options.
 
-- If neither `.lineup/tactics/` nor plugin built-in tactics exist, skip this stage silently and proceed to Stage 1.
+- If neither `.lineup/tactics/` nor skill pack built-in tactics exist, skip this stage silently and proceed to Stage 1.
 
 ### Variable Prompting
 
 If the selected tactic defines `variables`, prompt the user for each one before execution:
 
 - Show the variable `description` and `default` value
-- Use **AskUserQuestion** with the default as option 1 and a free-text option
+- Use **structured multiple-choice prompts** with the default as option 1 and a free-text option
 - Substitute resolved values into stage prompts using `${variable_name}` replacement
 
 ### Variable Validation
@@ -170,7 +170,7 @@ After resolving all variable values, scan all stage prompts for `${...}` pattern
 If any `${variable_name}` reference does not match a defined variable:
 
 1. List the unresolved references and which stage prompts contain them.
-2. Use **AskUserQuestion** to ask:
+2. Use **structured multiple-choice prompts** to ask:
    - "Provide a value for this variable"
    - "Continue with the literal string (agent will see '${variable_name}')"
    - "Abort tactic execution"
@@ -183,7 +183,7 @@ When a tactic is selected, **replace the default pipeline** with the tactic's st
 
 1. Iterate over the tactic's `stages` array in order.
 2. For each stage:
-   a. If the stage has `optional: true`, use **AskUserQuestion** to ask the user
+   a. If the stage has `optional: true`, use **structured multiple-choice prompts** to ask the user
       whether to run it. If they decline, skip to the next stage.
    b. Delegate to the specified `agent`.
    c. If the stage has a custom `prompt`, include it in the agent's instructions
