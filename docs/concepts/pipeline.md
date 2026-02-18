@@ -140,4 +140,4 @@ For example, when transitioning from Research to Plan, the snapshot includes the
 
 This selective forwarding keeps downstream agents focused on what they need and reduces token cost. The user can always ask to see any document from any stage -- snapshots control what agents receive, not what the user can access.
 
-See the kick-off skill's stage snapshot table in `skills/kick-off/SKILL.md` for the complete list of what each transition includes.
+See the kick-off stage snapshot table in `.lineup-core/skills/kick-off/core.md` for the complete list of transitions.

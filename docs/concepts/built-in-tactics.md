@@ -76,7 +76,7 @@ If you're contributing to Lineup and want to add a new built-in tactic:
 1. Create a new `.yaml` file in the plugin's `tactics/` directory (not `examples/tactics/`).
 2. Follow the [tactic schema](/reference/tactic-schema) -- same format as project tactics.
 3. The name must be unique among built-in tactics.
-4. Consider whether the tactic warrants a dedicated skill alias (like `explain` has `/lineup:explain`). If so, create a matching `skills/<name>/SKILL.md` that delegates to kick-off with the tactic name.
+4. Consider whether the tactic warrants a dedicated skill alias (like `explain` has `/lineup:explain`). If so, add a canonical template under `.lineup-core/skills/<name>/` and map it in host adapters.
 5. Update the AGENTS.md built-in tactics section to list the new tactic.
 
 Built-in tactics should represent broadly useful patterns that benefit most projects. Project-specific workflows belong in `examples/tactics/` as copyable examples, not as built-ins.

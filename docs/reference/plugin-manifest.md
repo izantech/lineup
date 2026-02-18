@@ -37,9 +37,9 @@ The file must be in a `.claude-plugin/` directory at the plugin root. Claude Cod
 
 ## How the namespace works
 
-The `name` field determines the namespace prefix. Since Lineup's name is `"lineup"`, all skills are registered under the `lineup:` prefix:
+The `name` field determines the namespace prefix. Since Lineup's name is `"lineup"`, all generated skills are registered under the `lineup:` prefix:
 
-| Skill file | Registered command |
+| Generated skill file | Registered command |
 | ---------- | ------------------ |
 | `skills/kick-off/SKILL.md` | `/lineup:kick-off` |
 | `skills/configure/SKILL.md` | `/lineup:configure` |
@@ -68,7 +68,7 @@ The version is informational -- Claude Code doesn't enforce version constraints 
 
 ## Plugin structure
 
-The manifest sits at the root of the plugin directory alongside all other components:
+The manifest sits at the root of the generated plugin directory alongside all runtime components:
 
 <div class="file-tree">
 
@@ -81,7 +81,7 @@ The manifest sits at the root of the plugin directory alongside all other compon
   - <span class="tree-file">reviewer.md</span>
   - <span class="tree-file">documenter.md</span>
   - <span class="tree-file">teacher.md</span>
-- <span class="tree-folder">skills/</span> <span class="tree-comment">Loaded as /lineup:{name}</span>
+- <span class="tree-folder">skills/</span> <span class="tree-comment">Generated at install-time; loaded as /lineup:{name}</span>
   - <span class="tree-folder">kick-off/</span>
     - <span class="tree-file">SKILL.md</span>
   - <span class="tree-folder">configure/</span>
@@ -108,7 +108,7 @@ The manifest sits at the root of the plugin directory alongside all other compon
 
 </div>
 
-Claude Code discovers agents by scanning the `agents/` directory for `.md` files, and skills by scanning `skills/*/SKILL.md`. Templates, tactics, and examples are referenced by the agents and skills but are not directly loaded by the plugin system.
+Claude Code discovers agents by scanning `agents/` and skills by scanning `skills/*/SKILL.md` in the generated plugin directory. Templates, tactics, and examples are referenced by the agents and skills but are not directly loaded by the plugin system.
 
 ## Modifying the manifest
 

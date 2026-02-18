@@ -177,7 +177,7 @@ cd /path/to/lineup/docs && npx vitepress build
 
 Check each part of the chain:
 
-1. **Skill exists:** Verify `skills/explain/SKILL.md` is present in the plugin directory.
+1. **Skill exists:** Verify your install reports healthy status with `lineup status --host claude`, and confirm canonical template `.lineup-core/skills/explain/core.md` exists in source.
 2. **Tactic exists:** Verify `tactics/explain.yaml` is present in the plugin directory.
 3. **No conflicting override:** If your project has `.lineup/tactics/explain.yaml`, the project version takes precedence over the built-in. Check that the project version is valid.
 4. **Kick-off works:** Test with `/lineup:kick-off explain How does authentication work?` to bypass the explain skill and invoke the tactic directly.

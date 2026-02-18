@@ -4,7 +4,7 @@ Skills are slash commands provided by a Claude Code plugin. Lineup ships four sk
 
 ## What is a skill?
 
-In Claude Code, a skill is a `SKILL.md` file inside a plugin's `skills/` directory. When the plugin loads, each skill becomes a slash command that users can invoke. The skill file contains instructions that tell the orchestrator what to do when the command is run.
+In Claude Code, a skill is a `SKILL.md` file inside a plugin's `skills/` directory. In Lineup 2.0 those files are generated from `.lineup-core/skills/**` during install. When the plugin loads, each skill becomes a slash command that users can invoke.
 
 ## The `lineup:` namespace
 
@@ -17,7 +17,7 @@ All Lineup skills are prefixed with `lineup:` automatically. This comes from the
 }
 ```
 
-When Claude Code loads the plugin, it discovers `skills/kick-off/SKILL.md` and registers it as `/lineup:kick-off`. You don't need to type the namespace yourself in the skill files -- it's added by the plugin system.
+When Claude Code loads the generated plugin, it discovers `skills/kick-off/SKILL.md` and registers it as `/lineup:kick-off`. You don't need to type the namespace yourself in skill files -- it's added by the plugin system.
 
 ## Available skills
 
@@ -53,7 +53,7 @@ Interactively customize agent settings. Walks you through changing models, tools
 /lineup:configure
 ```
 
-The configurator shows current settings, asks what you want to change, previews the result, and applies changes to the agent files. See [Customize Agents](/guides/customize-agents) for a detailed walkthrough.
+The configurator shows current settings, asks what you want to change, previews the result, and writes override files in `~/.claude/lineup/agents/` (or host equivalent). See [Customize Agents](/guides/customize-agents) for a detailed walkthrough.
 
 ### `/lineup:explain`
 

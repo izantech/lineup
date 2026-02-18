@@ -6,14 +6,14 @@ This is the complete reference for Lineup's skill commands. For a conceptual ove
 
 Lineup workflows are generated from canonical templates in `.lineup-core/skills/` and rendered to host-specific `SKILL.md` files.
 
-| Workflow | Claude command | Codex command | Generated files |
+| Workflow | Claude command | Codex command | Generated files (install-time) |
 | ------- | ---------- | ------- | ------- |
 | Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `skills/kick-off/SKILL.md`, `.agents/skills/lineup-kick-off/SKILL.md` |
 | Configure | `/lineup:configure` | `$lineup-configure` | `skills/configure/SKILL.md`, `.agents/skills/lineup-configure/SKILL.md` |
 | Explain | `/lineup:explain` | `$lineup-explain` | `skills/explain/SKILL.md`, `.agents/skills/lineup-explain/SKILL.md` |
 | Playbook | `/lineup:playbook` | `$lineup-playbook` | `skills/playbook/SKILL.md`, `.agents/skills/lineup-playbook/SKILL.md` |
 
-Do not edit generated skill files directly. Edit `.lineup-core/skills/**` and run `node scripts/sync-host-files.mjs`.
+Do not edit generated skill files directly. Edit `.lineup-core/skills/**`; host files are generated during `lineup install` and validated in CI with `npm --prefix cli run generate:check`.
 
 ## Kick-off (`/lineup:kick-off` / `$lineup-kick-off`)
 

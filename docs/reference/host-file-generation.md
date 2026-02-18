@@ -1,64 +1,40 @@
 # Host File Generation
 
-Lineup supports multiple agent hosts (Claude Code and Codex CLI) without duplicating full workflow files.
+Lineup 2.0 keeps one canonical workflow source and generates host files at install time.
 
-## Source of truth
+## Canonical source
 
-All workflow logic is authored once in canonical templates:
+- `.lineup-core/skills/**` (workflow templates)
+- `.lineup-core/hosts/*.json` (host adapter maps)
 
-- `.lineup-core/skills/kick-off/core.md`
-- `.lineup-core/skills/kick-off/init.core.md`
-- `.lineup-core/skills/configure/core.md`
-- `.lineup-core/skills/explain/core.md`
-- `.lineup-core/skills/playbook/core.md`
+## Generated outputs
 
-Host-specific variables are defined in:
+Generated host files are artifacts, not tracked files.
 
-- `.lineup-core/hosts/claude.json`
-- `.lineup-core/hosts/codex.json`
+| Host | Install-time output |
+| ---- | ------------------- |
+| Claude | Local plugin skills in CLI-managed plugin directory |
+| Codex | `$HOME/.agents/skills/lineup-*` |
 
-## Generated targets
-
-Generated skill files:
-
-| Host | Generated path |
-|------|----------------|
-| Claude Code | `skills/**` |
-| Codex CLI | `.agents/skills/**` |
-
-Every generated file includes this header:
+Each generated file includes:
 
 ```md
 <!-- AUTO-GENERATED. Edit canonical source in .lineup-core/. -->
 ```
 
-## Commands
+## Validation and drift prevention
 
-Generate files:
-
-```bash
-node scripts/sync-host-files.mjs
-```
-
-Check drift (CI-safe):
+Run from repository root:
 
 ```bash
-node scripts/check-host-files.mjs
+npm --prefix cli run schema:check
+npm --prefix cli run generate:check
 ```
+
+- `schema:check` validates JSON/YAML inputs used for generation
+- `generate:check` enforces deterministic generation and required output file sets
 
 ## Edit policy
 
-- Do edit: `.lineup-core/skills/**` and `.lineup-core/hosts/*.json`
-- Do not edit: `skills/**` and `.agents/skills/**`
-- Always run `sync-host-files` before committing template changes
-- Run `check-host-files` locally or in CI to prevent drift
-
-## CI behavior
-
-The workflow `.github/workflows/host-files-check.yml` runs `check-host-files` on pushes and pull requests.
-
-If any generated file is out of sync with canonical templates, CI fails and asks you to run:
-
-```bash
-node scripts/sync-host-files.mjs
-```
+- Edit: `.lineup-core/skills/**`, `.lineup-core/hosts/*.json`
+- Do not hand-edit generated host artifacts in local install directories

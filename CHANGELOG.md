@@ -7,39 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Notes
-- Installer wrapper and Codex global install support are reserved for the next major release (`2.0.0`).
-
 ## [2.0.0] - TBD
 
 ### Added
-- Canonical multi-host workflow source in `.lineup-core/skills/` with host adapter maps in `.lineup-core/hosts/`
-- Codex skill targets generated under `.agents/skills/`:
-  - `$lineup-kick-off`
-  - `$lineup-configure`
-  - `$lineup-explain`
-  - `$lineup-playbook`
-- Host file generation scripts:
-  - `node scripts/sync-host-files.mjs`
-  - `node scripts/check-host-files.mjs`
-- Cross-host installer wrapper CLI:
-  - `node scripts/lineup.mjs install|update|uninstall|status`
-  - Claude backend uses native marketplace lifecycle commands
-  - Codex backend installs global skills into `$HOME/.agents/skills/lineup-*`
-- Release resolver and cache for installer flow:
-  - `scripts/lineup-release.mjs`
-  - GitHub tag resolution (`latest` or pinned tag), tarball download, local cache under `~/.lineup/cache/`
-- Bootstrap installer script for end users:
-  - `scripts/install-lineup.sh`
-  - Installs `~/.local/bin/lineup` shim pointing at cached Lineup release script
-- Drift-check CI workflow: `.github/workflows/host-files-check.yml`
-- Host generation reference documentation: `docs/reference/host-file-generation.md`
+- New CLI package in `cli/` using TypeScript + Node ESM + Commander
+- Public `lineup` command surface:
+  - `lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+  - `lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+  - `lineup uninstall [--host claude|codex|all] [--yes] [--purge]`
+  - `lineup status [--host claude|codex|all] [--json]`
+- Runtime release resolver with tag resolution, cache, tarball checksum verification, and extracted source validation
+- Formal schemas in `cli/schemas/`:
+  - JSON: host adapters, state, release manifest
+  - YAML: tactic schema + agent output document contracts
+- Validation tooling:
+  - `npm --prefix cli run schema:check`
+  - `npm --prefix cli run generate:check`
+- CLI tests with Vitest for parsing, host selection, schema restrictions, and status contract shape
+- CLI fixtures for sample state and release manifest validation
 
 ### Changed
-- Claude skill files in `skills/**` are now generated from canonical templates and include an auto-generated banner
-- Repository docs now describe dual-host command mapping (Claude and Codex)
-- Release process now requires running host file sync and drift checks before tagging
-- Installation docs and README now document wrapper CLI usage matrix, non-interactive examples, and uninstall purge semantics
+- Distribution model is now CLI-only for host installs/updates/uninstalls
+- Host-generated skill outputs are install-time artifacts produced from `.lineup-core/**`
+- Built-in and example explain tactics now include `verification` criteria to satisfy strict tactic schema validation
+- Documentation updated for npm-based CLI installation and cross-host lifecycle management
+- CI moved from committed-file drift checks to CLI package checks (typecheck, tests, schema, generation, build)
+
+### Removed
+- Committed generated host skill files from `skills/**` and `.agents/skills/**`
+- Legacy root installer/generation scripts in `scripts/` (superseded by `cli/`)
 
 ## [1.5.0] - 2026-02-16
 
