@@ -4,28 +4,37 @@ This file is the single source of truth for AI agent instructions in this reposi
 
 ## Project Overview
 
-Lineup is a Claude Code plugin that provides a structured multi-agent workflow: **Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?**. It ships specialized subagents, skills, and a pipeline definition as a self-contained plugin directory.
+Lineup provides a structured multi-agent workflow: **Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?** across Claude Code and Codex CLI. It ships specialized subagents, skills, and a pipeline definition with host-specific wrappers generated from one canonical source.
 
-The project is a set of Markdown agent definitions, skills, a plugin manifest, and a workflow reference — no build system, no runtime dependencies.
+The project is a set of Markdown agent definitions, canonical skill templates, generated host skill files, a plugin manifest, and a workflow reference — no runtime dependencies.
 
 ## Commands
 
-There are no build, lint, or test commands. This is a pure-Markdown plugin.
+Core commands:
+
+- `node scripts/sync-host-files.mjs` — render generated Claude and Codex skill files from `.lineup-core/`
+- `node scripts/check-host-files.mjs` — fail if generated host files drift from canonical source
+- `node scripts/lineup.mjs <install|update|uninstall|status> ...` — cross-host Lineup installer wrapper (Claude marketplace + Codex global skills)
+- `bash scripts/install-lineup.sh [--version <tag>]` — bootstrap installer for a local `lineup` shim (`~/.local/bin/lineup`)
 
 ## Architecture
 
-### Plugin Structure
+### Host Structure
 
-Lineup is structured as a Claude Code plugin. The `.claude-plugin/plugin.json` manifest provides the `lineup` namespace — all agents and skills are automatically namespaced under `lineup:` when loaded as a plugin.
+Lineup is maintained as canonical templates plus generated host adapters:
 
 ```
-.claude-plugin/plugin.json    → Plugin manifest (name, version, author)
-agents/*.md                   → Agent definitions (loaded as lineup:<name>)
-skills/kick-off/SKILL.md      → Skill: full pipeline entry point
-skills/configure/SKILL.md     → Skill: interactive agent configurator
-skills/explain/SKILL.md       → Skill: explain project components (alias for explain tactic)
-skills/playbook/SKILL.md      → Skill: interactive tactic management wizard
-tactics/*.yaml                → Built-in tactics (shipped with plugin)
+.lineup-core/skills/**        → Canonical host-neutral skill templates (source of truth)
+.lineup-core/hosts/*.json     → Host adapter variable maps (claude, codex)
+scripts/sync-host-files.mjs   → Generator that renders host files
+scripts/check-host-files.mjs  → Drift checker for generated host files
+scripts/lineup*.mjs           → Cross-host installer/update/status wrapper implementation
+scripts/install-lineup.sh     → Bootstrap shim installer for end users
+skills/**                     → Generated Claude skill files (plugin targets)
+.agents/skills/**             → Generated Codex skill files
+.claude-plugin/plugin.json    → Claude plugin manifest (lineup namespace)
+agents/*.md                   → Shared agent definitions
+tactics/*.yaml                → Built-in tactics
 templates/*.yaml              → YAML schemas for agent output documents
 ```
 
@@ -58,36 +67,39 @@ The body (everything after the second `---`) contains the agent's instructions a
 
 ### Agent Configuration Overrides
 
-User customizations are stored as YAML override files in `~/.claude/lineup/agents/`.
-These files persist across plugin updates and contain only the frontmatter fields
+User customizations are stored as YAML override files in host-specific user directories:
+- Claude: `~/.claude/lineup/agents/`
+- Codex: `~/.codex/lineup/agents/`
+
+These files persist across updates and contain only the frontmatter fields
 the user has changed (model, tools, memory).
 
 ```
-~/.claude/lineup/agents/
+~/.claude/lineup/agents/ (Claude example)
   researcher.yaml      ← Override for researcher (e.g., model: sonnet)
   architect.yaml       ← Override for architect (if customized)
 ```
 
 Override precedence: user override file > plugin agent frontmatter defaults.
 
-The `/lineup:configure` skill writes these files. The `/lineup:kick-off` skill
-reads them before spawning agents. If no override file exists for an agent,
-plugin defaults are used.
+The configure workflow (`/lineup:configure` or `$lineup-configure`) writes these files.
+The kick-off workflow (`/lineup:kick-off` or `$lineup-kick-off`) reads them before spawning
+agents. If no override file exists for an agent, defaults are used.
 
 Override files include a `plugin_version` field indicating which plugin version
 they were created against. This is informational — overrides are forward-compatible
 since they only contain model/tools/memory fields.
 
-### Skills (`skills/`)
+### Skills
 
-Skills are static SKILL.md files that provide slash commands.
+Workflows are defined once in `.lineup-core/skills/**` and generated for each host.
 
-| Skill | Path | Command | Purpose |
+| Workflow | Claude target | Codex target | Commands |
 |-------|------|---------|---------|
-| Kick-off | `skills/kick-off/SKILL.md` | `/lineup:kick-off` | Entry point for the full agentic pipeline |
-| Configure | `skills/configure/SKILL.md` | `/lineup:configure` | Interactive agent configurator |
-| Explain | `skills/explain/SKILL.md` | `/lineup:explain` | Explain project components via researcher + teacher |
-| Playbook | `skills/playbook/SKILL.md` | `/lineup:playbook` | Interactive tactic management wizard |
+| Kick-off | `skills/kick-off/SKILL.md` | `.agents/skills/lineup-kick-off/SKILL.md` | Claude: `/lineup:kick-off` · Codex: `$lineup-kick-off` |
+| Configure | `skills/configure/SKILL.md` | `.agents/skills/lineup-configure/SKILL.md` | Claude: `/lineup:configure` · Codex: `$lineup-configure` |
+| Explain | `skills/explain/SKILL.md` | `.agents/skills/lineup-explain/SKILL.md` | Claude: `/lineup:explain` · Codex: `$lineup-explain` |
+| Playbook | `skills/playbook/SKILL.md` | `.agents/skills/lineup-playbook/SKILL.md` | Claude: `/lineup:playbook` · Codex: `$lineup-playbook` |
 
 ### Tactics (`.lineup/tactics/`)
 
@@ -127,19 +139,26 @@ Each stage in the `stages` list accepts the following fields:
 
 - Agent names do not use a prefix — the `lineup:` namespace is provided by the plugin manifest
 - Frontmatter fields use comma-space separation for tool lists
-- All configuration happens via the `/lineup:configure` skill — no external scripts
-- Agent plugin files (`agents/*.md`) are immutable at runtime — never edited by skills or users directly
+- All configuration happens via the configure workflow (`/lineup:configure` or `$lineup-configure`)
+- Agent files (`agents/*.md`) are immutable at runtime — never edited by skills or users directly
 - User customizations live in `~/.claude/lineup/agents/` as YAML override files
+- Generated host skill files are immutable by convention — never edit `skills/**` or `.agents/skills/**` directly
+- Edit canonical templates in `.lineup-core/skills/**`, then run `node scripts/sync-host-files.mjs`
 
 ## Release Process
 
 When releasing a new version:
 
-1. Update the version in `.claude-plugin/plugin.json`
-2. Add a new entry to `CHANGELOG.md` following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format
-3. Commit the changes with a conventional commit message
-4. Push to the remote repository
-5. Create a GitHub release using `gh`:
+1. Run `node scripts/sync-host-files.mjs`
+2. Run `node scripts/check-host-files.mjs` and confirm no drift
+3. Update the version in `.claude-plugin/plugin.json`
+4. Add a new entry to `CHANGELOG.md` following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format
+5. Commit the changes with a conventional commit message
+6. Push to the remote repository
+7. Validate installer wrapper against release semantics:
+   - `node scripts/lineup.mjs status --host all --json`
+   - Confirm bootstrap script references latest release install path (`scripts/install-lineup.sh`)
+8. Create a GitHub release using `gh`:
    ```bash
    gh release create <version> --title "<version>" --notes "$(cat <<'EOF'
    ## <Descriptive Title>
@@ -159,6 +178,8 @@ gh release create 1.3.0 --title "1.3.0" --notes "$(cat <<'EOF'
 EOF
 )"
 ```
+
+When shipping installer wrapper + Codex global install support, release as a major (`2.0.0+`).
 
 ## Document Conventions
 

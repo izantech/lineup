@@ -4,16 +4,18 @@ This is the complete reference for Lineup's skill commands. For a conceptual ove
 
 ## Overview
 
-Skills are slash commands provided by the Lineup plugin. Each skill is a `SKILL.md` file in the plugin's `skills/` directory. The `lineup:` namespace prefix comes from the plugin name in `.claude-plugin/plugin.json`.
+Lineup workflows are generated from canonical templates in `.lineup-core/skills/` and rendered to host-specific `SKILL.md` files.
 
-| Command | Skill file | Purpose |
-| ------- | ---------- | ------- |
-| `/lineup:kick-off` | `skills/kick-off/SKILL.md` | Run the agentic pipeline or a tactic |
-| `/lineup:configure` | `skills/configure/SKILL.md` | Customize agent settings interactively |
-| `/lineup:explain` | `skills/explain/SKILL.md` | Get a structured codebase explanation |
-| `/lineup:playbook` | `skills/playbook/SKILL.md` | Create, edit, import, or delete tactics |
+| Workflow | Claude command | Codex command | Generated files |
+| ------- | ---------- | ------- | ------- |
+| Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `skills/kick-off/SKILL.md`, `.agents/skills/lineup-kick-off/SKILL.md` |
+| Configure | `/lineup:configure` | `$lineup-configure` | `skills/configure/SKILL.md`, `.agents/skills/lineup-configure/SKILL.md` |
+| Explain | `/lineup:explain` | `$lineup-explain` | `skills/explain/SKILL.md`, `.agents/skills/lineup-explain/SKILL.md` |
+| Playbook | `/lineup:playbook` | `$lineup-playbook` | `skills/playbook/SKILL.md`, `.agents/skills/lineup-playbook/SKILL.md` |
 
-## `/lineup:kick-off`
+Do not edit generated skill files directly. Edit `.lineup-core/skills/**` and run `node scripts/sync-host-files.mjs`.
+
+## Kick-off (`/lineup:kick-off` / `$lineup-kick-off`)
 
 The main entry point for all Lineup workflows.
 
@@ -21,6 +23,7 @@ The main entry point for all Lineup workflows.
 
 ```bash
 /lineup:kick-off [task-description | tactic-name]
+$lineup-kick-off [task-description | tactic-name]
 ```
 
 ### Arguments
@@ -38,25 +41,29 @@ If no argument is provided, the skill enters menu mode.
 
 ```bash
 /lineup:kick-off Refactor the authentication module to use JWT tokens
+$lineup-kick-off Refactor the authentication module to use JWT tokens
 ```
 
 **With a tactic name:** The orchestrator looks for the named tactic in `.lineup/tactics/` (project) and the plugin's `tactics/` directory (built-in). If found, it runs the tactic's stage sequence. If not found, it reports the error and lists available tactics.
 
 ```bash
 /lineup:kick-off brownfield-docs
+$lineup-kick-off brownfield-docs
 ```
 
 **With no arguments (menu mode):** If tactics exist (project or built-in), the orchestrator presents a selection menu showing each tactic's name and description, plus options for the default pipeline and custom input. If no tactics exist, it prompts for a task description.
 
 ```bash
 /lineup:kick-off
+$lineup-kick-off
 ```
 
 ### Initialization
 
-Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in `skills/kick-off/INIT.md`:
+Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in the host init file (`skills/kick-off/INIT.md` on Claude, `.agents/skills/lineup-kick-off/INIT.md` on Codex):
 
 1. **Agent configuration overrides** -- reads user override files from `~/.claude/lineup/agents/`, validates them, and merges with plugin defaults
+   - Codex path: `~/.codex/lineup/agents/`
 2. **Memory migration** -- one-time migration of global agent memory to project-scoped memory (skipped silently if already done)
 3. **Tactic resolution** -- discovers tactics from `.lineup/tactics/` and the plugin's `tactics/` directory, presents selection if available
 
@@ -94,9 +101,9 @@ Stage labels use the tactic's count: a 3-stage tactic shows "Stage 1/3", "Stage 
 - The orchestrator never implements code itself -- it delegates to the developer agent
 - The orchestrator never does deep exploration -- it delegates to the researcher agent
 - User approval is always required before moving from Plan to Implement
-- AskUserQuestion is used for all user decisions in Clarify, Clarification Gate, and Document stages
+- Structured multiple-choice prompts are used for all user decisions in Clarify, Clarification Gate, and Document stages (`AskUserQuestion` on Claude)
 
-## `/lineup:configure`
+## Configure (`/lineup:configure` / `$lineup-configure`)
 
 Interactive agent configurator.
 
@@ -104,6 +111,7 @@ Interactive agent configurator.
 
 ```bash
 /lineup:configure
+$lineup-configure
 ```
 
 ### Arguments
@@ -119,7 +127,7 @@ The configurator walks through five steps:
 | 1. Read | Reads all agent files and displays current frontmatter as a summary table |
 | 2. Ask | Presents configuration categories (model, tools, memory, reset) and collects choices |
 | 3. Preview | Shows the final frontmatter for each agent that will change |
-| 4. Apply | Writes override YAML files to `~/.claude/lineup/agents/` |
+| 4. Apply | Writes override YAML files to host override directory (`~/.claude/lineup/agents/` or `~/.codex/lineup/agents/`) |
 | 5. Confirm | Reports what changed (which agents, which fields, old and new values) |
 
 ### Configuration categories
@@ -133,7 +141,7 @@ The configurator walks through five steps:
 
 ### What it modifies
 
-Writes override files to `~/.claude/lineup/agents/` containing only the fields you changed (model, tools, memory). Never modifies agent `.md` files.
+Writes override files to host override directories (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex) containing only the fields you changed (model, tools, memory). Never modifies agent `.md` files.
 
 ### Validation
 
@@ -154,7 +162,7 @@ Writes override files to `~/.claude/lineup/agents/` containing only the fields y
 | documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
-## `/lineup:explain`
+## Explain (`/lineup:explain` / `$lineup-explain`)
 
 Structured codebase explanation via the built-in `explain` tactic.
 
@@ -162,6 +170,7 @@ Structured codebase explanation via the built-in `explain` tactic.
 
 ```bash
 /lineup:explain <question>
+$lineup-explain <question>
 ```
 
 ### Arguments
@@ -172,7 +181,7 @@ Structured codebase explanation via the built-in `explain` tactic.
 
 ### Behavior
 
-This skill is an alias. It invokes `/lineup:kick-off explain` with the user's question as the task description. The kick-off skill resolves the built-in `explain` tactic and executes its two stages:
+This skill is an alias. It invokes kick-off explain mode (`/lineup:kick-off explain` on Claude, `$lineup-kick-off explain` on Codex) with the user's question as the task description. The kick-off workflow resolves the built-in `explain` tactic and executes its two stages:
 
 1. **Research:** A researcher agent explores the codebase, focusing on the topic the user asked about
 2. **Explain:** A teacher agent produces a structured explanation based on the research findings
@@ -195,7 +204,7 @@ Questions about specific components, patterns, data flows, and architectural dec
 
 Create `.lineup/tactics/explain.yaml` in your project to override the built-in explain tactic with a custom workflow.
 
-## `/lineup:playbook`
+## Playbook (`/lineup:playbook` / `$lineup-playbook`)
 
 Interactive tactic management wizard.
 
@@ -203,6 +212,7 @@ Interactive tactic management wizard.
 
 ```bash
 /lineup:playbook
+$lineup-playbook
 ```
 
 ### Arguments
@@ -284,7 +294,7 @@ The stage builder offers five pre-built patterns as starting points:
 
 ### What it modifies
 
-Writes, renames, or deletes files in `.lineup/tactics/` only. Never modifies plugin example files (`examples/tactics/`) or built-in tactics (`tactics/`).
+Writes, renames, or deletes files in `.lineup/tactics/` only. Never modifies repository example files (`examples/tactics/`) or built-in tactics (`tactics/`).
 
 ### Rules
 
@@ -292,4 +302,4 @@ Writes, renames, or deletes files in `.lineup/tactics/` only. Never modifies plu
 - Example tactics and built-in tactics are read-only
 - Rename in edit mode writes the new file before deleting the old one
 - YAML formatting matches the example tactics exactly (header comments, pipe-blocks, field order)
-- AskUserQuestion is used for all decisions
+- Structured multiple-choice prompts are used for all decisions (`AskUserQuestion` on Claude)

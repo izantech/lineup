@@ -3,7 +3,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 
 export default withMermaid(defineConfig({
   title: 'Lineup',
-  description: 'Structured multi-agent workflow for Claude Code',
+  description: 'Structured multi-agent workflow for Claude Code and Codex CLI',
   cleanUrls: true,
 
   head: [
@@ -58,6 +58,7 @@ export default withMermaid(defineConfig({
             { text: 'Skill Commands', link: '/reference/skills' },
             { text: 'Document Templates', link: '/reference/templates' },
             { text: 'Plugin Manifest', link: '/reference/plugin-manifest' },
+            { text: 'Host File Generation', link: '/reference/host-file-generation' },
             { text: 'Stage Output Styling', link: '/reference/stage-output-styling' }
           ]
         },

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Notes
+- Installer wrapper and Codex global install support are reserved for the next major release (`2.0.0`).
+
+## [2.0.0] - TBD
+
+### Added
+- Canonical multi-host workflow source in `.lineup-core/skills/` with host adapter maps in `.lineup-core/hosts/`
+- Codex skill targets generated under `.agents/skills/`:
+  - `$lineup-kick-off`
+  - `$lineup-configure`
+  - `$lineup-explain`
+  - `$lineup-playbook`
+- Host file generation scripts:
+  - `node scripts/sync-host-files.mjs`
+  - `node scripts/check-host-files.mjs`
+- Cross-host installer wrapper CLI:
+  - `node scripts/lineup.mjs install|update|uninstall|status`
+  - Claude backend uses native marketplace lifecycle commands
+  - Codex backend installs global skills into `$HOME/.agents/skills/lineup-*`
+- Release resolver and cache for installer flow:
+  - `scripts/lineup-release.mjs`
+  - GitHub tag resolution (`latest` or pinned tag), tarball download, local cache under `~/.lineup/cache/`
+- Bootstrap installer script for end users:
+  - `scripts/install-lineup.sh`
+  - Installs `~/.local/bin/lineup` shim pointing at cached Lineup release script
+- Drift-check CI workflow: `.github/workflows/host-files-check.yml`
+- Host generation reference documentation: `docs/reference/host-file-generation.md`
+
+### Changed
+- Claude skill files in `skills/**` are now generated from canonical templates and include an auto-generated banner
+- Repository docs now describe dual-host command mapping (Claude and Codex)
+- Release process now requires running host file sync and drift checks before tagging
+- Installation docs and README now document wrapper CLI usage matrix, non-interactive examples, and uninstall purge semantics
+
 ## [1.5.0] - 2026-02-16
 
 ### Changed
@@ -122,6 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
+[Unreleased]: https://github.com/izantech/lineup/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/izantech/lineup/compare/1.5.0...2.0.0
 [1.5.0]: https://github.com/izantech/lineup/compare/1.4.0...1.5.0
 [1.4.0]: https://github.com/izantech/lineup/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/izantech/lineup/compare/1.2.0...1.3.0

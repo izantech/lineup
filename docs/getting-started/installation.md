@@ -1,47 +1,111 @@
 # Installation
 
-Lineup is a Claude Code plugin. You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working before adding Lineup.
+Lineup supports both Claude Code and Codex CLI.
+
+> The wrapper CLI + Codex global install flow on this page is targeted for **2.0.0**.  
+> If you're on released `1.5.0`, use the Claude marketplace/native instructions.
 
 ## Prerequisites
 
-- **Claude Code** installed and configured with a valid API key or valid subscription
-- A terminal where you can run `claude` commands
+- For Claude: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and configured
+- For Codex: [Codex CLI](https://developers.openai.com/codex) installed and configured
+- Node.js available in your shell
+- A terminal where you can run `claude` or `codex` commands
 
 ## Choose your install method
 
 | Method | Best for | Time |
 | ------ | -------- | ---- |
-| [Marketplace](#marketplace-install) | Most users -- quick, auto-updating | 1 minute |
-| [Manual](#manual-install) | Contributing to Lineup, inspecting source | 2 minutes |
-| [Customized](#customized-install) | Tweaking agent models, tools, or memory | 3 minutes |
+| [Lineup wrapper CLI](#lineup-wrapper-cli-recommended) | Most users (cross-host install/update/status) | 1 minute |
+| [Claude marketplace](#claude-marketplace-native) | Claude-only native flow | 1 minute |
+| [Codex repo-local](#codex-repo-local-native) | Contributors running from source | 1 minute |
+| [Manual plugin dir](#manual-plugin-dir-claude) | Local development and plugin internals | 2 minutes |
 
-## Marketplace install
+## Lineup wrapper CLI (Recommended)
 
-Register the izantech marketplace (one-time setup):
+Install the `lineup` shim:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/izantech/lineup/main/scripts/install-lineup.sh | bash
+```
+
+This installs:
+- shim: `~/.local/bin/lineup`
+- cached release payloads: `~/.lineup/bootstrap/releases/<tag>/source`
+- active symlink: `~/.lineup/current`
+
+### Wrapper command surface
+
+```text
+lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]
+lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]
+lineup uninstall [--host claude|codex|all] [--yes] [--purge]
+lineup status [--host claude|codex|all] [--json]
+```
+
+### Host behavior matrix
+
+| `lineup` command | Claude backend | Codex backend |
+| --- | --- | --- |
+| `install` | `claude plugin marketplace add izantech/claude-plugins` + `claude plugin install lineup@izantech` | Install skills into `$HOME/.agents/skills/lineup-*` |
+| `update` | `claude plugin update lineup@izantech` | Re-sync `$HOME/.agents/skills/lineup-*` from release |
+| `uninstall` | `claude plugin remove lineup@izantech` | Remove `$HOME/.agents/skills/lineup-*` |
+| `status` | Read `claude plugin list` | Verify required skill files in `$HOME/.agents/skills/` |
+
+### Non-interactive examples
+
+```bash
+lineup install --host all --yes
+lineup update --host codex --version latest --yes
+lineup status --host all --json
+lineup uninstall --host claude --yes
+```
+
+### Uninstall prompts and purge semantics
+
+`lineup uninstall` is interactive by default.
+
+- In TTY mode, it asks:
+  - confirm uninstall target hosts
+  - confirm whether to purge Lineup data directories
+- In non-TTY mode, pass `--yes`.
+- Use `--purge` to delete data paths without prompt when combined with `--yes`.
+
+Purge targets:
+- `~/.claude/lineup/agents/`
+- `~/.codex/lineup/agents/`
+- `~/.codex/lineup/memory/`
+
+## Claude marketplace (native)
 
 ```bash
 claude plugin marketplace add izantech/claude-plugins
-```
-
-Then install Lineup:
-
-```bash
-# From within Claude Code:
-/plugin install lineup@izantech
-
-# Or from terminal:
 claude plugin install lineup@izantech
 ```
 
-To update later:
+Update later:
 
 ```bash
 claude plugin update lineup@izantech
 ```
 
-That's it. You now have the `lineup:` namespace with all skills and agents available.
+## Codex repo-local (native)
 
-## Manual install
+Clone and run Codex from the repository root:
+
+```bash
+git clone https://github.com/izantech/lineup.git
+cd lineup
+codex
+```
+
+Codex discovers Lineup workflows from `.agents/skills/`:
+- `$lineup-kick-off`
+- `$lineup-configure`
+- `$lineup-explain`
+- `$lineup-playbook`
+
+## Manual plugin dir (Claude)
 
 Clone the repository and point Claude Code at it:
 
@@ -52,58 +116,58 @@ claude --plugin-dir /path/to/lineup
 
 This loads all agents and skills automatically. The `lineup:` namespace comes from the plugin name in `plugin.json`.
 
-Use this method when you want to read or modify the source, or contribute changes back to the project.
-
-## Customized install
-
-**Note:** You can use `/lineup:configure` with **any** installation method (marketplace, manual, or customized) to adjust agent settings interactively.
-
-For deeper customization (modifying agent instructions, adding custom agents, or changing plugin behavior), clone the repository and point Claude Code at your local copy:
-
-```bash
-git clone https://github.com/izantech/lineup.git
-claude --plugin-dir /path/to/lineup
-```
-
-Now you can:
-- **Edit files directly** (agent definitions in `agents/`, skill logic in `skills/`)
-- **Use the configurator** for model/tool/memory changes:
-
-```bash
-/lineup:configure
-```
-
-See the [Customize Agents](/guides/customize-agents) guide for details on what you can change with the configurator vs. manual file edits.
-
 ## Verify installation
 
-After installing, confirm everything is working:
+After installing in Claude, confirm everything is working:
 
 ```bash
 /lineup:kick-off Hello, just checking the pipeline works!
 ```
 
-You should see the orchestrator respond and begin the Clarify stage. You can cancel at any point -- the goal is just to confirm the skill loads.
+For Codex, run:
+
+```text
+$lineup-kick-off Hello, just checking the pipeline works!
+```
+
+With the wrapper installed, you can also verify quickly:
+
+```bash
+lineup status --host all
+```
 
 ## Troubleshooting
 
-### Plugin not found
+### `lineup` command not found
+
+- Ensure `~/.local/bin` is in your shell `PATH`.
+- Re-run bootstrap install script.
+
+### Bootstrap reports missing `scripts/lineup.mjs`
+
+If bootstrap prints `installer artifacts unavailable`, the latest published release tag does not include the wrapper scripts yet.
+
+- Use repo mode temporarily: `node scripts/lineup.mjs <command> ...`
+- Retry bootstrap after the next tagged release is published
+
+### Claude plugin not found
 
 If `/lineup:kick-off` is not recognized:
 
-- **Marketplace install**: Make sure the marketplace was added first with `claude plugin marketplace add izantech/claude-plugins`, then re-run `/plugin install lineup@izantech`.
-- **Manual install**: Verify the `--plugin-dir` path points to the directory containing `.claude-plugin/plugin.json`. The path should be to the `lineup` root, not to a subdirectory.
+- Confirm marketplace registration: `claude plugin marketplace add izantech/claude-plugins`
+- Re-run install: `claude plugin install lineup@izantech`
 
-### Skills load but agents fail
+### Codex skills missing
 
-If the skill starts but agent delegation fails:
+If `$lineup-kick-off` is not recognized:
 
-- Check that all files in `agents/` are present (researcher, architect, developer, reviewer, documenter, teacher).
-- For customized installs, run `/lineup:configure` and choose **Reset** to restore default agent settings.
+- Run `lineup status --host codex`
+- Re-run `lineup install --host codex --yes`
+- Confirm `~/.agents/skills/lineup-kick-off/SKILL.md` exists
 
-### "No such agent" errors
+### "No such agent" errors (Claude)
 
-Agent names are auto-namespaced by the plugin. You should see agents like `lineup:researcher`, `lineup:architect`, etc. If you see bare names without the `lineup:` prefix, the plugin manifest may not be loading correctly -- confirm `.claude-plugin/plugin.json` exists and has `"name": "lineup"`.
+Agent names are auto-namespaced by the plugin. You should see agents like `lineup:researcher`, `lineup:architect`, etc. If you see bare names without the `lineup:` prefix, confirm `.claude-plugin/plugin.json` exists and has `"name": "lineup"`.
 
 ## Next steps
 

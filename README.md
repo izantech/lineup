@@ -1,9 +1,10 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7c3aed)](https://docs.anthropic.com/en/docs/claude-code)
+[![Codex CLI](https://img.shields.io/badge/Codex%20CLI-skills-10a37f)](https://developers.openai.com/codex)
 [![GitHub release](https://img.shields.io/github/v/release/izantech/lineup)](https://github.com/izantech/lineup/releases)
 
 # [Lineup](https://lineup.izantech.app)
 
-A structured multi-agent workflow for Claude Code that breaks complex tasks into
+A structured multi-agent workflow for Claude Code and Codex CLI that breaks complex tasks into
 a clear pipeline: **Clarify, Research, Plan, Implement, Verify, Document**.
 
 Instead of letting a single agent do everything in one shot, Lineup delegates work
@@ -11,44 +12,90 @@ to specialized subagents -- each with its own tools, model, and persistent memor
 
 **[Read the full documentation →](https://lineup.izantech.app)**
 
-## Quick Start
+> Installer wrapper and Codex global install support described below are planned for the next major release (**2.0.0**).  
+> Current marketplace release (`1.5.0`) remains Claude-first.
 
-Register the izantech marketplace (one-time setup):
+## Quick Start (Lineup CLI Wrapper)
+
+Install the `lineup` wrapper command (bootstrap):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/izantech/lineup/main/scripts/install-lineup.sh | bash
+```
+
+If bootstrap reports `missing scripts/lineup.mjs`, the latest published tag does not yet include installer artifacts. Use `node scripts/lineup.mjs ...` from a clone until the next release tag is published.
+
+Install Lineup for both hosts:
+
+```bash
+lineup install --host all
+```
+
+Common operations:
+
+```bash
+lineup update --host all
+lineup status --host all
+lineup uninstall --host codex
+lineup uninstall --host all --purge
+```
+
+## Host Command Matrix
+
+| Operation | Claude backend | Codex backend |
+| --------- | -------------- | ------------- |
+| Install | `claude plugin marketplace add izantech/claude-plugins` + `claude plugin install lineup@izantech` | Copy release `.agents/skills/lineup-*` to `$HOME/.agents/skills/` |
+| Update | `claude plugin update lineup@izantech` | Re-sync `$HOME/.agents/skills/lineup-*` from release |
+| Uninstall | `claude plugin remove lineup@izantech` | Remove `$HOME/.agents/skills/lineup-*` |
+| Status | `claude plugin list` | Verify required skill files in `$HOME/.agents/skills/` |
+
+## Existing Workflow Commands (Unchanged)
+
+Claude commands:
+- `/lineup:kick-off`
+- `/lineup:configure`
+- `/lineup:explain`
+- `/lineup:playbook`
+
+Codex commands:
+- `$lineup-kick-off`
+- `$lineup-configure`
+- `$lineup-explain`
+- `$lineup-playbook`
+
+## Native Host Install Paths (without wrapper)
+
+### Claude marketplace
 
 ```bash
 claude plugin marketplace add izantech/claude-plugins
-```
-
-Install lineup:
-
-```bash
-# From within Claude Code:
-/plugin install lineup@izantech
-
-# Or from terminal:
 claude plugin install lineup@izantech
 ```
 
-Run your first task:
+### Codex repo-local mode
+
+Run Codex from this repository root (`.agents/skills/` is discovered locally):
 
 ```bash
-/lineup:kick-off Refactor the authentication module to use JWT tokens
+codex
 ```
 
-That's it. The pipeline will walk you through clarification, research, planning,
-implementation, and verification. On first run, Lineup automatically configures agents, migrates memory, and discovers available tactics.
+## Generated Host Files
 
-See the [installation guide](https://lineup.izantech.app/getting-started/installation)
-for manual install and customization options.
+Lineup uses a canonical source plus generated host adapters to avoid prompt drift.
 
-## What's Inside
+- Canonical templates: `.lineup-core/skills/**`
+- Host adapters: `.lineup-core/hosts/claude.json`, `.lineup-core/hosts/codex.json`
+- Generated outputs:
+  - Claude plugin skill files: `skills/**`
+  - Codex skill files: `.agents/skills/**`
 
-| Component | Description |
-| --------- | ----------- |
-| 6 specialized agents | Researcher, Architect, Developer, Reviewer, Documenter, Teacher |
-| Flexible pipeline | 3 tiers (Full, Lightweight, Direct) with up to 7 stages. Define custom workflows with reusable tactics. |
-| 4 skills | `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook` |
-| Reusable tactics | Per-project custom workflows in YAML |
+Do not edit generated files directly. Edit canonical templates, then run:
+
+```bash
+node scripts/sync-host-files.mjs
+node scripts/check-host-files.mjs
+```
 
 ## Learn More
 
