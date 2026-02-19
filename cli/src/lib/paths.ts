@@ -1,9 +1,32 @@
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function packageRoot(): string {
   const file = fileURLToPath(import.meta.url);
+  let current = path.dirname(file);
+  const filesystemRoot = path.parse(current).root;
+
+  while (true) {
+    const candidate = path.join(current, "package.json");
+    if (existsSync(candidate)) {
+      try {
+        const parsed = JSON.parse(readFileSync(candidate, "utf8")) as { name?: string };
+        if (parsed.name === "@izantech/lineup-cli") {
+          return current;
+        }
+      } catch {
+        // Continue walking when package.json is unreadable or invalid.
+      }
+    }
+
+    if (current === filesystemRoot) {
+      break;
+    }
+    current = path.dirname(current);
+  }
+
   return path.resolve(path.dirname(file), "..", "..");
 }
 

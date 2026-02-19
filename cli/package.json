@@ -50,7 +50,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "schema:check": "tsx src/scripts/schema-check.ts",
-    "generate:check": "tsx src/scripts/generate-check.ts"
+    "generate:check": "tsx src/scripts/generate-check.ts",
+    "smoke:dist": "tsx src/scripts/smoke-dist.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

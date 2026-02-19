@@ -89,7 +89,25 @@ export function resolveExitCode(error: unknown): number {
   return 1;
 }
 
+export function handleFatalError(error: unknown): never {
+  printCliError(error);
+  process.exit(resolveExitCode(error));
+}
+
 export async function run(argv: string[] = process.argv): Promise<void> {
   const program = buildProgram();
   await program.parseAsync(argv);
+}
+
+function isDirectExecution(argv: string[]): boolean {
+  const entry = argv[1];
+  if (!entry) {
+    return false;
+  }
+
+  return path.resolve(entry) === path.resolve(packageRoot(), "dist", "cli.js");
+}
+
+if (isDirectExecution(process.argv)) {
+  run().catch(handleFatalError);
 }

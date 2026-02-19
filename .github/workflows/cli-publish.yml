@@ -43,5 +43,8 @@ jobs:
       - name: Build
         run: npm --prefix cli run build
 
+      - name: Dist smoke
+        run: npm --prefix cli run smoke:dist
+
       - name: Publish to npm
         run: npm publish --prefix cli --access public --provenance
