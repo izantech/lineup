@@ -53,6 +53,7 @@ export default withMermaid(defineConfig({
         {
           text: 'Reference',
           items: [
+            { text: 'CLI Manager', link: '/reference/cli' },
             { text: 'Agent Configuration', link: '/reference/agents' },
             { text: 'Tactic Schema', link: '/reference/tactic-schema' },
             { text: 'Skill Commands', link: '/reference/skills' },

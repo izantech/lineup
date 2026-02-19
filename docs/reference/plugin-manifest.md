@@ -57,14 +57,14 @@ The `version` field follows [semantic versioning](https://semver.org/):
 - **Minor** (x.2.x): New features (agents, skills, tactics) that don't break existing workflows
 - **Patch** (x.x.1): Bug fixes, prompt improvements, documentation updates
 
-When you update the plugin, the version number indicates what changed:
+When you update the Claude host install through the Lineup manager, the version number indicates what changed:
 
 ```bash
-# Marketplace update
-claude plugin update lineup@izantech
+# CLI-managed Claude host update
+lineup update --host claude --version latest --yes
 ```
 
-The version is informational -- Claude Code doesn't enforce version constraints between plugins. It's used by the marketplace for update discovery.
+The version is informational -- Claude Code doesn't enforce version constraints between plugins.
 
 ## Plugin structure
 

@@ -6,31 +6,62 @@ Common issues and solutions when using Lineup. Each entry follows the pattern: *
 
 **Symptom:** Running `/lineup:kick-off` gives "command not recognized" or "no such skill".
 
-**Diagnosis:** The Lineup plugin is not installed, or the marketplace is not registered.
+**Diagnosis:** The Claude host install is missing, stale, or failed to sync.
 
 **Solution:**
 
-For marketplace installs, make sure you registered the marketplace first:
+Check current host status:
 
 ```bash
-claude plugin marketplace add izantech/claude-plugins
+lineup status --host claude
 ```
 
-Then install the plugin:
+Install or re-install Claude host assets:
 
 ```bash
-/plugin install lineup@izantech
+lineup install --host claude
 ```
 
-For manual installs, verify the `--plugin-dir` path points to the directory containing `.claude-plugin/plugin.json`. The path should be the Lineup root directory, not a subdirectory:
+Force non-interactive recovery:
 
 ```bash
-# Correct
-claude --plugin-dir /path/to/lineup
-
-# Wrong -- points to a subdirectory
-claude --plugin-dir /path/to/lineup/.claude-plugin
+lineup install --host claude --yes
+lineup update --host claude --version latest --yes
 ```
+
+## Install/update fails with HTTP or release errors
+
+**Symptom:** `lineup install` or `lineup update` fails with errors like `http_error`, `release_not_found`, or `release_manifest_missing`.
+
+**Diagnosis:** The CLI could not resolve or download release artifacts from GitHub.
+
+**Solution:**
+
+1. Check your network connectivity and GitHub availability.
+2. Retry with an explicit existing tag:
+
+```bash
+lineup install --host all --version <existing-tag> --yes
+```
+
+3. If `latest` fails, retry once GitHub API access is healthy.
+4. See [CLI Manager Reference](/reference/cli) for the release resolution and cache model.
+
+## Install/update fails with checksum mismatch
+
+**Symptom:** Install/update fails with `checksum_mismatch`.
+
+**Diagnosis:** Downloaded release archive digest did not match the manifest checksum.
+
+**Solution:**
+
+1. Remove the cached tag directory:
+
+```bash
+rm -rf ~/.lineup/cache/<tag>
+```
+
+2. Re-run install/update for that tag.
 
 ## Agent not recognized
 
@@ -129,23 +160,27 @@ Alternatively, be explicit in your task description about which patterns to foll
 
 **Symptom:** Running `/lineup:kick-off explain` or `/lineup:explain` reports that the `explain` tactic was not found.
 
-**Diagnosis:** Built-in tactics were introduced in version 1.3.0. If you're running an older version, the plugin's `tactics/` directory may not exist or may be empty.
+**Diagnosis:** Claude host assets are outdated or corrupted, so built-in tactic files are missing from the active install.
 
 **Solution:**
 
-Update to the latest version:
+Refresh the Claude host install from the latest release:
 
 ```bash
-claude plugin update lineup@izantech
+lineup update --host claude --version latest --yes
 ```
 
-For manual installs, pull the latest changes:
+Then verify status:
 
 ```bash
-cd /path/to/lineup && git pull
+lineup status --host claude
 ```
 
-Verify the plugin version by checking `.claude-plugin/plugin.json` -- the `version` field should be `1.5.0` or later.
+If needed, reinstall:
+
+```bash
+lineup install --host claude --yes
+```
 
 ## VitePress build errors (for contributors)
 
@@ -182,22 +217,21 @@ Check each part of the chain:
 3. **No conflicting override:** If your project has `.lineup/tactics/explain.yaml`, the project version takes precedence over the built-in. Check that the project version is valid.
 4. **Kick-off works:** Test with `/lineup:kick-off explain How does authentication work?` to bypass the explain skill and invoke the tactic directly.
 
-If `/lineup:kick-off explain` works but `/lineup:explain` doesn't, the issue is in the skill definition. For manual installs, verify the file contents match the upstream version.
+If `/lineup:kick-off explain` works but `/lineup:explain` doesn't, the issue is in the skill alias definition for your current host install. Re-run `lineup update --host claude --version latest --yes`.
 
 ## Customizations lost after update
 
 **Symptom:** Agent settings (model, tools, memory) reverted to defaults after
 updating Lineup.
 
-**Diagnosis:** You may have customized agents before version 1.3.0, which
-introduced persistent overrides. Older versions edited plugin files directly,
-and those edits are lost when the plugin directory is replaced during update.
+**Diagnosis:** Direct edits to generated plugin files are not persisted across
+updates. The CLI refreshes generated host assets during update/install.
 
 **Solution:**
 
-Run `/lineup:configure` to re-apply your preferred settings. From version 1.3.0
-onward, customizations are stored in `~/.claude/lineup/agents/` and survive
-future updates.
+Run `/lineup:configure` to re-apply your preferred settings. Customizations are
+stored in `~/.claude/lineup/agents/` and survive future updates when managed
+through overrides.
 
 ## Override file issues
 

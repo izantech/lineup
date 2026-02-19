@@ -14,6 +14,13 @@ Lineup 2.0 is installed and managed via the `lineup` CLI.
 npm install -g @izantech/lineup-cli
 ```
 
+## Where install files come from
+
+`lineup install` and `lineup update` fetch release artifacts from GitHub and cache them locally per tag in `~/.lineup/cache/<tag>/`.
+
+Lineup does not embed canonical workflow files inside the npm package.
+For full details, see [CLI Manager Reference](/reference/cli).
+
 ## Install Lineup
 
 Install for both hosts:
