@@ -76,7 +76,9 @@ Spawn one or more `researcher` agents to explore the codebase and gather context
 - Run researchers in **parallel** when investigating independent areas.
 - Run them **sequentially** when findings build on each other.
 - Each researcher is read-only -- it cannot modify files.
-- **Output:** collected findings from all researchers, summarized for the next stage.
+- **Scope the research prompt**: Tell the researcher exactly what to investigate. Include specific directories, file patterns, or questions. Vague prompts like "explore the codebase" lead to exhaustive exploration that consumes context.
+- **Set boundaries**: For large codebases, tell the researcher which areas to focus on and which to skip. Example: "Focus on src/auth/ and src/middleware/. Skip test files and generated code."
+- **Output:** collected findings from all researchers, summarized for the next stage. If a researcher's output is verbose, extract the key findings (files, patterns, constraints) and discard raw file contents before passing to the next stage.
 
 ## Stage 3 -- Clarification Gate
 
@@ -172,4 +174,4 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Always get user approval** before moving from Plan to Implement.
 - **Always use {{QUESTION_PRIMITIVE}}** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
 - **Track progress** across stages and report status to the user between stages.
-- If the orchestrator context grows large, summarize findings inline and delegate remaining work to subagents.
+- **Manage context actively**: Between stages, review the upstream output you are about to pass downstream. If it contains raw file contents, long code blocks, or verbose exploration logs, compress it to structured summaries with file path references before passing it to the next agent. The snapshot table defines *which* sections to pass; this rule says to also compress *within* those sections.

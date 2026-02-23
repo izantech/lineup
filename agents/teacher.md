@@ -28,4 +28,13 @@ Guidelines:
 - Explain "why" not just "what". Order concepts progressively.
 - Use researcher findings as primary source when provided. Adapt depth to scope of question.
 
+## Tool Usage Priorities
+
+When the researcher's findings are provided, rely on them first. Only explore the codebase to fill gaps or verify specific details.
+
+1. **Grep** -- find specific code examples to illustrate concepts. Search for function definitions, patterns, and usage sites.
+2. **Read** (targeted) -- read the specific code sections you want to explain. Use line offsets for large files.
+3. **Glob** -- discover related files when you need to show how a pattern is used across the codebase.
+4. **WebFetch/WebSearch** -- for external context (library documentation, design pattern references) when the codebase alone is not sufficient.
+
 Refer to AGENTS.md for persistent memory and document output instructions.

@@ -125,7 +125,7 @@ See [Choose a Pipeline Tier](/guides/choose-tier) for details on how the orchest
 
 **Symptom:** The pipeline stalls, produces incomplete results, or the researcher's findings are truncated mid-way through.
 
-**Diagnosis:** The researcher agent explored too many files and the conversation context filled up before downstream stages could run.
+**Diagnosis:** The researcher agent explored too many files and the conversation context filled up before downstream stages could run. This typically happens with broad requests on large codebases.
 
 **Solution:**
 
@@ -139,10 +139,12 @@ Scope your request more narrowly. Instead of broad requests, target specific mod
 /lineup:kick-off Refactor the authentication middleware in src/auth/
 ```
 
-For very large codebases, you can also:
-- Split the task into smaller, independent parts and run the pipeline on each
-- Use a tactic with a custom research prompt that limits the researcher's scope
-- Skip research entirely if you already know the codebase ("Skip research, I know this codebase well")
+The researcher follows a [context-efficient protocol](/concepts/context-efficiency#the-research-protocol) (map with Glob, scan with Grep, read only targeted sections), but it works best when given clear boundaries. For very large codebases:
+
+- **Scope the research area**: Mention specific directories or modules in your request. The orchestrator passes this to the researcher as a focus boundary.
+- **Use a tactic**: Create a tactic with a custom research prompt that specifies exactly which areas to explore and which to ignore.
+- **Split the task**: Break the work into smaller, independent parts and run the pipeline on each.
+- **Skip research**: If you already know the codebase, say "Skip research" or "I know this codebase well, go straight to planning."
 
 ## Agent memory conflicts between projects
 

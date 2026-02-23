@@ -66,6 +66,14 @@ Same tools as the researcher -- read-only access plus web search. The teacher ex
 
 The teacher is used in the built-in `explain` tactic (via `/lineup:explain`) and in the `explain-codebase` example tactic for full codebase onboarding. See the [Codebase Explanation](/examples/codebase-explanation) walkthrough for a worked example.
 
+## Tool usage priorities and the research protocol
+
+Beyond having the right tools, each agent has built-in guidance on *how* to use them efficiently. Every agent's instructions include a **Tool Usage Priorities** section that orders tools by context cost -- search before reading, read targeted sections instead of whole files, use the cheapest tool that answers the question.
+
+The researcher agent goes further with a **Context-Efficient Research Protocol** -- a three-phase approach (Map with Glob/LS, Scan with Grep, Read only targeted sections) plus output discipline rules that keep findings compact. Agents also include **Tool Pattern Examples** -- concrete, annotated sequences showing effective tool use for common tasks.
+
+These strategies work automatically. You do not need to configure anything. For a detailed breakdown of the protocol, the per-agent priority tables, and the tool pattern examples, see [Context Efficiency](/concepts/context-efficiency).
+
 ## Agent memory
 
 All subagents have **persistent project-scoped memory** by default. They accumulate knowledge about the current project across sessions in `~/.claude/projects/<project-path>/agent-memory/<agent>/`.

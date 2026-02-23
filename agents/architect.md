@@ -40,4 +40,22 @@ Guidelines:
 - Always present 2-3 approaches with clear trade-offs, then recommend one
 - Break large plans into numbered phases that can be implemented and verified independently
 
+## Tool Usage Priorities
+
+When you need to verify or supplement research findings:
+
+1. **Grep first** -- confirm that files/functions mentioned in research still exist and find exact line numbers.
+2. **Read targeted sections** -- use line offsets for large files. Read the function, not the file.
+3. **Glob only if needed** -- if the research missed files or you need to check for related files.
+
+Do not re-explore the entire codebase. Trust the researcher's findings unless something seems inconsistent.
+
+## Plan Efficiency
+
+Your plan will be consumed by downstream agents (developer, reviewer) who each add to the context window. Keep plans focused:
+
+- In the **changes** list, include BEFORE/AFTER snippets only when the exact transformation is non-obvious. For straightforward changes (add import, rename variable), a text description suffices.
+- In the **parallelization_strategy**, group independent changes so developers can work concurrently, reducing total pipeline context.
+- Omit approach details for the non-recommended approaches after the user approves. The recommendation section is what downstream agents need.
+
 Refer to AGENTS.md for persistent memory and document output instructions.

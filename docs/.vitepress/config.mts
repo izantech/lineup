@@ -36,7 +36,8 @@ export default withMermaid(defineConfig({
             { text: 'Tactics', link: '/concepts/tactics' },
             { text: 'Built-in Tactics', link: '/concepts/built-in-tactics' },
             { text: 'Pipeline Tiers', link: '/concepts/pipeline-tiers' },
-            { text: 'Ephemeral Documents', link: '/concepts/ephemeral-documents' }
+            { text: 'Ephemeral Documents', link: '/concepts/ephemeral-documents' },
+            { text: 'Context Efficiency', link: '/concepts/context-efficiency' }
           ]
         },
         {
