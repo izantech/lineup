@@ -270,6 +270,40 @@ export async function resolveRelease(input: ResolveReleaseInput = {}): Promise<R
   };
 }
 
+export function resolveLocalRelease(dirPath: string): ResolvedRelease {
+  const resolvedPath = path.resolve(dirPath);
+
+  if (!existsSync(resolvedPath)) {
+    throw new CliError(`Local directory does not exist: ${resolvedPath}`, {
+      code: "local_dir_not_found"
+    });
+  }
+
+  validateExtractedSource(resolvedPath);
+
+  let tag = "local";
+  try {
+    const pkgPath = path.join(resolvedPath, "cli", "package.json");
+    const parsed = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
+    if (parsed.version) {
+      tag = parsed.version;
+    }
+  } catch {
+    // Fall back to "local" tag when package.json is unavailable.
+  }
+
+  return {
+    tag,
+    sourceRoot: resolvedPath,
+    cacheDir: resolvedPath,
+    manifest: {
+      tag,
+      tarball_url: "local",
+      sha256: "local"
+    }
+  };
+}
+
 export async function readManifestFromFile(filePath: string): Promise<ReleaseManifest> {
   const raw = await readFile(filePath, "utf8");
   const parsed = JSON.parse(raw);

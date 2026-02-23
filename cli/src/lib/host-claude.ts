@@ -36,7 +36,7 @@ function writeMarketplace(root: string, pluginSource: string, version: string): 
     plugins: [
       {
         name: LINEUP_PLUGIN_NAME,
-        source: pluginSource,
+        source: `./${path.relative(root, pluginSource)}`,
         version,
         description: "Lineup local managed plugin"
       }

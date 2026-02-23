@@ -5,6 +5,7 @@ import { performInstallOrUpdate } from "../lib/operations";
 export type UpdateCommandOptions = {
   host?: string;
   version?: string;
+  fromDir?: string;
   yes?: boolean;
 };
 
@@ -14,6 +15,7 @@ export async function runUpdateCommand(options: UpdateCommandOptions): Promise<v
     action: "update",
     hosts,
     version: options.version,
+    fromDir: options.fromDir,
     yes: Boolean(options.yes)
   });
 

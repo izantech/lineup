@@ -68,6 +68,12 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
         }
       };
     },
+    resolveLocalRelease: (dirPath: string) => ({
+      tag: "v2.0.0",
+      sourceRoot: dirPath,
+      cacheDir: dirPath,
+      manifest: { tag: "v2.0.0", tarball_url: "local", sha256: "local" }
+    }),
     validateSourceBundle: (sourceRoot: string) => {
       calls.validateSourceBundleInputs.push(sourceRoot);
     },

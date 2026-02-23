@@ -5,6 +5,7 @@ import { resolveRequestedHosts } from "../lib/hosts";
 export type InstallCommandOptions = {
   host?: string;
   version?: string;
+  fromDir?: string;
   yes?: boolean;
 };
 
@@ -14,6 +15,7 @@ export async function runInstallCommand(options: InstallCommandOptions): Promise
     action: "install",
     hosts,
     version: options.version,
+    fromDir: options.fromDir,
     yes: Boolean(options.yes)
   });
 

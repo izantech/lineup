@@ -59,7 +59,7 @@ export function codexHostRoot(homeDir = os.homedir()): string {
 }
 
 export function claudeManagedPluginDir(version: string, homeDir = os.homedir()): string {
-  return path.join(claudeHostRoot(homeDir), "plugins", "lineup", version);
+  return path.join(claudeMarketplaceRoot(homeDir), "plugins", "lineup", version);
 }
 
 export function claudeMarketplaceRoot(homeDir = os.homedir()): string {

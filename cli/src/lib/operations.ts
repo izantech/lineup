@@ -13,7 +13,7 @@ import {
 import { installCodex, statusCodex, uninstallCodex } from "./host-codex";
 import { codexHostRoot, lineupStateFile, purgeTargets } from "./paths";
 import { isInteractive, promptMigrationConfirm, promptUninstallPlan } from "./prompts";
-import { resolveRelease } from "./release";
+import { resolveLocalRelease, resolveRelease } from "./release";
 import { loadState, saveState, updateHostState } from "./state";
 import type { StatusHost, StatusOutput } from "./types";
 import { validateSourceBundle } from "./validation";
@@ -39,6 +39,7 @@ export type UninstallResult = {
 
 export type OperationsDeps = {
   resolveRelease: typeof resolveRelease;
+  resolveLocalRelease: typeof resolveLocalRelease;
   validateSourceBundle: typeof validateSourceBundle;
   detectLegacyClaudeInstall: typeof detectLegacyClaudeInstall;
   installClaudeFromPreparedPlugin: typeof installClaudeFromPreparedPlugin;
@@ -64,6 +65,7 @@ export type OperationsDeps = {
 
 const defaultDeps: OperationsDeps = {
   resolveRelease,
+  resolveLocalRelease,
   validateSourceBundle,
   detectLegacyClaudeInstall,
   installClaudeFromPreparedPlugin,
@@ -150,9 +152,12 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
     action: "install" | "update";
     hosts: HostName[];
     version?: string;
+    fromDir?: string;
     yes: boolean;
   }): Promise<InstallUpdateResult> {
-    const release = await deps.resolveRelease({ version: input.version });
+    const release = input.fromDir
+      ? deps.resolveLocalRelease(input.fromDir)
+      : await deps.resolveRelease({ version: input.version });
     deps.validateSourceBundle(release.sourceRoot);
 
     const state = deps.loadState();

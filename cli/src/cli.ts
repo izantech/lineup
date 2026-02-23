@@ -47,6 +47,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("Install Lineup for selected host(s)")
     .option("--host <host>", "Target host(s): claude|codex|all")
     .option("--version <tag>", "Release tag to install", "latest")
+    .option("--from-dir <path>", "Install from local directory instead of GitHub release")
     .option("--yes", "Auto-confirm prompts")
     .action(commandHandlers.install);
 
@@ -55,6 +56,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("Update Lineup for selected host(s)")
     .option("--host <host>", "Target host(s): claude|codex|all")
     .option("--version <tag>", "Release tag to install", "latest")
+    .option("--from-dir <path>", "Install from local directory instead of GitHub release")
     .option("--yes", "Auto-confirm prompts")
     .action(commandHandlers.update);
 
