@@ -72,11 +72,20 @@ The research protocol also governs how findings are expressed:
 
 ## Orchestrator context management
 
-The orchestrator applies two additional measures to keep context lean across the full pipeline:
+The orchestrator applies several measures to keep context lean across the full pipeline:
 
-1. **Research scoping.** When spawning researchers, the orchestrator includes specific directories, file patterns, or focus boundaries in the prompt. Vague prompts like "explore the codebase" lead to exhaustive exploration. Scoped prompts like "focus on `src/auth/` and `src/middleware/`, skip test files" keep research targeted.
+1. **Triage-driven scoping.** Stage 0 (Triage) produces an assessment with concrete search targets -- specific directories, file patterns, and questions per affected area. Researchers receive these as focused directives instead of deriving scope from scratch. This eliminates the broad "explore the codebase" pattern that historically consumed the most context.
 
-2. **Active compression.** Between stages, the orchestrator reviews upstream output before passing it downstream. If the output contains raw file contents, long code blocks, or verbose exploration logs, it compresses them to structured summaries with file path references. The [context snapshot](/concepts/pipeline#context-snapshots) table defines *which* sections to pass; active compression controls the density *within* those sections.
+2. **Conditional approach analysis.** The triage assessment classifies task complexity as `simple`, `moderate`, or `complex`. Simple tasks skip the multi-approach comparison in the Plan stage entirely -- the architect produces 1 approach directly. This saves the token cost of generating and evaluating 2-3 alternatives when there is only one sensible path.
+
+3. **Parallel architects.** When triage detects 2+ independent areas, separate architect agents spawn in parallel, each scoped to its area. The orchestrator merges outputs into a master plan. This reduces wall-clock time on multi-area tasks without increasing per-architect context load.
+
+4. **Active compression.** Between stages, the orchestrator reviews upstream output before passing it downstream. If the output contains raw file contents, long code blocks, or verbose exploration logs, it compresses them to structured summaries with file path references. The [context snapshot](/concepts/pipeline#context-snapshots) table defines *which* sections to pass; active compression controls the density *within* those sections.
+
+5. **Output compression rules.** Three specific rules constrain inter-stage output size:
+   - Cap `how_it_works` sections at ~500 words -- compress to essential execution flow, data flow, and pattern descriptions
+   - Omit empty YAML sections (`gaps: []`, `risks: null`) -- pass only sections with substantive content
+   - Prefer structured bullet-point lists over prose paragraphs -- downstream agents parse lists faster and more accurately
 
 ## How you benefit
 

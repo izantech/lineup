@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Stage 0 (Triage) -- lightweight pre-pipeline orchestrator analysis that classifies task complexity, identifies affected areas, produces targeted search directives, and detects independent areas for parallel planning
+- Parallel architect spawning -- when triage detects 2+ independent areas, separate architect agents plan in parallel and the orchestrator merges outputs into a master plan
+- Conditional approach analysis -- simple tasks get 1 approach directly (no multi-approach comparison), moderate/complex tasks get 2-3
+
+### Changed
+- Researchers now receive triage search targets as focused directives instead of deriving scope from scratch
+- Context snapshot table updated: added triage transitions (Triage -> Clarify, Triage -> Research), enriched Clarification Gate -> Plan with triage fields, trimmed Plan -> Verify to `acceptance_criteria` only
+- Output compression rules added: `how_it_works` capped at ~500 words, empty YAML sections omitted between stages, structured lists preferred over prose
+- Pipeline tiers (Full, Lightweight) now start with Stage 0 (Triage)
+- Estimated ~30-40k token reduction per task (25-40% of pipeline cost)
+
 ## [2.0.0] - 2026-02-20
 
 ### Added

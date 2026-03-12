@@ -38,7 +38,7 @@ This project has tactics defined. Which workflow would you like to run?
 
   1. brownfield-docs -- Generate missing documentation for an existing codebase
   2. api-feature -- Full pipeline with API-focused research and testing
-  3. Run the default pipeline (Clarify -> Research -> ... -> Document?)
+  3. Run the default pipeline (Triage -> Clarify -> Research -> ... -> Document?)
   4. Other (please specify)
 
 :::
@@ -58,6 +58,16 @@ Every time you run `/lineup:kick-off`, the orchestrator runs an initialization s
 You will not see explicit output from this phase unless there is a warning (e.g., a malformed override file or a version mismatch). It happens automatically in the background.
 
 ## What to expect at each stage
+
+### Stage 0: Triage
+
+Before any visible stage begins, the orchestrator performs a fast, lightweight analysis of your request. No agent is spawned -- this is pure orchestrator reasoning.
+
+**What it produces:** A triage assessment containing `affected_areas`, `complexity` (simple/moderate/complex), `search_targets` (specific directories, file patterns, and questions for researchers), and `independent_areas` (groups that can be planned in parallel).
+
+**What you see:** Nothing -- triage is not shown as a separate approval gate. It feeds directly into the stages that follow. Its output drives research scoping (search targets become researcher directives), conditional approach analysis in planning (simple tasks get 1 approach, moderate/complex get 2-3), and parallel architect spawning when 2+ independent areas are detected.
+
+**How it's counted:** Stage progress reports show "Stage N/7" -- triage is Stage 0 and does not count toward the 7-stage total.
 
 ### Stage 1: Clarify
 

@@ -164,10 +164,11 @@ If you choose yes, a **documenter** agent writes or updates relevant docs in you
 
 Here's the flow of information through the pipeline:
 
+0. **Triage** (invisible) -- the orchestrator analyzed your request and classified its complexity, identified affected areas, and produced search targets for researchers
 1. **Clarify** produced a requirements summary
-2. **Research** produced structured findings (key files, patterns, gaps)
+2. **Research** used the triage search targets as focused directives and produced structured findings (key files, patterns, gaps)
 3. **Clarification Gate** resolved remaining ambiguities
-4. **Plan** consumed the requirements + findings and produced an implementation plan
+4. **Plan** consumed the requirements + findings + triage assessment and produced an implementation plan
 5. **Implement** consumed the plan and wrote code
 6. **Verify** consumed the plan + implementation and validated everything
 7. **Document** (if chosen) consumed the plan + implementation + review to write docs
@@ -176,13 +177,13 @@ Each agent received context from the previous stages as YAML documents -- struct
 
 ## Not every task needs the full pipeline
 
-For this walkthrough, we ran all 7 stages. In practice, the orchestrator can compress the pipeline based on task complexity:
+For this walkthrough, we ran all 7 stages (plus Stage 0 Triage, which runs invisibly). In practice, the orchestrator can compress the pipeline based on task complexity:
 
-- **Simple fix** (typo, one-line change): skips straight to implementation
-- **Moderate task** (clear scope, single module): starts at Plan
-- **Complex task** (unclear scope, multi-file): runs the full pipeline
+- **Simple fix** (typo, one-line change): skips straight to implementation (Direct tier)
+- **Moderate task** (clear scope, single module): runs Triage, Plan, Implement, Verify (Lightweight tier)
+- **Complex task** (unclear scope, multi-file): runs the full pipeline (Full tier)
 
-See [Pipeline Tiers](/concepts/pipeline-tiers) for guidance on when each tier applies.
+Triage always runs for Full and Lightweight tiers -- it informs downstream stages even when clarification and research are skipped. See [Pipeline Tiers](/concepts/pipeline-tiers) for guidance on when each tier applies.
 
 ## Next steps
 

@@ -5,7 +5,9 @@ This file is the single source of truth for AI agent instructions in this reposi
 ## Project Overview
 
 Lineup provides a structured multi-agent workflow:
-**Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?**
+**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?**
+
+Stage 0 (Triage) is a lightweight orchestrator-only analysis that classifies complexity, identifies affected areas, and produces search targets before any agent is spawned.
 
 Lineup 2.0 uses a canonical core plus a CLI-managed install flow across Claude Code and Codex CLI.
 
@@ -60,6 +62,15 @@ Key internals:
 - `cli/src/lib/host-codex.ts` — Codex global skill sync/uninstall/status
 - `cli/src/lib/validation.ts` — AJV + YAML parsing + schema checks
 - `cli/schemas/**` — JSON/YAML schemas
+
+### Triage-Driven Pipeline Optimizations
+
+Stage 0 (Triage) produces a lightweight assessment that drives downstream behavior:
+
+- **Research scoping**: Researchers receive concrete search targets (directories, file patterns, questions) from the triage assessment instead of deriving scope from scratch.
+- **Conditional approach analysis**: Simple tasks get 1 approach in the Plan stage (no multi-approach comparison); moderate/complex tasks get 2-3.
+- **Parallel architects**: When 2+ independent areas are detected, separate architect agents spawn in parallel. The orchestrator merges their outputs into a single master plan.
+- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages.
 
 ### Agent Definitions (`agents/*.md`)
 

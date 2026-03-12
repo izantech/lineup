@@ -71,10 +71,11 @@ This initialization runs on every kick-off invocation, before any stages execute
 
 ### Pipeline stages
 
-When running the default pipeline, kick-off executes up to 7 stages:
+When running the default pipeline, kick-off executes Stage 0 (Triage) followed by up to 7 stages:
 
 | Stage | Name | Agent | User interaction |
 | ----- | ---- | ----- | ---------------- |
+| 0 | Triage | Orchestrator (no spawn) | None -- runs invisibly |
 | 1 | Clarify | Orchestrator | Answers structured questions |
 | 2 | Research | Researcher | None (wait for findings) |
 | 3 | Clarification Gate | Orchestrator | Answers follow-up questions |
@@ -83,7 +84,7 @@ When running the default pipeline, kick-off executes up to 7 stages:
 | 6 | Verify | Reviewer | Reviews the report |
 | 7 | Document (optional) | Documenter | Opts in or skips |
 
-Stages may be skipped depending on the selected tier. See [Pipeline Tiers](/concepts/pipeline-tiers).
+Triage (Stage 0) is a lightweight orchestrator-only analysis that classifies complexity, identifies affected areas, and produces search targets. It does not count toward the "Stage N/7" progress labels. Stages 1-7 may be skipped depending on the selected tier. See [Pipeline Tiers](/concepts/pipeline-tiers).
 
 ### Tactic execution
 

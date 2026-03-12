@@ -4,7 +4,7 @@
 # [Lineup](https://lineup.izantech.app)
 
 Lineup is a structured multi-agent workflow for Claude Code and Codex CLI:
-**Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document**.
+**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document**.
 
 Lineup 2.0 is distributed through a single CLI manager: `lineup`.
 

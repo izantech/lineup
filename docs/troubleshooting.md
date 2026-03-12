@@ -101,9 +101,9 @@ Also check:
 
 ## Stage skipped unexpectedly
 
-**Symptom:** You expected the full pipeline (Clarify, Research, Plan, Implement, Verify) but the orchestrator jumped straight to Plan or Implement.
+**Symptom:** You expected the full pipeline (Triage, Clarify, Research, Plan, Implement, Verify) but the orchestrator jumped straight to Plan or Implement.
 
-**Diagnosis:** The orchestrator infers a [pipeline tier](/concepts/pipeline-tiers) from your request. If your description was specific enough, it may have selected the Lightweight tier (Plan, Implement, Verify) or Direct tier (just do it), skipping the earlier stages.
+**Diagnosis:** The orchestrator infers a [pipeline tier](/concepts/pipeline-tiers) from your request. If your description was specific enough, it may have selected the Lightweight tier (Triage, Plan, Implement, Verify) or Direct tier (just do it), skipping the earlier stages. Note that Triage (Stage 0) always runs for Full and Lightweight tiers but is invisible -- it does not appear as a separate stage prompt.
 
 **Solution:**
 
@@ -139,9 +139,9 @@ Scope your request more narrowly. Instead of broad requests, target specific mod
 /lineup:kick-off Refactor the authentication middleware in src/auth/
 ```
 
-The researcher follows a [context-efficient protocol](/concepts/context-efficiency#the-research-protocol) (map with Glob, scan with Grep, read only targeted sections), but it works best when given clear boundaries. For very large codebases:
+Stage 0 (Triage) now produces concrete search targets for researchers -- specific directories, file patterns, and questions per affected area. This significantly reduces unfocused exploration compared to earlier versions. The researcher also follows a [context-efficient protocol](/concepts/context-efficiency#the-research-protocol) (map with Glob, scan with Grep, read only targeted sections). For very large codebases where context exhaustion still occurs:
 
-- **Scope the research area**: Mention specific directories or modules in your request. The orchestrator passes this to the researcher as a focus boundary.
+- **Scope the research area**: Mention specific directories or modules in your request. Triage uses this to produce more targeted search directives.
 - **Use a tactic**: Create a tactic with a custom research prompt that specifies exactly which areas to explore and which to ignore.
 - **Split the task**: Break the work into smaller, independent parts and run the pipeline on each.
 - **Skip research**: If you already know the codebase, say "Skip research" or "I know this codebase well, go straight to planning."

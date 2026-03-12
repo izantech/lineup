@@ -23,7 +23,7 @@ When Claude Code loads the generated plugin, it discovers `skills/kick-off/SKILL
 
 ### `/lineup:kick-off`
 
-The main entry point. Runs the full agentic pipeline: Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document.
+The main entry point. Runs the full agentic pipeline: Triage, Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document.
 
 ```bash
 /lineup:kick-off Refactor the authentication module to use JWT tokens

@@ -17,8 +17,8 @@ The file must be in a `.claude-plugin/` directory at the plugin root. Claude Cod
 ```json
 {
   "name": "lineup",
-  "description": "Structured multi-agent workflow: Clarify, Research, Plan, Implement, Verify, Document",
-  "version": "1.5.0",
+  "description": "Structured multi-agent workflow: Triage, Clarify, Research, Plan, Implement, Verify, Document",
+  "version": "2.0.0",
   "author": { "name": "izantech" },
   "repository": "https://github.com/izantech/lineup"
 }
