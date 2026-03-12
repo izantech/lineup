@@ -47,7 +47,8 @@ jobs:
         run: npm --prefix cli run smoke:dist
 
       - name: Publish to npm
-        run: npm publish --prefix cli --access public --provenance
+        working-directory: cli
+        run: npm publish --access public --provenance
 
       - name: Create source tarball
         shell: bash
