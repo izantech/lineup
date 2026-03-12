@@ -1,69 +1,89 @@
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7c3aed)](https://docs.anthropic.com/en/docs/claude-code)
+[![npm version](https://img.shields.io/npm/v/%40izantech%2Flineup-cli)](https://www.npmjs.com/package/@izantech/lineup-cli)
 [![GitHub release](https://img.shields.io/github/v/release/izantech/lineup)](https://github.com/izantech/lineup/releases)
 
 # [Lineup](https://lineup.izantech.app)
 
-A structured multi-agent workflow for Claude Code that breaks complex tasks into
-a clear pipeline: **Clarify, Research, Plan, Implement, Verify, Document**.
+Lineup is a structured multi-agent workflow for Claude Code and Codex CLI:
+**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document**.
 
-Instead of letting a single agent do everything in one shot, Lineup delegates work
-to specialized subagents -- each with its own tools, model, and persistent memory.
+Lineup 2.0 is distributed through a single CLI manager: `lineup`.
 
-**[Read the full documentation →](https://lineup.izantech.app)**
-
-## Quick Start
-
-Register the izantech marketplace (one-time setup):
+## Install the CLI
 
 ```bash
-claude plugin marketplace add izantech/claude-plugins
+npm install -g @izantech/lineup-cli
 ```
 
-Install lineup:
+## Manage hosts
 
 ```bash
-# From within Claude Code:
-/plugin install lineup@izantech
-
-# Or from terminal:
-claude plugin install lineup@izantech
+lineup install --host all
+lineup update --host all
+lineup status --host all
+lineup uninstall --host codex
 ```
 
-Run your first task:
+### Command surface
+
+```text
+lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]
+lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]
+lineup uninstall [--host claude|codex|all] [--yes] [--purge]
+lineup status [--host claude|codex|all] [--json]
+```
+
+### Host behavior
+
+| Operation | Claude | Codex |
+| --------- | ------ | ----- |
+| Install | CLI-managed local marketplace plugin install | Atomic sync into `$HOME/.agents/skills/lineup-*` |
+| Update | Refresh local marketplace plugin from selected release tag | Re-sync from selected release tag |
+| Uninstall | Remove CLI-managed plugin | Remove `$HOME/.agents/skills/lineup-*` |
+| Status | Detect install + legacy marketplace state | Verify required skill files |
+
+## Workflow commands (unchanged)
+
+Claude:
+- `/lineup:kick-off`
+- `/lineup:configure`
+- `/lineup:explain`
+- `/lineup:playbook`
+
+Codex:
+- `$lineup-kick-off`
+- `$lineup-configure`
+- `$lineup-explain`
+- `$lineup-playbook`
+
+## Canonical source model
+
+Lineup uses canonical templates plus host adapters:
+
+- Canonical templates: `.lineup-core/skills/**`
+- Host adapters: `.lineup-core/hosts/*.json`
+- Generated host files are install-time artifacts and are not committed to git
+
+## Validation and checks
 
 ```bash
-/lineup:kick-off Refactor the authentication module to use JWT tokens
+npm --prefix cli run typecheck
+npm --prefix cli test
+npm --prefix cli run schema:check
+npm --prefix cli run generate:check
+npm --prefix cli run build
 ```
 
-That's it. The pipeline will walk you through clarification, research, planning,
-implementation, and verification. On first run, Lineup automatically configures agents, migrates memory, and discovers available tactics.
+## Upgrading from 1.x
 
-See the [installation guide](https://lineup.izantech.app/getting-started/installation)
-for manual install and customization options.
+If you are using Lineup 1.x via the Claude marketplace, see the [Migration Guide](https://lineup.izantech.app/guides/migration-v2) for step-by-step upgrade instructions. The CLI detects legacy installs automatically and handles the transition.
 
-## What's Inside
+## Learn more
 
-| Component | Description |
-| --------- | ----------- |
-| 6 specialized agents | Researcher, Architect, Developer, Reviewer, Documenter, Teacher |
-| Flexible pipeline | 3 tiers (Full, Lightweight, Direct) with up to 7 stages. Define custom workflows with reusable tactics. |
-| 4 skills | `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook` |
-| Reusable tactics | Per-project custom workflows in YAML |
-
-## Learn More
-
-- [Getting Started](https://lineup.izantech.app/getting-started/installation) -- Installation and first task
-- [Concepts](https://lineup.izantech.app/concepts/pipeline) -- How the pipeline, agents, and tactics work
-- [How-To Guides](https://lineup.izantech.app/guides/run-kick-off) -- Step-by-step task guides
-- [Reference](https://lineup.izantech.app/reference/agents) -- Complete configuration reference
-- [Examples](https://lineup.izantech.app/examples/feature-development) -- Real walkthroughs with output
-
-## Credits
-
-The clarification gate, confidence-based review filtering, and multi-option
-architecture patterns were adapted from the
-[feature-dev](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/feature-dev)
-skill for Claude Code.
+- [Getting Started](https://lineup.izantech.app/getting-started/installation)
+- [Concepts](https://lineup.izantech.app/concepts/pipeline)
+- [Guides](https://lineup.izantech.app/guides/run-kick-off)
+- [Reference](https://lineup.izantech.app/reference/agents)
+- [Examples](https://lineup.izantech.app/examples/feature-development)
 
 ## License
 

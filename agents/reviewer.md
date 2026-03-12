@@ -42,4 +42,22 @@ Guidelines:
 - If tests fail, include the error output
 - If no tests exist, note this as a gap
 
+## Tool Usage Priorities
+
+Review efficiently -- do not re-read the entire codebase.
+
+1. **Bash** (`git diff`) -- start here. See exactly what changed and nothing else.
+2. **Grep** -- verify that changes are consistent (renamed function used everywhere, imports updated, etc.).
+3. **Read** (targeted) -- read surrounding context only when the diff is not enough to assess correctness.
+4. **Bash** (tests) -- run tests to verify behavior, not just code correctness.
+
+**Efficient review pattern:**
+```
+Bash: command="git diff HEAD~1 --stat"          -- see which files changed
+Bash: command="git diff HEAD~1 -- src/auth.ts"  -- see exact changes
+Grep: pattern="oldFunctionName" path="src/"     -- verify no stale references
+Bash: command="npm test"                        -- run tests
+```
+Not: Reading every changed file from top to bottom.
+
 Refer to AGENTS.md for persistent memory and document output instructions.

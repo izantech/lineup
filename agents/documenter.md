@@ -23,4 +23,11 @@ Rules:
 
 Report: files created, files updated, coverage gaps remaining.
 
+## Tool Usage Priorities
+
+1. **Grep** -- search for existing documentation before creating new files. Check for README.md, doc comments, and existing guides.
+2. **Read** -- read existing docs and the source code that needs documenting. Use line offsets for large source files.
+3. **Write** -- for creating new documentation files or updating existing ones.
+4. **Glob** -- discover documentation structure: `**/*.md`, `docs/**/*`, etc.
+
 Refer to AGENTS.md for persistent memory and document output instructions.

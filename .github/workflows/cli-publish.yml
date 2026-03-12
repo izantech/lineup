@@ -1,0 +1,89 @@
+name: CLI Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Validate tag/version consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          PKG_VERSION="$(node -p "require('./cli/package.json').version")"
+
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "Tag/version mismatch: tag=$TAG package=$PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm --prefix cli ci
+
+      - name: Build
+        run: npm --prefix cli run build
+
+      - name: Dist smoke
+        run: npm --prefix cli run smoke:dist
+
+      - name: Publish to npm
+        run: npm publish --prefix cli --access public --provenance
+
+      - name: Create source tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir "lineup-${TAG}"
+          cp -r .lineup-core agents templates "lineup-${TAG}/"
+          tar czf "lineup-${TAG}.tar.gz" "lineup-${TAG}"
+          rm -rf "lineup-${TAG}"
+          echo "TARBALL_NAME=lineup-${TAG}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Generate release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          SHA256="$(sha256sum "${TARBALL_NAME}" | awk '{print $1}')"
+          TARBALL_URL="https://github.com/izantech/lineup/releases/download/${TAG}/${TARBALL_NAME}"
+          printf '{\n  "tag": "%s",\n  "tarball_url": "%s",\n  "sha256": "%s",\n  "published_at": "%s",\n  "generated_at": "%s"\n}\n' \
+            "${TAG}" \
+            "${TARBALL_URL}" \
+            "${SHA256}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > lineup-manifest.json
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes \
+            "${TARBALL_NAME}" \
+            lineup-manifest.json

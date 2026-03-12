@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Stage 0 (Triage) -- lightweight pre-pipeline orchestrator analysis that classifies task complexity, identifies affected areas, produces targeted search directives, and detects independent areas for parallel planning
+- Parallel architect spawning -- when triage detects 2+ independent areas, separate architect agents plan in parallel and the orchestrator merges outputs into a master plan
+- Conditional approach analysis -- simple tasks get 1 approach directly (no multi-approach comparison), moderate/complex tasks get 2-3
+
+### Changed
+- Researchers now receive triage search targets as focused directives instead of deriving scope from scratch
+- Context snapshot table updated: added triage transitions (Triage -> Clarify, Triage -> Research), enriched Clarification Gate -> Plan with triage fields, trimmed Plan -> Verify to `acceptance_criteria` only
+- Output compression rules added: `how_it_works` capped at ~500 words, empty YAML sections omitted between stages, structured lists preferred over prose
+- Pipeline tiers (Full, Lightweight) now start with Stage 0 (Triage)
+- Estimated ~30-40k token reduction per task (25-40% of pipeline cost)
+
+## [2.0.0] - 2026-02-20
+
+### Added
+- New CLI package in `cli/` using TypeScript + Node ESM + Commander
+- Public `lineup` command surface:
+  - `lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+  - `lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+  - `lineup uninstall [--host claude|codex|all] [--yes] [--purge]`
+  - `lineup status [--host claude|codex|all] [--json]`
+- Runtime release resolver with tag resolution, cache, tarball checksum verification, and extracted source validation
+- Formal schemas in `cli/schemas/`:
+  - JSON: host adapters, state, release manifest
+  - YAML: tactic schema + agent output document contracts
+- Validation tooling:
+  - `npm --prefix cli run schema:check`
+  - `npm --prefix cli run generate:check`
+- CLI tests with Vitest for parsing, host selection, schema restrictions, and status contract shape
+- CLI fixtures for sample state and release manifest validation
+
+### Changed
+- Distribution model is now CLI-only for host installs/updates/uninstalls
+- Host-generated skill outputs are install-time artifacts produced from `.lineup-core/**`
+- Built-in and example explain tactics now include `verification` criteria to satisfy strict tactic schema validation
+- Documentation updated for npm-based CLI installation and cross-host lifecycle management
+- CI moved from committed-file drift checks to CLI package checks (typecheck, tests, schema, generation, build)
+
+### Removed
+- Committed generated host skill files from `skills/**` and `.agents/skills/**`
+- Legacy root installer/generation scripts in `scripts/` (superseded by `cli/`)
+
 ## [1.5.0] - 2026-02-16
 
 ### Changed
@@ -122,6 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
+[Unreleased]: https://github.com/izantech/lineup/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/izantech/lineup/compare/1.5.0...2.0.0
 [1.5.0]: https://github.com/izantech/lineup/compare/1.4.0...1.5.0
 [1.4.0]: https://github.com/izantech/lineup/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/izantech/lineup/compare/1.2.0...1.3.0

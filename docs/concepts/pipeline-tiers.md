@@ -6,19 +6,19 @@ Not every task needs the full 7-stage pipeline. Lineup supports three tiers that
 
 | Tier | Stages | Time | Cost |
 | ---- | ------ | ---- | ---- |
-| **Full** | Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document? | Longest | Highest |
-| **Lightweight** | Plan, Implement, Verify | Moderate | Moderate |
+| **Full** | Triage, Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document? | Longest | Highest |
+| **Lightweight** | Triage, Plan, Implement, Verify | Moderate | Moderate |
 | **Direct** | Just do it | Fastest | Lowest |
 
 ### Full
 
 :::info Full Pipeline
 
-Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?
+Triage → Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?
 
 :::
 
-The complete pipeline. Every stage runs (except Document, which is always optional). Use this when the task is complex, the requirements are unclear, or you're working in unfamiliar code.
+The complete pipeline. Every stage runs (except Document, which is always optional). Triage runs first to classify complexity, identify affected areas, and produce search targets that scope all downstream stages. Use this when the task is complex, the requirements are unclear, or you're working in unfamiliar code.
 
 **Examples:**
 - "Refactor the authentication module to use JWT tokens"
@@ -29,11 +29,11 @@ The complete pipeline. Every stage runs (except Document, which is always option
 
 :::info Lightweight Pipeline
 
-Plan → Implement → Verify
+Triage → Plan → Implement → Verify
 
 :::
 
-Skips clarification and research. Starts directly with planning. Use this when you already understand the scope and the codebase -- you just need a plan, execution, and validation.
+Runs triage, then skips clarification and research. Starts planning with the triage assessment already available. Use this when you already understand the scope and the codebase -- you just need a plan, execution, and validation. Triage still informs the Plan stage (conditional approach analysis, parallel architects).
 
 **Examples:**
 - "Add a loading spinner to the user list component"

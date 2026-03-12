@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/agent-output/developer.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["type", "agent", "date", "topic", "status", "pipeline_stage", "plan_ref"],
+  "properties": {
+    "type": { "const": "implementation" },
+    "agent": { "const": "developer" },
+    "date": { "type": "string" },
+    "topic": { "type": "string" },
+    "status": { "const": "complete" },
+    "pipeline_stage": { "type": ["integer", "string"] },
+    "plan_ref": { "type": "string" }
+  }
+}

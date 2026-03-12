@@ -4,34 +4,77 @@ This file is the single source of truth for AI agent instructions in this reposi
 
 ## Project Overview
 
-Lineup is a Claude Code plugin that provides a structured multi-agent workflow: **Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?**. It ships specialized subagents, skills, and a pipeline definition as a self-contained plugin directory.
+Lineup provides a structured multi-agent workflow:
+**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?**
 
-The project is a set of Markdown agent definitions, skills, a plugin manifest, and a workflow reference — no build system, no runtime dependencies.
+Stage 0 (Triage) is a lightweight orchestrator-only analysis that classifies complexity, identifies affected areas, and produces search targets before any agent is spawned.
+
+Lineup 2.0 uses a canonical core plus a CLI-managed install flow across Claude Code and Codex CLI.
 
 ## Commands
 
-There are no build, lint, or test commands. This is a pure-Markdown plugin.
+Repository checks:
+
+- `npm --prefix cli run typecheck`
+- `npm --prefix cli test`
+- `npm --prefix cli run schema:check`
+- `npm --prefix cli run generate:check`
+- `npm --prefix cli run build`
+
+CLI runtime:
+
+- `lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+- `lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]`
+- `lineup uninstall [--host claude|codex|all] [--yes] [--purge]`
+- `lineup status [--host claude|codex|all] [--json]`
 
 ## Architecture
 
-### Plugin Structure
+### Canonical + Adapter Model
 
-Lineup is structured as a Claude Code plugin. The `.claude-plugin/plugin.json` manifest provides the `lineup` namespace — all agents and skills are automatically namespaced under `lineup:` when loaded as a plugin.
+Lineup avoids prompt drift by keeping one canonical source and generating host artifacts at install time.
 
 ```
-.claude-plugin/plugin.json    → Plugin manifest (name, version, author)
-agents/*.md                   → Agent definitions (loaded as lineup:<name>)
-skills/kick-off/SKILL.md      → Skill: full pipeline entry point
-skills/configure/SKILL.md     → Skill: interactive agent configurator
-skills/explain/SKILL.md       → Skill: explain project components (alias for explain tactic)
-skills/playbook/SKILL.md      → Skill: interactive tactic management wizard
-tactics/*.yaml                → Built-in tactics (shipped with plugin)
-templates/*.yaml              → YAML schemas for agent output documents
+.lineup-core/skills/**        → Canonical workflow templates (source of truth)
+.lineup-core/hosts/*.json     → Host adapter maps (claude, codex)
+agents/*.md                   → Shared agent definitions
+tactics/*.yaml                → Built-in tactics
+templates/*.yaml              → YAML format references
+cli/                          → Lineup CLI package (install/update/uninstall/status)
 ```
+
+Generated host outputs are **not committed** to git:
+
+- Claude skill files are generated into the CLI-managed local plugin directory during install/update.
+- Codex skill files are generated and synced into `$HOME/.agents/skills/lineup-*`.
+
+### CLI Package (`cli/`)
+
+`cli/` is the source of truth for distribution and host lifecycle management.
+
+Key internals:
+
+- `cli/src/cli.ts` — Commander command registration and dispatch
+- `cli/src/commands/*.ts` — install/update/uninstall/status handlers
+- `cli/src/lib/release.ts` — GitHub release resolution, cache, checksum verification
+- `cli/src/lib/generate.ts` — template rendering using host adapters
+- `cli/src/lib/host-claude.ts` — Claude lifecycle and migration handling
+- `cli/src/lib/host-codex.ts` — Codex global skill sync/uninstall/status
+- `cli/src/lib/validation.ts` — AJV + YAML parsing + schema checks
+- `cli/schemas/**` — JSON/YAML schemas
+
+### Triage-Driven Pipeline Optimizations
+
+Stage 0 (Triage) produces a lightweight assessment that drives downstream behavior:
+
+- **Research scoping**: Researchers receive concrete search targets (directories, file patterns, questions) from the triage assessment instead of deriving scope from scratch.
+- **Conditional approach analysis**: Simple tasks get 1 approach in the Plan stage (no multi-approach comparison); moderate/complex tasks get 2-3.
+- **Parallel architects**: When 2+ independent areas are detected, separate architect agents spawn in parallel. The orchestrator merges their outputs into a single master plan.
+- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages.
 
 ### Agent Definitions (`agents/*.md`)
 
-Each agent is a Markdown file with YAML frontmatter:
+Each agent file has YAML frontmatter:
 
 ```markdown
 ---
@@ -46,154 +89,88 @@ memory: user|project|local
 <Agent instructions>
 ```
 
-The frontmatter fields are:
-- `name`: agent role name
-- `color`: display color for visual identification (valid: `blue`, `green`, `yellow`, `red`; officially supported but may have rendering issues: `cyan`, `magenta`)
-- `description`: one-line summary
-- `tools`: comma-space separated list (e.g. `Read, Grep, Glob, LS`)
-- `model`: one of `haiku`, `sonnet`, `opus`
-- `memory`: one of `user`, `project`, `local`
+Frontmatter fields:
 
-The body (everything after the second `---`) contains the agent's instructions and is preserved as-is during configuration.
+- `name`: role name
+- `color`: visual color (`blue`, `green`, `yellow`, `red`; `cyan`, `magenta` may render inconsistently)
+- `description`: one-line summary
+- `tools`: comma-space separated list
+- `model`: `haiku`, `sonnet`, or `opus`
+- `memory`: `user`, `project`, or `local`
 
 ### Agent Configuration Overrides
 
-User customizations are stored as YAML override files in `~/.claude/lineup/agents/`.
-These files persist across plugin updates and contain only the frontmatter fields
-the user has changed (model, tools, memory).
+Runtime overrides are persisted outside the repo:
 
-```
-~/.claude/lineup/agents/
-  researcher.yaml      ← Override for researcher (e.g., model: sonnet)
-  architect.yaml       ← Override for architect (if customized)
-```
+- Claude: `~/.claude/lineup/agents/`
+- Codex: `~/.codex/lineup/agents/`
 
-Override precedence: user override file > plugin agent frontmatter defaults.
+Override precedence: user override > agent frontmatter defaults.
 
-The `/lineup:configure` skill writes these files. The `/lineup:kick-off` skill
-reads them before spawning agents. If no override file exists for an agent,
-plugin defaults are used.
+### Skills / Commands
 
-Override files include a `plugin_version` field indicating which plugin version
-they were created against. This is informational — overrides are forward-compatible
-since they only contain model/tools/memory fields.
+Command surface is unchanged:
 
-### Skills (`skills/`)
+- Claude: `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook`
+- Codex: `$lineup-kick-off`, `$lineup-configure`, `$lineup-explain`, `$lineup-playbook`
 
-Skills are static SKILL.md files that provide slash commands.
+## Data and Schema Conventions
 
-| Skill | Path | Command | Purpose |
-|-------|------|---------|---------|
-| Kick-off | `skills/kick-off/SKILL.md` | `/lineup:kick-off` | Entry point for the full agentic pipeline |
-| Configure | `skills/configure/SKILL.md` | `/lineup:configure` | Interactive agent configurator |
-| Explain | `skills/explain/SKILL.md` | `/lineup:explain` | Explain project components via researcher + teacher |
-| Playbook | `skills/playbook/SKILL.md` | `/lineup:playbook` | Interactive tactic management wizard |
+### YAML (human-authored)
 
-### Tactics (`.lineup/tactics/`)
+- Canonical workflow templates: `.lineup-core/skills/**/*.md`
+- Tactics: `.lineup/tactics/*.yaml` and built-ins in `tactics/*.yaml`
+- YAML restrictions: no anchors, aliases, merge keys, or custom tags
+- Validation flow: parse YAML -> validate with JSON Schema
 
-Tactics are per-project reusable workflow definitions. They let users define custom
-agent sequences that the kick-off skill can discover and execute.
+### JSON (machine-owned)
 
-- Stored as YAML files in `.lineup/tactics/` within the project directory
-- Schema documented in `templates/tactic.yaml`
-- Discovered automatically by `/lineup:kick-off`
-- Each tactic defines: `name`, `description`, `stages`, `verification`, and optional `variables`
-- Stages support orchestration controls: `optional` (ask before running) and `gate: approval` (pause after)
-- Example tactics available in `examples/tactics/` for common workflows
+- Host adapters: `.lineup-core/hosts/*.json`
+- Installer state: `~/.lineup/state.json`
+- Release manifest/checksum metadata
 
-### Built-in Tactics (`tactics/`)
+All are validated with JSON Schema in CI and runtime paths.
 
-Built-in tactics are shipped with the plugin in the `tactics/` directory (distinct from
-per-project `.lineup/tactics/`). They provide common workflows out of the box.
+## Tactics
 
-- Discovered automatically by `/lineup:kick-off` alongside project tactics
-- Project tactics with the same name override built-in tactics
-- Current built-in tactics: `explain`
+Project tactics:
 
-The explain skill (`/lineup:explain`) is an alias that runs the built-in `explain` tactic
-via kick-off.
+- Stored in `.lineup/tactics/`
+- Schema reference: `templates/tactic.yaml`
+- Discovered by kick-off
+- Define `name`, `description`, `stages`, `verification`, optional `variables`
 
-Each stage in the `stages` list accepts the following fields:
+Built-ins live in `tactics/`. Project tactics override built-ins by matching `name`.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `type` | Yes | Pipeline stage: `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document`, `explain` |
-| `agent` | Yes | Agent to invoke: `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
-| `prompt` | No | Custom instructions appended to agent defaults |
-| `optional` | No | If `true`, orchestrator asks user before running this stage (default: `false`) |
-| `gate` | No | If `approval`, orchestrator pauses for explicit user approval after this stage completes |
+## Release Process (2.0)
 
-## Conventions
-
-- Agent names do not use a prefix — the `lineup:` namespace is provided by the plugin manifest
-- Frontmatter fields use comma-space separation for tool lists
-- All configuration happens via the `/lineup:configure` skill — no external scripts
-- Agent plugin files (`agents/*.md`) are immutable at runtime — never edited by skills or users directly
-- User customizations live in `~/.claude/lineup/agents/` as YAML override files
-
-## Release Process
-
-When releasing a new version:
-
-1. Update the version in `.claude-plugin/plugin.json`
-2. Add a new entry to `CHANGELOG.md` following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format
-3. Commit the changes with a conventional commit message
-4. Push to the remote repository
-5. Create a GitHub release using `gh`:
-   ```bash
-   gh release create <version> --title "<version>" --notes "$(cat <<'EOF'
-   ## <Descriptive Title>
-
-   <Paste the CHANGELOG content for this version here>
-   EOF
-   )"
-   ```
-
-Example:
-```bash
-gh release create 1.3.0 --title "1.3.0" --notes "$(cat <<'EOF'
-## Persistent Configuration and Built-in Tactics
-
-### Added
-- Feature descriptions...
-EOF
-)"
-```
+1. Update versions (`cli/package.json`, `.claude-plugin/plugin.json` as needed)
+2. Update `CHANGELOG.md`
+3. Run checks:
+   - `npm --prefix cli run typecheck`
+   - `npm --prefix cli test`
+   - `npm --prefix cli run schema:check`
+   - `npm --prefix cli run generate:check`
+   - `npm --prefix cli run build`
+4. Commit and push
+5. Create GitHub release tag
+6. Publish npm package via GitHub Actions OIDC (workflow checks tag/version alignment)
 
 ## Document Conventions
 
-Agents produce structured documents during pipeline execution (research findings, plans, implementation reports, reviews). These follow a standardized YAML format for consistency and parseability.
+Agent outputs are YAML-structured and **ephemeral by default** (conversation context unless explicitly requested to persist).
 
-### Ephemeral by Default
+Template references:
 
-All agent documents are **ephemeral** -- they exist in the conversation context and are passed between agents by the orchestrator. No files are written to the project directory unless the user explicitly requests it. This avoids polluting projects with tool-specific artifacts.
+- `templates/researcher.yaml`
+- `templates/architect.yaml`
+- `templates/developer.yaml`
+- `templates/reviewer.yaml`
+- `templates/documenter.yaml`
+- `templates/teacher.yaml`
 
-### YAML Format
+Status values:
 
-All agent output follows YAML schemas defined in `templates/`:
-
-| Template | Agent | Document Type |
-|----------|-------|---------------|
-| `templates/researcher.yaml` | researcher | Research findings |
-| `templates/architect.yaml` | architect | Implementation plan |
-| `templates/developer.yaml` | developer | Implementation report |
-| `templates/reviewer.yaml` | reviewer | Review report |
-| `templates/documenter.yaml` | documenter | Documentation report |
-| `templates/teacher.yaml` | teacher | Explanation |
-
-Every document includes these core fields:
-
-| Field | Required | Values | Description |
-|-------|----------|--------|-------------|
-| type | Yes | `research`, `plan`, `implementation`, `review`, `documentation`, `explanation` | Document type |
-| agent | Yes | `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` | Producing agent |
-| date | Yes | `YYYY-MM-DD` | Creation date |
-| topic | Yes | kebab-case string | Short topic label |
-| status | Yes | varies by type | Document status |
-| pipeline_stage | Yes | `2`, `4`, `5`, `6`, `7`, `null` | Pipeline stage number |
-| plan_ref | Conditional | filename string | Required for `implementation` and `review` types |
-
-**Status values by type**:
 - research: `complete`
 - plan: `draft`, `approved`, `superseded`
 - implementation: `complete`
@@ -201,47 +178,14 @@ Every document includes these core fields:
 - documentation: `complete`
 - explanation: `complete`
 
-### Persistence
+## Memory
 
-All documents are **fully ephemeral**:
+Default memory scope is `project`.
 
-| Document | Storage | Purpose |
-|----------|---------|---------|
-| Research findings | Conversation context | Passed to architect as input |
-| Implementation plan | Conversation context | Passed to developer and reviewer as input |
-| Implementation report | Conversation context | Passed to reviewer as input |
-| Review report | Conversation context | Presented to user in conversation |
-| Documentation report | Conversation context + project files | Documenter writes docs to project; report is ephemeral |
-| Explanation | Conversation context | Presented to user in conversation |
+Storage locations:
 
-If the user wants to save any document for future reference, they can copy it from the conversation.
+- `user`: `~/.claude/agent-memory/<agent>/`
+- `project`: `~/.claude/projects/<project-path>/agent-memory/<agent>/`
+- `local`: `.lineup/memory/<agent>/`
 
-### Agent Memory (Cross-Session Knowledge)
-
-Agents use persistent memory for cross-session knowledge -- patterns, conventions, architectural decisions, and debugging insights. This is distinct from document output: memory captures reusable knowledge, not session-specific artifacts.
-
-Memory scope defaults to `project` (scoped to the current project). The three scopes and their storage locations:
-
-| Scope | Storage location |
-| ----- | ---------------- |
-| `user` | `~/.claude/agent-memory/<agent>/` |
-| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` |
-| `local` | `.lineup/memory/<agent>/` |
-
-When the kick-off skill detects global memory (`~/.claude/agent-memory/<agent>/`) containing project-specific knowledge, it automatically migrates matching sections to the project-scoped memory path. This is a one-time migration per project.
-
-### Agent Persistent Memory Instructions
-
-Every agent has a persistent memory directory whose contents survive across conversations.
-
-- Store **project-specific knowledge** in project-scoped memory: patterns, conventions,
-  architectural decisions, key file locations, and insights unique to this project.
-- If you also have user-scoped memory, store **cross-project knowledge** there: general
-  language idioms, universal techniques, and framework patterns that apply to any codebase.
-
-### Agent Document Output Instructions
-
-Every agent structures its output as YAML following the schema in its corresponding
-`templates/<agent>.yaml` file from this plugin's directory. Present the YAML directly in
-your response -- do not write it to a file unless explicitly requested. The orchestrator
-passes your structured output to downstream agents as context.
+Use project memory for project-specific knowledge; user memory for cross-project knowledge.

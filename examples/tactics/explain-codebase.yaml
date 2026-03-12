@@ -26,3 +26,7 @@ stages:
       4. Data flow from input to output (request lifecycle, event pipeline, etc.)
       5. Conventions and patterns the team follows
       6. Where to start reading code for a new contributor
+
+verification:
+  - "Explanation includes architecture, module boundaries, and data flow."
+  - "Guide identifies practical first files for a new contributor."

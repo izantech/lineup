@@ -1,0 +1,23 @@
+{
+  "host": "claude",
+  "vars": {
+    "SKILL_NAME_KICKOFF": "kick-off",
+    "SKILL_NAME_CONFIGURE": "configure",
+    "SKILL_NAME_EXPLAIN": "explain",
+    "SKILL_NAME_PLAYBOOK": "playbook",
+    "CMD_KICKOFF": "/lineup:kick-off",
+    "CMD_CONFIGURE": "/lineup:configure",
+    "CMD_EXPLAIN": "/lineup:explain",
+    "CMD_PLAYBOOK": "/lineup:playbook",
+    "KICKOFF_INIT_PATH": "skills/kick-off/INIT.md",
+    "QUESTION_PRIMITIVE": "AskUserQuestion",
+    "OVERRIDES_DIR": "~/.claude/lineup/agents/",
+    "MEMORY_USER_DIR": "~/.claude/agent-memory",
+    "MEMORY_PROJECT_DIR": "~/.claude/projects",
+    "HOST_TERM_PLUGIN": "plugin",
+    "HOST_TERM_PLUGIN_POSSESSIVE": "plugin's",
+    "HOST_DEFAULTS_TERM": "plugin defaults",
+    "HOST_ARTIFACT_LABEL": "Plugin",
+    "HOST_ARTIFACT_LABEL_LOWER": "plugin"
+  }
+}

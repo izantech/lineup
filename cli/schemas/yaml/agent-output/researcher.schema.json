@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/agent-output/researcher.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["type", "agent", "date", "topic", "status", "pipeline_stage"],
+  "properties": {
+    "type": { "const": "research" },
+    "agent": { "const": "researcher" },
+    "date": { "type": "string" },
+    "topic": { "type": "string" },
+    "status": { "const": "complete" },
+    "pipeline_stage": { "type": ["integer", "string"] }
+  }
+}

@@ -3,7 +3,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 
 export default withMermaid(defineConfig({
   title: 'Lineup',
-  description: 'Structured multi-agent workflow for Claude Code',
+  description: 'Structured multi-agent workflow for Claude Code and Codex CLI',
   cleanUrls: true,
 
   head: [
@@ -36,7 +36,8 @@ export default withMermaid(defineConfig({
             { text: 'Tactics', link: '/concepts/tactics' },
             { text: 'Built-in Tactics', link: '/concepts/built-in-tactics' },
             { text: 'Pipeline Tiers', link: '/concepts/pipeline-tiers' },
-            { text: 'Ephemeral Documents', link: '/concepts/ephemeral-documents' }
+            { text: 'Ephemeral Documents', link: '/concepts/ephemeral-documents' },
+            { text: 'Context Efficiency', link: '/concepts/context-efficiency' }
           ]
         },
         {
@@ -47,17 +48,20 @@ export default withMermaid(defineConfig({
             { text: 'Customize Agents', link: '/guides/customize-agents' },
             { text: 'Use Explain', link: '/guides/use-explain' },
             { text: 'Use Playbook', link: '/guides/use-playbook' },
-            { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' }
+            { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' },
+            { text: 'Migrate from 1.x', link: '/guides/migration-v2' }
           ]
         },
         {
           text: 'Reference',
           items: [
+            { text: 'CLI Manager', link: '/reference/cli' },
             { text: 'Agent Configuration', link: '/reference/agents' },
             { text: 'Tactic Schema', link: '/reference/tactic-schema' },
             { text: 'Skill Commands', link: '/reference/skills' },
             { text: 'Document Templates', link: '/reference/templates' },
             { text: 'Plugin Manifest', link: '/reference/plugin-manifest' },
+            { text: 'Host File Generation', link: '/reference/host-file-generation' },
             { text: 'Stage Output Styling', link: '/reference/stage-output-styling' }
           ]
         },

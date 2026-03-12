@@ -1,110 +1,121 @@
 # Installation
 
-Lineup is a Claude Code plugin. You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working before adding Lineup.
+Lineup 2.0 is installed and managed via the `lineup` CLI.
 
 ## Prerequisites
 
-- **Claude Code** installed and configured with a valid API key or valid subscription
-- A terminal where you can run `claude` commands
+- [Node.js](https://nodejs.org/) 20+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) for Claude host operations
+- [Codex CLI](https://developers.openai.com/codex/) for Codex host operations
 
-## Choose your install method
-
-| Method | Best for | Time |
-| ------ | -------- | ---- |
-| [Marketplace](#marketplace-install) | Most users -- quick, auto-updating | 1 minute |
-| [Manual](#manual-install) | Contributing to Lineup, inspecting source | 2 minutes |
-| [Customized](#customized-install) | Tweaking agent models, tools, or memory | 3 minutes |
-
-## Marketplace install
-
-Register the izantech marketplace (one-time setup):
+## Install the manager
 
 ```bash
-claude plugin marketplace add izantech/claude-plugins
+npm install -g @izantech/lineup-cli
 ```
 
-Then install Lineup:
+## Where install files come from
+
+`lineup install` and `lineup update` fetch release artifacts from GitHub and cache them locally per tag in `~/.lineup/cache/<tag>/`.
+
+Lineup does not embed canonical workflow files inside the npm package.
+For full details, see [CLI Manager Reference](/reference/cli).
+
+## Install Lineup
+
+Install for both hosts:
 
 ```bash
-# From within Claude Code:
-/plugin install lineup@izantech
-
-# Or from terminal:
-claude plugin install lineup@izantech
+lineup install --host all
 ```
 
-To update later:
+Install for one host:
 
 ```bash
-claude plugin update lineup@izantech
+lineup install --host claude
+lineup install --host codex
 ```
 
-That's it. You now have the `lineup:` namespace with all skills and agents available.
+If `--host` is omitted in a TTY, Lineup prompts for host selection.
+In non-TTY mode, `--host` is required.
 
-## Manual install
-
-Clone the repository and point Claude Code at it:
+## Update
 
 ```bash
-git clone https://github.com/izantech/lineup.git
-claude --plugin-dir /path/to/lineup
+lineup update --host all
+lineup update --host codex --version 2.0.0
+lineup update --host claude --version latest
 ```
 
-This loads all agents and skills automatically. The `lineup:` namespace comes from the plugin name in `plugin.json`.
-
-Use this method when you want to read or modify the source, or contribute changes back to the project.
-
-## Customized install
-
-**Note:** You can use `/lineup:configure` with **any** installation method (marketplace, manual, or customized) to adjust agent settings interactively.
-
-For deeper customization (modifying agent instructions, adding custom agents, or changing plugin behavior), clone the repository and point Claude Code at your local copy:
+## Status
 
 ```bash
-git clone https://github.com/izantech/lineup.git
-claude --plugin-dir /path/to/lineup
+lineup status --host all
+lineup status --host all --json
 ```
 
-Now you can:
-- **Edit files directly** (agent definitions in `agents/`, skill logic in `skills/`)
-- **Use the configurator** for model/tool/memory changes:
+`status --json` returns:
+- `schema_version`
+- `state_file`
+- `hosts.<host>.installed`
+- `hosts.<host>.version`
+- `hosts.<host>.source`
+- `hosts.<host>.last_action`
+- `hosts.<host>.error` (optional)
+
+## Uninstall
 
 ```bash
-/lineup:configure
+lineup uninstall --host all
 ```
 
-See the [Customize Agents](/guides/customize-agents) guide for details on what you can change with the configurator vs. manual file edits.
+Uninstall is interactive by default and always asks for confirmation.
 
-## Verify installation
-
-After installing, confirm everything is working:
+Non-interactive:
 
 ```bash
-/lineup:kick-off Hello, just checking the pipeline works!
+lineup uninstall --host all --yes
 ```
 
-You should see the orchestrator respond and begin the Clarify stage. You can cancel at any point -- the goal is just to confirm the skill loads.
+Purge Lineup-owned data paths:
+
+```bash
+lineup uninstall --host all --yes --purge
+```
+
+Purge targets:
+- `~/.claude/lineup/agents/`
+- `~/.codex/lineup/agents/`
+- `~/.codex/lineup/memory/`
+
+## Notes on host installs
+
+- Claude installs are CLI-managed local marketplace/plugin installs.
+- Codex installs are global skills in `$HOME/.agents/skills/lineup-*`.
+- Existing legacy Claude marketplace installs are detected and can be migrated.
 
 ## Troubleshooting
 
-### Plugin not found
+### `lineup: command not found`
 
-If `/lineup:kick-off` is not recognized:
+- Ensure your global npm bin is in `PATH`.
+- Reinstall: `npm install -g @izantech/lineup-cli`
 
-- **Marketplace install**: Make sure the marketplace was added first with `claude plugin marketplace add izantech/claude-plugins`, then re-run `/plugin install lineup@izantech`.
-- **Manual install**: Verify the `--plugin-dir` path points to the directory containing `.claude-plugin/plugin.json`. The path should be to the `lineup` root, not to a subdirectory.
+### Claude status shows a legacy install
 
-### Skills load but agents fail
+Run install and accept migration prompt:
 
-If the skill starts but agent delegation fails:
+```bash
+lineup install --host claude
+```
 
-- Check that all files in `agents/` are present (researcher, architect, developer, reviewer, documenter, teacher).
-- For customized installs, run `/lineup:configure` and choose **Reset** to restore default agent settings.
+### Codex skills are missing
 
-### "No such agent" errors
+```bash
+lineup status --host codex
+lineup install --host codex --yes
+```
 
-Agent names are auto-namespaced by the plugin. You should see agents like `lineup:researcher`, `lineup:architect`, etc. If you see bare names without the `lineup:` prefix, the plugin manifest may not be loading correctly -- confirm `.claude-plugin/plugin.json` exists and has `"name": "lineup"`.
+## Next step
 
-## Next steps
-
-Head to [Your First Task](/getting-started/first-task) to walk through a complete pipeline run.
+Go to [Your First Task](/getting-started/first-task).

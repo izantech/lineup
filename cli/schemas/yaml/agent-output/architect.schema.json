@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/agent-output/architect.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["type", "agent", "date", "topic", "status", "pipeline_stage"],
+  "properties": {
+    "type": { "const": "plan" },
+    "agent": { "const": "architect" },
+    "date": { "type": "string" },
+    "topic": { "type": "string" },
+    "status": { "enum": ["draft", "approved", "superseded"] },
+    "pipeline_stage": { "type": ["integer", "string"] }
+  }
+}

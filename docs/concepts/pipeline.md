@@ -1,6 +1,6 @@
 # The Pipeline
 
-Lineup organizes work into a 7-stage pipeline. Each stage has a specific purpose, and the output of one stage feeds into the next.
+Lineup organizes work into a pipeline with up to 8 stages (Stage 0 through Stage 7). Each stage has a specific purpose, and the output of one stage feeds into the next.
 
 ## Overview
 
@@ -9,6 +9,7 @@ Lineup organizes work into a 7-stage pipeline. Each stage has a specific purpose
 ```mermaid
 flowchart TD
     REQ([User Request])
+    S0[0. Triage]
     S1[1. Clarify]
     S2[2. Research]
     S3[3. Clarification Gate]
@@ -19,10 +20,12 @@ flowchart TD
     S7[7. Document?]
     DONE([Done])
 
-    REQ --> S1
+    REQ --> S0
+    S0 -->|Triage assessment| S1
     S1 -->|Requirements summary| S2
+    S0 -->|Search targets| S2
     S2 -->|Structured findings| S3
-    S3 -->|Resolved requirements| S4
+    S3 -->|Resolved requirements + triage fields| S4
     S4 --> APPROVE
     APPROVE -->|Approved| S5
     APPROVE -->|Revise| S4
@@ -34,6 +37,16 @@ flowchart TD
 </div>
 
 ## Stage-by-stage breakdown
+
+### Stage 0: Triage
+
+**What it does:** The orchestrator performs a fast, lightweight analysis of the user's prompt before entering the pipeline. No agent is spawned -- this is pure orchestrator reasoning.
+
+**Why it exists:** Without triage, every downstream stage must independently figure out what the task involves. Triage front-loads this analysis once, producing structured fields that drive research scoping, conditional approach selection, and parallel architect spawning.
+
+**What gets passed to the next stages:** A triage assessment containing `affected_areas`, `complexity` (simple/moderate/complex), `search_targets`, and `independent_areas`.
+
+**How it works:** The orchestrator reads the user's prompt and classifies the task. For each affected area, it notes whether it is independent or coupled with other areas. It produces concrete search targets (specific directories, file patterns, questions) that researchers will use as focused directives. This assessment is not shown to the user as a separate gate -- it feeds directly into Stages 1 and 2.
 
 ### Stage 1: Clarify
 
@@ -53,7 +66,7 @@ flowchart TD
 
 **What gets passed to the next stage:** Structured findings in YAML format -- key files, classes, functions, data structures, execution flow, architectural patterns, constraints, and gaps.
 
-**How it works:** Researchers run in parallel when investigating independent areas, or sequentially when findings build on each other. They cannot modify files -- read-only access ensures safe exploration.
+**How it works:** Researchers receive the triage assessment's search targets as focused directives -- specific directories, file patterns, and questions -- rather than deriving scope from scratch. They run in parallel when investigating independent areas, or sequentially when findings build on each other. They cannot modify files -- read-only access ensures safe exploration.
 
 ### Stage 3: Clarification Gate
 
@@ -73,7 +86,7 @@ flowchart TD
 
 **What gets passed to the next stage:** An approved implementation plan.
 
-**How it works:** The architect receives all upstream context (requirements, research findings, resolved ambiguities). After producing the plan, the orchestrator presents it to the user and **waits for explicit approval**. The user can approve, reject, or suggest changes.
+**How it works:** The triage assessment's `complexity` and `independent_areas` fields drive how this stage runs. Simple tasks get a single approach directly (no multi-approach comparison), while moderate and complex tasks get 2-3 approaches with trade-offs. When triage detects 2+ independent areas, separate architect agents spawn in parallel -- each scoped to its area -- and the orchestrator merges their outputs into a single master plan. After producing the plan, the orchestrator presents it to the user and **waits for explicit approval**. The user can approve, reject, or suggest changes.
 
 ### Stage 5: Implement
 
@@ -111,8 +124,8 @@ Not every task needs all 7 stages. The orchestrator can compress the pipeline ba
 
 | Tier | Pipeline | Use when |
 | ---- | -------- | -------- |
-| **Full** | Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document? | Complex multi-file changes, unclear requirements, unfamiliar code |
-| **Lightweight** | Plan, Implement, Verify | Moderate tasks, scope is understood, single module |
+| **Full** | Triage, Clarify, Research, Clarification Gate, Plan, Implement, Verify, Document? | Complex multi-file changes, unclear requirements, unfamiliar code |
+| **Lightweight** | Triage, Plan, Implement, Verify | Moderate tasks, scope is understood, single module |
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions |
 
 See [Pipeline Tiers](/concepts/pipeline-tiers) for detailed guidance on choosing the right tier.
@@ -121,10 +134,11 @@ See [Pipeline Tiers](/concepts/pipeline-tiers) for detailed guidance on choosing
 
 The pipeline is designed to be flexible:
 
+- **Triage** always runs for Full and Lightweight tiers. It is skipped only in Direct tier.
 - **Clarify** is skipped when the request is already specific and unambiguous.
 - **Clarification Gate** is skipped when research yields clear, complete answers with no open questions.
 - **Document** is always optional -- the user chooses at the end.
-- **The entire first half** (Clarify, Research, Clarification Gate) is skipped in Lightweight tier when the scope is already clear.
+- **The clarification and research stages** (Clarify, Research, Clarification Gate) are skipped in Lightweight tier when the scope is already clear. Triage still runs to inform planning.
 
 The orchestrator makes these decisions based on the task description and what it learns at each stage. When in doubt, it runs the full pipeline -- it's cheaper to skip a stage that turns out unnecessary than to redo work because a needed stage was skipped.
 
@@ -136,8 +150,8 @@ The orchestrator makes these decisions based on the task description and what it
 
 When the orchestrator passes output from one stage to the next, it does not forward the entire conversation history. Instead, it creates a **context snapshot** -- a curated subset of the upstream output that contains only the sections relevant to the downstream agent.
 
-For example, when transitioning from Research to Plan, the snapshot includes the full research YAML. But when transitioning from Plan to Implement, the snapshot includes only the `changes`, `parallelization_strategy`, and `acceptance_criteria` sections of the plan -- not the approaches analysis or risk assessment.
+For example, when transitioning from Research to Plan, the snapshot includes the full research YAML. When transitioning from Plan to Implement, the snapshot includes only the `changes`, `parallelization_strategy`, and `acceptance_criteria` sections of the plan -- not the approaches analysis or risk assessment. The Plan to Verify transition is even leaner: only `acceptance_criteria` is forwarded, saving 8-12k tokens compared to passing the full plan.
 
 This selective forwarding keeps downstream agents focused on what they need and reduces token cost. The user can always ask to see any document from any stage -- snapshots control what agents receive, not what the user can access.
 
-See the kick-off skill's stage snapshot table in `skills/kick-off/SKILL.md` for the complete list of what each transition includes.
+See the kick-off stage snapshot table in `.lineup-core/skills/kick-off/core.md` for the complete list of transitions.
