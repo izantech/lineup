@@ -73,6 +73,10 @@ npm --prefix cli run generate:check
 npm --prefix cli run build
 ```
 
+## Upgrading from 1.x
+
+If you are using Lineup 1.x via the Claude marketplace, see the [Migration Guide](https://lineup.izantech.app/guides/migration-v2) for step-by-step upgrade instructions. The CLI detects legacy installs automatically and handles the transition.
+
 ## Learn more
 
 - [Getting Started](https://lineup.izantech.app/getting-started/installation)

@@ -48,7 +48,8 @@ export default withMermaid(defineConfig({
             { text: 'Customize Agents', link: '/guides/customize-agents' },
             { text: 'Use Explain', link: '/guides/use-explain' },
             { text: 'Use Playbook', link: '/guides/use-playbook' },
-            { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' }
+            { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' },
+            { text: 'Migrate from 1.x', link: '/guides/migration-v2' }
           ]
         },
         {
