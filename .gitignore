@@ -8,8 +8,8 @@ cli/node_modules/
 cli/dist/
 
 # Generated host outputs (CLI artifacts)
-skills/
-.agents/skills/
+/skills/
+/.agents/skills/
 
 # Claude Code
 .claude/

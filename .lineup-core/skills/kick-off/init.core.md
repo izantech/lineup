@@ -195,6 +195,55 @@ When a tactic is selected, **replace the default pipeline** with the tactic's st
    - If a `verify` stage was included in the tactic, the reviewer evaluates the criteria.
    - If no `verify` stage exists, the orchestrator presents them as a manual checklist.
 5. **Do not** fall through to the default Stage 1-7 pipeline -- tactic execution is complete.
+6. **Cleanup**: If `TEAMS_MODE = true`, check if any teammates are still running
+   and send a `shutdown_request` to each one. Teammates should already have been
+   shut down eagerly after each stage, so this is a safety net.
 
 **Stage labels**: When running a tactic, use the stage count from the tactic, not the default
 7-stage numbering. For example, a 3-stage tactic shows "Stage 1/3", "Stage 2/3", "Stage 3/3".
+
+---
+
+## Team Setup
+
+After tactic resolution, check whether Claude Code Teams are available.
+
+### Detection
+
+Check whether the `TeamCreate` tool is available in your environment. If it is
+**not available**, skip this section entirely and use the standard subagent path
+for all stages. Set an internal flag: `TEAMS_MODE = false`.
+
+If `TeamCreate` is available, set `TEAMS_MODE = true` and proceed below.
+
+### Creating the team
+
+Generate a random **session ID**: a 6-character lowercase alphanumeric string
+(e.g., `a3f2k9`, `m1x7b2`). This ID uniquely identifies the current pipeline run
+and prevents namespace collisions when multiple projects run concurrently.
+
+Call `TeamCreate` with:
+- `team_name`: `lineup-<session_id>` (e.g., `lineup-a3f2k9`)
+- `description`: `Lineup agentic pipeline — researcher, architect, developer, reviewer, documenter`
+
+If `TeamCreate` fails due to a **name conflict** (team name already exists), generate
+a new session ID and retry. Retry up to 3 attempts. If all retries fail due to name
+conflicts, log the error, set `TEAMS_MODE = false`, and continue with the standard
+subagent path.
+
+If `TeamCreate` fails for any **other reason**, log the error, set `TEAMS_MODE = false`,
+and continue with the standard subagent path. Do not abort the pipeline.
+
+Store both values in working context:
+- `session_id` — the generated 6-character ID
+- `team_name` — the full namespaced team name (e.g., `lineup-a3f2k9`)
+
+All agent spawns in this pipeline will use these values to construct `team_name`
+and `name` parameters for the Agent tool.
+
+### Team teardown
+
+Do not call `TeamDelete` at pipeline end -- Claude Code manages the team entity
+lifecycle. However, you **must** shut down individual teammates when the pipeline
+completes. See the Pipeline Cleanup section in the core pipeline definition for
+the shutdown procedure.

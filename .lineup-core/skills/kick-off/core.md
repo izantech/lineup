@@ -38,6 +38,84 @@ conversation history. This keeps downstream agents focused and reduces token cos
 
 ---
 
+## Agent Spawning
+
+All agent spawns in this pipeline follow the mode set during initialization
+(see `{{KICKOFF_INIT_PATH}}` Team Setup section). Check `TEAMS_MODE` before
+every spawn.
+
+### Subagent mode (`TEAMS_MODE = false`)
+
+Spawn using the Agent tool with `subagent_type: "lineup:<role>"`.
+Example for a researcher:
+
+```
+Agent(subagent_type="lineup:researcher", prompt="<task-specific prompt>")
+```
+
+The agent's frontmatter (model, tools, memory) is applied automatically.
+
+### Team mode (`TEAMS_MODE = true`)
+
+Spawning requires extra steps before calling the Agent tool:
+
+1. **Read the agent definition file.** The agent definitions live in
+   `{{AGENTS_DIR}}<role>.md` (relative to the {{HOST_TERM_PLUGIN}} root). Read the
+   file for the agent you are about to spawn.
+
+2. **Extract from frontmatter:**
+   - `model` — pass this as the `model` parameter to the Agent tool
+   - `name` — append `-<session_id>` to this value and pass the result as the `name`
+     parameter to the Agent tool (e.g., `reviewer-a3f2k9`). This ensures unique addressing
+     across concurrent pipeline runs.
+
+3. **Build the prompt.** Take the body of the agent `.md` file (everything after the
+   closing `---` of the frontmatter block) and prepend it to your task-specific
+   instructions. This replaces the instructions that would normally come from the
+   agent definition.
+
+4. **Call Agent tool with team parameters:**
+
+```
+Agent(
+  team_name="<team_name from working context>",
+  name="<name from frontmatter>-<session_id>",
+  model="<model from frontmatter>",
+  prompt="<agent body instructions>\n\n---\n\n<task-specific prompt>"
+)
+```
+
+### Override interaction
+
+If an override file exists for the agent (see Agent Configuration Overrides in
+`{{KICKOFF_INIT_PATH}}`), use the overridden `model` value instead of the frontmatter
+default when building the Agent tool call in team mode.
+
+### Parallel spawns
+
+Both modes support parallel spawns. Spawn multiple agents in the same tool call
+batch when the stage calls for parallel execution. In team mode, each parallel
+spawn is a separate Agent tool call with `team_name` from working context.
+
+### Teammate lifecycle (team mode only)
+
+When `TEAMS_MODE = true`, shut down teammates **eagerly** -- as soon as their stage
+completes and you have extracted the information needed for the next stage.
+
+After receiving a teammate's output, immediately send a shutdown request:
+
+```
+SendMessage(
+  to: "<name>-<session_id>",
+  message: { type: "shutdown_request", reason: "Stage complete" }
+)
+```
+
+Do not leave teammates idle between stages. If multiple teammates were spawned in
+parallel for a stage (e.g., 2 researchers), shut down each one as it completes.
+
+---
+
 ## Initialization
 
 Before starting the pipeline stages, run the initialization sequence defined in
@@ -99,6 +177,7 @@ Refine the request before any work begins using **structured questions**.
 >  **Stage 2/7: Research**
 
 Spawn one or more `researcher` agents to explore the codebase and gather context.
+Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
 
 - **Use triage search targets**: The triage assessment provides specific directories,
   file patterns, and questions per affected area. Use these as the basis for each
@@ -134,7 +213,8 @@ Review the research findings and identify any remaining ambiguities.
 
 >  **Stage 4/7: Plan**
 
-Spawn one or more `architect` agents to create an implementation plan. The triage
+Spawn one or more `architect` agents to create an implementation plan.
+Follow the **Agent Spawning** rules above for spawn mode (team or subagent). The triage
 assessment's `complexity` and `independent_areas` fields drive how this stage runs.
 
 ### Conditional approach analysis
@@ -178,6 +258,7 @@ If only one area exists, spawn a single architect (current behavior).
 >  **Stage 5/7: Implement**
 
 Spawn one or more `developer` agents to execute the approved plan.
+Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
 
 - Follow the architect's **Parallelization Strategy** from the approved plan:
   - Spawn developers according to the parallel batches identified in the plan
@@ -192,6 +273,7 @@ Spawn one or more `developer` agents to execute the approved plan.
 >  **Stage 6/7: Verify**
 
 Spawn a `reviewer` agent to validate the implementation.
+Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
 
 - Run tests, review the diff against the plan, check for regressions.
 - Flag any issues found -- do not silently pass a broken implementation.
@@ -211,10 +293,25 @@ After verification passes, ask the user if they want documentation generated for
 - Use **{{QUESTION_PRIMITIVE}}** to offer:
   1. Generate documentation for the new changes
   2. Skip documentation
-- If the user chooses to generate documentation, spawn a `documenter` agent.
+- If the user chooses to generate documentation, spawn a `documenter` agent
+  following the **Agent Spawning** rules above.
 - Feed it the implementation plan, the implementation report, and the review report as context.
 - The documenter will write documentation files directly to the project.
 - **Output:** documentation report listing what files were created or updated.
+
+After Stage 7 completes (or if the user chose to skip documentation in this stage),
+proceed to **Pipeline Cleanup**.
+
+---
+
+## Pipeline Cleanup
+
+Safety net for any teammates that were not shut down eagerly during the pipeline.
+**Skip entirely if `TEAMS_MODE = false`.**
+
+After the final stage completes, check if any teammates are still running. If so,
+send a `shutdown_request` to each one. Do not call `TeamDelete` -- Claude Code
+manages the team entity lifecycle.
 
 ---
 
@@ -252,3 +349,4 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Omit empty sections**: When passing agent output YAML downstream, strip any sections that are empty, null, or contain only placeholder values (e.g., `gaps: []`, `risks: null`). Do not pass skeleton structure -- pass only sections with substantive content.
 - **Prefer structured lists over prose**: When compressing agent output between stages, convert prose paragraphs to bullet-point lists with file path references. Downstream agents parse lists faster and more accurately than paragraphs.
 - **Clean up ephemeral artifacts**: Agents may write intermediate files (research YAML, plan drafts, reports) to disk during the pipeline if those files serve downstream stages. However, these files are **ephemeral** -- they must be cleaned up once they are no longer needed. The artifact cleanup step in Stage 6 (Verify) handles this. Only files produced by Stage 5 (implementation code) and Stage 7 (documentation markdown) should persist after the pipeline completes.
+- **Always run Pipeline Cleanup** at the end of the pipeline when `TEAMS_MODE = true`. This applies to all pipeline tiers (Full, Lightweight, Direct) and to tactic pipelines.

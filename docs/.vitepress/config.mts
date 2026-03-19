@@ -49,6 +49,7 @@ export default withMermaid(defineConfig({
             { text: 'Use Explain', link: '/guides/use-explain' },
             { text: 'Use Playbook', link: '/guides/use-playbook' },
             { text: 'Choose a Pipeline Tier', link: '/guides/choose-tier' },
+            { text: 'Use Teams Mode', link: '/guides/teams-mode' },
             { text: 'Migrate from 1.x', link: '/guides/migration-v2' }
           ]
         },

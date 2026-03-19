@@ -98,6 +98,25 @@ Frontmatter fields:
 - `model`: `haiku`, `sonnet`, or `opus`
 - `memory`: `user`, `project`, or `local`
 
+### Claude Code Teams Mode
+
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and `TeamCreate` is available,
+the kick-off pipeline runs in **teams mode**:
+
+- A session-scoped team named `lineup-<session_id>` is created once during initialization
+  (the 6-character `session_id` is generated randomly to isolate concurrent runs).
+- All agent spawns use the Agent tool with `team_name="lineup-<session_id>"`,
+  `name="<role>-<session_id>"`, and `model=<frontmatter model>`.
+- Because custom agent definitions (frontmatter + body) are silently dropped by the
+  teams runtime when `team_name` is specified, the orchestrator reads each agent's
+  `.md` file and embeds the body instructions directly in the `prompt` parameter.
+- Teammates are visible as tmux panes named after their role.
+- Teammates cannot spawn sub-teammates (nesting is blocked by the platform).
+- Tool restrictions from agent frontmatter are advisory only in team mode (known platform limitation).
+
+If `TeamCreate` is not available (e.g., Codex CLI, standard Claude Code without the
+experiment flag), the pipeline falls back to the standard subagent path transparently.
+
 ### Agent Configuration Overrides
 
 Runtime overrides are persisted outside the repo:

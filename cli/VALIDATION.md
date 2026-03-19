@@ -1,4 +1,4 @@
-# CLI 2.0 Pre-Release Validation Guide
+# CLI 2.1 Pre-Release Validation Guide
 
 Quick manual checks to run before tagging a release.
 The install/update commands require a published GitHub release, so this guide
@@ -45,7 +45,7 @@ LINEUP="node bin/lineup.mjs"
 
 ```bash
 $LINEUP --cli-version
-# Expected: 2.0.0
+# Expected: 2.1.0
 ```
 
 ### Help
@@ -91,7 +91,7 @@ cd $(mktemp -d)
 
 # verify the binary is on PATH
 lineup --cli-version
-# Expected: 2.0.0
+# Expected: 2.1.0
 
 lineup --help
 lineup status --host all --json
@@ -106,7 +106,7 @@ npm unlink -g @izantech/lineup-cli
 > error because `resolveRelease` fetches from the GitHub API.
 
 ```bash
-lineup install --host claude --version 2.0.0
+lineup install --host claude --version 2.1.0
 ```
 
 If you need to test the install path before publishing, the unit tests in
@@ -117,7 +117,7 @@ flow with injected dependencies (no network).
 
 - [ ] All 5 automated checks pass
 - [ ] `smoke:dist` passes
-- [ ] `--cli-version` prints `2.0.0`
+- [ ] `--cli-version` prints `2.1.0`
 - [ ] `status --host all --json` returns valid JSON with expected shape
 - [ ] Invalid host is rejected
 - [ ] (Optional) `npm link` → `lineup` binary works from PATH

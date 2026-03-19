@@ -43,7 +43,7 @@ In non-TTY mode, `--host` is required.
 
 ```bash
 lineup update --host all
-lineup update --host codex --version 2.0.0
+lineup update --host codex --version 2.1.0
 lineup update --host claude --version latest
 ```
 

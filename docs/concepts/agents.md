@@ -97,6 +97,19 @@ Memory scope can be changed per-agent with `/lineup:configure`:
 
 When you first run the pipeline in a project, the kick-off skill checks whether any agents have global memory (from `user`-scoped usage) that contains knowledge relevant to the current project. If so, it automatically migrates those sections to project-scoped memory. This is a one-time operation -- subsequent runs skip it silently. The migration ensures that project-specific knowledge ends up in the right scope even if agents previously used `user` memory.
 
+## Claude Code Teams mode
+
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set in your environment, the kick-off pipeline runs agents as **teammates** instead of subagents. A single team named `lineup` is created during initialization, and each agent spawns as a named teammate visible as a tmux pane.
+
+Key differences from standard subagent mode:
+
+- **Visibility**: teammates appear as named tmux panes, which makes it easier to follow what each agent is doing in real time.
+- **Prompt embedding**: because the teams runtime does not apply agent frontmatter automatically, the orchestrator reads each agent's `.md` file and embeds the body instructions directly in the spawn prompt.
+- **Tool restrictions advisory**: the tool list from agent frontmatter is not enforced by the platform in team mode -- it is treated as a guideline only.
+- **No sub-teammates**: teammates cannot spawn their own teammates. Nesting is blocked by the platform.
+
+If `TeamCreate` is not available (standard Claude Code without the experiment flag, or Codex CLI), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
+
 ## Full configuration reference
 
 For the complete specification of agent frontmatter fields, default tool lists, and configuration options, see the [Agent Configuration](/reference/agents) reference.

@@ -18,6 +18,7 @@
     "HOST_TERM_PLUGIN_POSSESSIVE": "plugin's",
     "HOST_DEFAULTS_TERM": "plugin defaults",
     "HOST_ARTIFACT_LABEL": "Plugin",
-    "HOST_ARTIFACT_LABEL_LOWER": "plugin"
+    "HOST_ARTIFACT_LABEL_LOWER": "plugin",
+    "AGENTS_DIR": "agents/"
   }
 }

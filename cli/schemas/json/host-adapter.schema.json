@@ -31,7 +31,8 @@
         "HOST_TERM_PLUGIN_POSSESSIVE",
         "HOST_DEFAULTS_TERM",
         "HOST_ARTIFACT_LABEL",
-        "HOST_ARTIFACT_LABEL_LOWER"
+        "HOST_ARTIFACT_LABEL_LOWER",
+        "AGENTS_DIR"
       ],
       "properties": {
         "SKILL_NAME_KICKOFF": { "type": "string" },
@@ -51,7 +52,8 @@
         "HOST_TERM_PLUGIN_POSSESSIVE": { "type": "string" },
         "HOST_DEFAULTS_TERM": { "type": "string" },
         "HOST_ARTIFACT_LABEL": { "type": "string" },
-        "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" }
+        "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" },
+        "AGENTS_DIR": { "type": "string" }
       }
     }
   }

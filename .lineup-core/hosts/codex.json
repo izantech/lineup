@@ -18,6 +18,7 @@
     "HOST_TERM_PLUGIN_POSSESSIVE": "skill pack's",
     "HOST_DEFAULTS_TERM": "skill pack defaults",
     "HOST_ARTIFACT_LABEL": "Skill Pack",
-    "HOST_ARTIFACT_LABEL_LOWER": "skill pack"
+    "HOST_ARTIFACT_LABEL_LOWER": "skill pack",
+    "AGENTS_DIR": "agents/"
   }
 }

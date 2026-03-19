@@ -221,6 +221,38 @@ Check each part of the chain:
 
 If `/lineup:kick-off explain` works but `/lineup:explain` doesn't, the issue is in the skill alias definition for your current host install. Re-run `lineup update --host claude --version latest --yes`.
 
+## Teams mode not activating
+
+**Symptom:** You set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` but agents still spawn as subagents instead of teammates.
+
+**Diagnosis:** Teams mode requires both the environment variable and the `TeamCreate` tool to be available in your Claude Code session. If either is missing, the pipeline falls back to standard subagent mode silently.
+
+**Solution:**
+
+1. Confirm the environment variable is set in the shell that launched Claude Code:
+
+```bash
+echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+# Expected: 1
+```
+
+2. Verify your Claude Code version supports the teams experiment. Teams is an experimental feature and may not be available in all builds.
+
+3. Check the orchestrator's initialization output -- it logs which spawn mode was selected. If it says "subagent mode", `TeamCreate` was not detected.
+
+## Team creation fails
+
+**Symptom:** The orchestrator detects `TeamCreate` but team creation fails with a name conflict or other error.
+
+**Diagnosis:** The orchestrator generates a unique team name (`lineup-<session_id>`) and retries up to 3 times on name conflicts. Other errors cause an immediate fallback to subagent mode.
+
+**Solution:**
+
+This is self-healing -- the pipeline falls back to subagent mode automatically. If it happens repeatedly:
+
+1. Check for stale teams from previous sessions that may not have been cleaned up.
+2. Restart Claude Code to get a fresh session.
+
 ## Customizations lost after update
 
 **Symptom:** Agent settings (model, tools, memory) reverted to defaults after
