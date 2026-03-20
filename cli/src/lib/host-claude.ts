@@ -20,6 +20,14 @@ function parseInstallPresence(output: string): { localInstalled: boolean; legacy
   };
 }
 
+function checkPluginOnDisk(): { installed: boolean; source: StatusHost["source"] } {
+  const marketplaceManifest = path.join(claudeMarketplaceRoot(), ".claude-plugin", "marketplace.json");
+  if (existsSync(marketplaceManifest)) {
+    return { installed: true, source: "cli-managed" };
+  }
+  return { installed: false, source: null };
+}
+
 function writeMarketplace(root: string, pluginSource: string, version: string): string {
   const dotClaude = path.join(root, ".claude-plugin");
   mkdirSync(dotClaude, { recursive: true });
@@ -71,13 +79,16 @@ export async function statusClaude(): Promise<StatusHost> {
   try {
     const result = await runCommand("claude", ["plugin", "list"]);
     if (result.code !== 0) {
+      const disk = checkPluginOnDisk();
       return {
         host: "claude",
-        installed: false,
+        installed: disk.installed,
         version: null,
-        source: null,
+        source: disk.source,
         last_action: null,
-        error: result.stderr.trim() || "Failed to run claude plugin list"
+        error: disk.installed
+          ? "claude plugin list unavailable; status detected from filesystem"
+          : result.stderr.trim() || "Failed to run claude plugin list"
       };
     }
 
