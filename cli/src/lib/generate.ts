@@ -71,7 +71,7 @@ export function writeGeneratedFiles(files: GeneratedFile[], outputRoot: string):
 }
 
 export function prepareClaudePluginSkeleton(sourceRoot: string, outputRoot: string): void {
-  const copyPaths = [".claude-plugin", "agents", "tactics", "templates", "examples", "AGENTS.md", "CLAUDE.md"];
+  const copyPaths = [".claude-plugin", "agents", "tactics", "templates"];
 
   for (const entry of copyPaths) {
     const from = path.join(sourceRoot, entry);
