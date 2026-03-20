@@ -244,7 +244,7 @@ echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 **Symptom:** The orchestrator detects `TeamCreate` but team creation fails with a name conflict or other error.
 
-**Diagnosis:** The orchestrator generates a unique team name (`lineup-<session_id>`) and retries up to 3 times on name conflicts. Other errors cause an immediate fallback to subagent mode.
+**Diagnosis:** The orchestrator generates a unique team name (`lineup-<session_id>`) and retries up to 3 times on name conflicts. If another Claude Code session is already leading a team, the pipeline detects this and falls back to subagent mode with a notification -- Claude Code currently limits each user to one active team at a time. Other errors also cause an immediate fallback.
 
 **Solution:**
 

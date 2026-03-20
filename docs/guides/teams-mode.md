@@ -53,6 +53,8 @@ Teammates cannot spawn their own teammates. The platform blocks nested team crea
 
 If any of the prerequisites are missing -- the environment variable is unset, `TeamCreate` is unavailable, or team creation fails -- the pipeline falls back to standard subagent mode transparently. You do not need to change any configuration. The orchestrator logs which mode it selected during initialization.
 
+> **Note:** Claude Code limits each user to one active team at a time. If another session is already leading a team, the pipeline will notify you and continue in subagent mode. Both pipelines run normally -- only the team coordination UI is affected.
+
 ## When to use teams mode
 
 Teams mode is useful when you want to:

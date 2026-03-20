@@ -231,8 +231,16 @@ a new session ID and retry. Retry up to 3 attempts. If all retries fail due to n
 conflicts, log the error, set `TEAMS_MODE = false`, and continue with the standard
 subagent path.
 
-If `TeamCreate` fails for any **other reason**, log the error, set `TEAMS_MODE = false`,
-and continue with the standard subagent path. Do not abort the pipeline.
+If `TeamCreate` fails because the leader is **already managing another team** (error
+message contains "Already leading team"), notify the user:
+"Note: Teams mode unavailable — another session is already leading a team. Continuing
+with standard agents."
+Then set `TEAMS_MODE = false` and continue with the standard subagent path. Do not
+attempt to delete the other team, as it may be actively in use.
+
+If `TeamCreate` fails for any **other reason** not covered above, log the error, set
+`TEAMS_MODE = false`, and continue with the standard subagent path. Do not abort the
+pipeline.
 
 Store both values in working context:
 - `session_id` — the generated 6-character ID
