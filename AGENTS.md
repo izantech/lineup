@@ -146,9 +146,10 @@ the kick-off pipeline runs in **teams mode**, subject to a terminal width check:
   (the 6-character `session_id` is generated randomly to isolate concurrent runs).
 - All agent spawns use the Agent tool with `team_name="lineup-<session_id>"`,
   `name="<role>-<session_id>"`, and `model=<frontmatter model>`.
-- Because custom agent definitions (frontmatter + body) are silently dropped by the
-  teams runtime when `team_name` is specified, the orchestrator reads each agent's
-  `.md` file and embeds the body instructions directly in the `prompt` parameter.
+- A **Team Preamble** step writes all agent instruction bodies to
+  `.lineup/.ephemeral/agent-instructions.md` (one `## <role>` section each) after
+  team creation. Spawn prompts reference this file instead of embedding the full
+  body inline, reducing per-spawn token cost.
 - Teammates are visible as tmux panes named after their role.
 - Teammates cannot spawn sub-teammates (nesting is blocked by the platform).
 - Tool restrictions from agent frontmatter are advisory only in team mode (known platform limitation).
@@ -200,6 +201,11 @@ Project tactics:
 
 Built-ins live in `tactics/`. Project tactics override built-ins by matching `name`.
 
+Tactic composition: a stage can reference another tactic via a `tactic` field (mutually
+exclusive with `type`/`agent`). The orchestrator inlines the referenced tactic's stages
+before execution. Cycle detection prevents infinite recursion; parent variables override
+child defaults.
+
 ## Release Process (2.0)
 
 1. Update versions (`cli/package.json`, `.claude-plugin/plugin.json` as needed)
@@ -247,3 +253,6 @@ Storage locations:
 - `local`: `.lineup/memory/<agent>/`
 
 Use project memory for project-specific knowledge; user memory for cross-project knowledge.
+
+Migration for global memory files over 50 KB is incremental — section headers are scanned
+first, then only matching sections are read into context.

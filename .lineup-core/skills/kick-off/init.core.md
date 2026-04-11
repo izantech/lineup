@@ -75,7 +75,10 @@ already done in a previous session.
 
 For each agent that needs migration:
 
-1. Read `{{MEMORY_USER_DIR}}/lineup-<agent>/MEMORY.md`.
+1. Check the file size of the global MEMORY.md for this agent. If the file exceeds
+   50 KB, read it incrementally: first scan for project-header boundaries (Grep for
+   `## Project:` patterns), then read only the matching section(s) plus surrounding
+   context using offset and limit. For files under 50 KB, read the full file.
 2. Identify sections relevant to the current project. Agent memory files typically organize
    knowledge under `## Project: <name>` headers. Match by:
    - Project name appearing in the header (e.g., `## Project: Lineup`)
@@ -92,7 +95,11 @@ For each agent that needs migration:
 
 ### Safety rules
 
-- **Read before write**: Read the full global MEMORY.md into context before making any changes. Do not alternate between reading and writing.
+- **Read before write**: For files under 50 KB, read the full global MEMORY.md into
+  context before making any changes. For files over 50 KB, read incrementally: scan
+  for project-header boundaries first (Grep for `## Project:` patterns), then read
+  only the matching section(s) plus surrounding context. Do not alternate between
+  reading and writing within a single section migration.
 - **Write-then-clean order**: When migrating a section, always write it to the destination
   first, then remove it from the source. Never remove from the source before confirming the
   destination write succeeded. If the pipeline is interrupted between these two steps, the
@@ -183,9 +190,37 @@ If any `${variable_name}` reference does not match a defined variable:
    literal text: ${var1}, ${var2}."
    List only the unresolved references that appear in that specific stage's prompt.
 
+### Tactic Inlining
+
+Before executing stages, expand any tactic references into their constituent stages:
+
+1. **Expand**: Walk the `stages` array. For each stage that has a `tactic` field
+   (instead of `type`/`agent`):
+   a. Load the referenced tactic file (same discovery logic as Tactic Resolution).
+   b. Replace the tactic-reference stage with the referenced tactic's `stages` array
+      (flattened in place).
+   c. If the referencing stage had `prompt`, `optional`, or `gate` fields, apply them
+      as overrides to the **first** inlined stage only.
+2. **Cycle detection**: Maintain a set of tactic names currently being expanded
+   (the "expansion stack"). Before expanding a tactic, check if its name is already
+   in the stack. If so, report an error:
+   "Error: Circular tactic reference detected: <stack trace as A -> B -> A>.
+   Aborting tactic execution."
+   Use **AskUserQuestion** to let the user choose: abort or run the default pipeline.
+3. **Variable scoping**: When inlining tactic B into tactic A:
+   - Variables defined in A override B's defaults for any `${var}` references that
+     share the same name.
+   - Variables defined only in B use B's defaults.
+   - After inlining, re-run Variable Validation on the expanded stage list.
+4. **Stage count**: Recalculate total stage count after all inlining is complete.
+   Stage labels use the expanded count (e.g., "Stage 3/8" not "Stage 2/5").
+
+Inlining is recursive — an inlined tactic may itself contain tactic references.
+The cycle detection stack prevents infinite recursion.
+
 ### Tactic Execution
 
-When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence:
+When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence (after tactic inlining has expanded all references):
 
 1. Iterate over the tactic's `stages` array in order.
 2. For each stage:
@@ -271,6 +306,22 @@ Store both values in working context:
 
 All agent spawns in this pipeline will use these values to construct `team_name`
 and `name` parameters for the Agent tool.
+
+### Team Preamble
+
+After the team is created (`TEAMS_MODE = true`), write a combined agent instruction
+file to reduce per-spawn token cost:
+
+1. For each agent role used in the pipeline (`researcher`, `architect`, `developer`,
+   `reviewer`, `documenter`), read `{{AGENTS_DIR}}<role>.md`.
+2. Extract the body (everything after the closing `---` of the frontmatter).
+3. Write all bodies to `.lineup/.ephemeral/agent-instructions.md`, separated by
+   `## <role>` headers.
+4. This file is referenced by team-mode spawn prompts instead of embedding the full
+   body inline. See the Team mode section in the core pipeline definition.
+
+If `.lineup/.ephemeral/` does not exist, create it. This file is cleaned up by
+Pipeline Cleanup like all other ephemeral artifacts.
 
 ### Team teardown
 

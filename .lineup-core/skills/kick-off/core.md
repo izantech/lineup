@@ -76,10 +76,10 @@ Spawning requires extra steps before calling the Agent tool:
      parameter to the Agent tool (e.g., `reviewer-a3f2k9`). This ensures unique addressing
      across concurrent pipeline runs.
 
-3. **Build the prompt.** Take the body of the agent `.md` file (everything after the
-   closing `---` of the frontmatter block) and prepend it to your task-specific
-   instructions. This replaces the instructions that would normally come from the
-   agent definition.
+3. **Build the prompt.** Instead of embedding the full agent body, include this
+   directive at the top of the prompt: `Read your base instructions from
+   .lineup/.ephemeral/agent-instructions.md, section '## <role>'.` Then append
+   your task-specific instructions after a `---` separator.
 
 4. **Call Agent tool with team parameters:**
 
@@ -88,7 +88,7 @@ Agent(
   team_name="<team_name from working context>",
   name="<name from frontmatter>-<session_id>",
   model="<model from frontmatter>",
-  prompt="<agent body instructions>\n\n---\n\n<task-specific prompt>"
+  prompt="Read your base instructions from .lineup/.ephemeral/agent-instructions.md, section '## <role>'.\n\n---\n\n<task-specific prompt>"
 )
 ```
 
@@ -198,6 +198,13 @@ Not every task needs the full pipeline. Use your judgment:
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions |
 
 When in doubt, start with the full pipeline. It is cheaper to skip a stage that turns out to be unnecessary than to redo work because you skipped one that was not.
+
+### Custom Approval Gates
+
+The default pipeline has a single approval gate after Stage 4 (Plan). If you need
+additional gates (e.g., approval after Research or before Documentation), create a
+**tactic** in `.lineup/tactics/` with `gate: approval` on the desired stages. See
+the Tactic Resolution section in the initialization file for details.
 
 ## Stage Transitions
 

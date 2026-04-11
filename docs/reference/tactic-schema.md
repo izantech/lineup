@@ -53,11 +53,14 @@ Each entry in the `stages` list accepts the following fields:
 
 | Field | Type | Required | Default | Description |
 | ----- | ---- | -------- | ------- | ----------- |
-| `type` | string | Yes | -- | Pipeline stage type. See valid values below. |
-| `agent` | string | Yes | -- | Agent to invoke. See valid values below. |
+| `type` | string | Yes* | -- | Pipeline stage type. See valid values below. |
+| `agent` | string | Yes* | -- | Agent to invoke. See valid values below. |
+| `tactic` | string | No | `null` | Name of another tactic to inline at this position. Mutually exclusive with `type`/`agent` — when `tactic` is set, `type` and `agent` must be omitted. |
 | `prompt` | string | No | `null` | Custom instructions appended to the agent's defaults (not a replacement). Supports multi-line YAML (`\|`). |
 | `optional` | boolean | No | `false` | If `true`, the orchestrator asks the user before running this stage. |
 | `gate` | string | No | `null` | Set to `"approval"` to pause for explicit user approval after this stage completes. |
+
+*`type` and `agent` are required unless `tactic` is set — a stage must have either `type`/`agent` or `tactic`, not both.
 
 ### Valid stage types
 
@@ -116,7 +119,16 @@ Agent-stage pairings are conventions, not hard constraints. Any agent can be ass
   gate: approval       # User must approve before implementation
 ```
 
-Both fields can be combined. An optional stage with an approval gate first asks whether to run it, then (if yes) requires approval of the output:
+**`tactic: <name>`** -- Instead of running an agent, inline another tactic's stages at this position. The referenced tactic's stages are expanded in place before execution begins.
+
+```yaml
+- tactic: research-deep
+  gate: approval       # Applied to the first inlined stage only
+```
+
+When using `tactic`, do not include `type` or `agent` — they are mutually exclusive. The orchestrator detects circular references (A -> B -> A) and reports an error. Parent tactic variables override child tactic defaults for shared variable names.
+
+Both `optional` and `gate` fields can be combined. An optional stage with an approval gate first asks whether to run it, then (if yes) requires approval of the output:
 
 ```yaml
 - type: research

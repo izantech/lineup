@@ -7,7 +7,7 @@ Lineup uses specialized subagents for different stages of the pipeline. Each age
 | Role | Default Model | Tools | Purpose |
 | ---- | ------------- | ----- | ------- |
 | **Orchestrator** | -- | All | Coordinates the pipeline, delegates work, interacts with the user |
-| **Researcher** | Haiku | Read-only + Web | Explores code, reads docs, gathers context |
+| **Researcher** | Haiku | Read-only + Web + Write (ephemeral) | Explores code, reads docs, gathers context |
 | **Architect** | Sonnet | Read-only + Write | Synthesizes findings into actionable plans |
 | **Developer** | Haiku | All | Implements the approved plan |
 | **Reviewer** | Sonnet | Read-only + Bash | Runs tests, reviews diffs, validates work |
@@ -43,9 +43,9 @@ Each agent gets only the tools it needs. This is intentional -- restricting tool
 
 ### Researcher
 
-`Read, Grep, Glob, LS, WebFetch, WebSearch`
+`Read, Grep, Glob, LS, WebFetch, WebSearch, Write`
 
-Read-only codebase access plus web search. The researcher can explore files and look up external documentation, but it cannot modify anything. This makes research safe to run without supervision.
+Read-only codebase access plus web search, with Write restricted to `.lineup/.ephemeral/` for intermediate research drafts that exceed ~2 KB. The researcher can explore files, look up external documentation, and persist large findings to disk for downstream agents to read via file reference.
 
 ### Architect
 

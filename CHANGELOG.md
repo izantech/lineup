@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transient file lifecycle -- large intermediate outputs written to `.lineup/.ephemeral/` with downstream agents receiving file path references instead of inline content; cleanup runs after reviewer finishes and in Pipeline Cleanup
 - Terminal width detection in kick-off initialization -- Teams mode is automatically disabled on terminals narrower than 80 columns, falling back to standard subagents to avoid layout issues with side-by-side panels
 - Inter-stage progress reporting -- orchestrator now shows a one-sentence factual summary after each stage completes
+- Team Preamble -- in Teams mode, all agent instruction bodies are written to a single `.lineup/.ephemeral/agent-instructions.md` file; spawn prompts reference the file instead of embedding the full body, reducing per-spawn token cost
+- Tactic composition -- stages can reference other tactics via a `tactic` field, enabling composable workflows; includes cycle detection, variable scoping (parent overrides child defaults), and automatic stage count recalculation
+- Custom Approval Gates documentation -- default pipeline section now points users to tactics with `gate: approval` for custom approval checkpoints at any stage
+- Researcher Write tool -- researcher agents can write intermediate findings to `.lineup/.ephemeral/` when output exceeds ~2 KB, reducing inline context bloat
+- Incremental memory migration -- global agent memory files over 50 KB are read incrementally by section headers instead of loading the full file into context
 
 ### Fixed
 - Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics
