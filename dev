@@ -4,37 +4,37 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG="@izantech/lineup-cli"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BOLD='\033[1m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
 
 die() { echo -e "${RED}error:${NC} $1" >&2; exit 1; }
 
 usage() {
     cat <<EOF
-${BOLD}Lineup Dev Script${NC}
+${GREEN}${BOLD}Lineup Dev Script${NC}
 
 Usage: ./dev <command> [args...]
 
-${BOLD}Install:${NC}
+${GREEN}Install:${NC}
   install local           Build from source and install CLI + all host skills
   install remote          Install latest version from npm
   install clean           Remove CLI and host skills
   install clean --purge   Also remove custom agent config and memory
 
-${BOLD}Build:${NC}
+${GREEN}Build:${NC}
   build                   Build CLI
   typecheck               Run TypeScript type checks
   test                    Run test suite
   check                   Run all checks (typecheck, test, schema, generate, build)
 
-${BOLD}Docs:${NC}
+${GREEN}Docs:${NC}
   docs                    Start VitePress dev server
   docs build              Build docs for production
   docs preview            Preview production docs build
 
-${BOLD}Other:${NC}
+${GREEN}Other:${NC}
   setup                   Install dependencies
   help                    Show this help message
 EOF
