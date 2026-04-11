@@ -17,5 +17,8 @@ cli/dist/
 # Local working files
 .local/
 
+# Generated digests
+DIGEST.md
+
 # OS
 .DS_Store
