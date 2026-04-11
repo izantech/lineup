@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Researcher Write tool -- researcher agents can write intermediate findings to `.lineup/.ephemeral/` when output exceeds ~2 KB, reducing inline context bloat
 - Incremental memory migration -- global agent memory files over 50 KB are read incrementally by section headers instead of loading the full file into context
 - Ollama integration (opt-in) -- researcher agents can delegate text summarization and context gathering to a local Ollama model; enabled via `/lineup:configure` which writes `~/.claude/lineup/ollama.yaml`; requires `rawveg/ollama-mcp` MCP server; Ollama is never used for code analysis or generation
+- Digest skill (`/lineup:digest`) -- standalone codebase overview generator that spawns parallel researchers, structures findings via an architect, and writes a regenerable `DIGEST.md`; supports Ollama-assisted research when enabled
 
 ### Fixed
 - Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics

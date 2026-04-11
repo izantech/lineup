@@ -13,7 +13,8 @@ export const CODEX_SKILL_DIRS = [
   "lineup-kick-off",
   "lineup-configure",
   "lineup-explain",
-  "lineup-playbook"
+  "lineup-playbook",
+  "lineup-digest"
 ] as const;
 
 export const CODEX_REQUIRED_FILES = [
@@ -24,7 +25,8 @@ export const CODEX_REQUIRED_FILES = [
   ".agents/skills/lineup-kick-off/STAGES-6-7.md",
   ".agents/skills/lineup-configure/SKILL.md",
   ".agents/skills/lineup-explain/SKILL.md",
-  ".agents/skills/lineup-playbook/SKILL.md"
+  ".agents/skills/lineup-playbook/SKILL.md",
+  ".agents/skills/lineup-digest/SKILL.md"
 ] as const;
 
 export const HOST_TEMPLATE_SPECS = [
@@ -82,6 +84,13 @@ export const HOST_TEMPLATE_SPECS = [
     targetFor: {
       claude: "skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md",
       codex: ".agents/skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md"
+    }
+  },
+  {
+    source: ".lineup-core/skills/digest/core.md",
+    targetFor: {
+      claude: "skills/{{SKILL_NAME_DIGEST}}/SKILL.md",
+      codex: ".agents/skills/{{SKILL_NAME_DIGEST}}/SKILL.md"
     }
   }
 ] as const;

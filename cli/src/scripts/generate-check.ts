@@ -36,7 +36,8 @@ function assertRequiredOutputs(sourceRoot: string): void {
     `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/STAGES-6-7.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_CONFIGURE}/SKILL.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_EXPLAIN}/SKILL.md`,
-    `skills/${claudeAdapter.vars.SKILL_NAME_PLAYBOOK}/SKILL.md`
+    `skills/${claudeAdapter.vars.SKILL_NAME_PLAYBOOK}/SKILL.md`,
+    `skills/${claudeAdapter.vars.SKILL_NAME_DIGEST}/SKILL.md`
   ]);
 
   const actualClaude = new Set<string>(claude.map((file) => file.target));
