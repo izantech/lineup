@@ -23,7 +23,7 @@ Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subage
 
 When `OLLAMA_AVAILABLE = true`, augment each researcher spawn as follows:
 
-- Append `mcp__ollama__ollama_chat, mcp__ollama__ollama_generate` to the researcher's
+- Append `mcp__ollama__ollama_chat, mcp__ollama__ollama_generate, mcp__ollama__ollama_web_search, mcp__ollama__ollama_web_fetch` to the researcher's
   `tools` list in the Agent spawn call.
 - Add the following to each researcher's spawn prompt:
 

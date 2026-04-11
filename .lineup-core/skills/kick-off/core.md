@@ -43,6 +43,14 @@ this threshold, compress it to key findings with file path references. Strip
 inline code blocks, raw file contents, and verbose explanations. Retain:
 structured lists, file paths, function/class names, and one-line summaries.
 
+When `OLLAMA_AVAILABLE = true`, delegate snapshot compression to Ollama instead
+of compressing manually. Call `mcp__ollama__ollama_generate` with the full
+snapshot text and this prompt: "Compress this to structured bullet points with
+file path references. Strip verbose explanations, inline code, and raw file
+contents. Retain: structured lists, file paths, function/class names, one-line
+summaries. Keep under 2 KB." Replace the snapshot content with the Ollama output
+before passing it to the next agent.
+
 ---
 
 ## Agent Spawning

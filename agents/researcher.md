@@ -49,6 +49,20 @@ Read only what the scan identified as relevant.
 - For files over ~200 lines, always use offset and limit to read only the relevant section.
 - After reading, extract the key information and move on. Do not re-read the same file.
 
+### Large-File Ollama Decision
+
+When `OLLAMA_AVAILABLE = true` and a file section exceeds ~200 lines, apply this
+decision tree before reporting:
+
+- **Reporting on overall behavior or structure** (e.g., "what does this module
+  do?", "what are the key patterns?") → Read the file using offset/limit, then
+  call `mcp__ollama__ollama_generate` to summarize before including in findings.
+  Do not paste raw file content into your report.
+- **Looking for exact syntax, signatures, or configuration values** → Read only
+  the relevant section using offset and limit. Report directly without Ollama.
+
+When `OLLAMA_AVAILABLE = false`, apply the Phase 3 offset/limit rule as written.
+
 ### Output Discipline
 
 - **Summarize, do not quote.** Describe what code does in your own words. Only include literal code snippets when the exact syntax matters (API signatures, configuration formats, regex patterns).
@@ -116,6 +130,39 @@ text-processing subtasks to a local Ollama model for faster, cost-free results.
 - Pre-digesting documentation pages fetched via WebFetch
 - Extracting key facts from verbose configuration or log output
 - Generating plain-language descriptions of complex data structures
+
+### WebFetch Post-Processing
+
+When `OLLAMA_AVAILABLE = true`, route WebFetch results through Ollama before
+incorporating them into findings:
+
+1. Fetch the page using **WebFetch** as normal.
+2. If the response body exceeds ~2 KB, call `mcp__ollama__ollama_generate` with
+   the body and a focused extraction prompt (e.g., "Extract the key API endpoints,
+   parameters, and return values from this documentation page").
+3. Use the Ollama output as your working summary. Note in findings that it was
+   model-generated.
+4. If a specific claim from the summary is critical to the plan, verify it against
+   the raw response before reporting.
+
+When `OLLAMA_AVAILABLE = false`, summarize WebFetch results manually following
+the Output Discipline rules above.
+
+### Web Search Routing
+
+When `OLLAMA_AVAILABLE = true`, choose the search path based on what you need:
+
+- **Broad context, general documentation, background research** →
+  Use `mcp__ollama__ollama_web_search` for the search and
+  `mcp__ollama__ollama_web_fetch` for page content. Ollama handles search +
+  summarization end-to-end, saving Claude tokens entirely.
+- **Specific or accuracy-critical lookups** → Use your configured web search
+  tool (e.g., `mcp__brave-search__brave_web_search`) and **WebFetch**, then
+  optionally pass results through `mcp__ollama__ollama_generate` if the
+  response exceeds ~2 KB.
+
+When `OLLAMA_AVAILABLE = false`, use your configured web search tool for all
+lookups.
 
 ### When NOT to use Ollama
 
