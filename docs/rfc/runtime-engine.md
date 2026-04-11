@@ -1,8 +1,9 @@
 # RFC: Lineup Runtime — Declarative Workflow Engine
 
-**Status**: Draft
+**Status**: Draft — External review complete (see Appendix C)
 **Author**: izantech
 **Date**: 2026-04-12
+**Recommended path**: Option B (Task Foundry as runtime, Lineup as bridge)
 
 ---
 
@@ -1055,3 +1056,111 @@ Lineup's `lineup run` command would:
 4. **Diff-based output model**: TF workers produce unified diffs. Lineup developers currently write files directly. Should the Lineup adapter instruct developers to output diffs instead? Recommendation: yes for TF-managed stages. The developer agent prompt would include "output your changes as a unified diff" when running under TF.
 
 5. **Error taxonomy alignment**: TF has `AttemptFailure::Validation` vs `Fatal`. Lineup's RFC proposes a richer taxonomy. Should TF's error model be extended, or should the bridge translate between the two? Recommendation: bridge translates. TF's binary classification is sufficient for the subprocess layer; Lineup's richer taxonomy lives in the bridge.
+
+---
+
+## Appendix C: External Architectural Review
+
+**Reviewer**: ChatGPT (o3)
+**Date**: 2026-04-12
+**Verdict**: Prefer Option B (TF as runtime, Lineup as bridge) with unified run model
+
+### Diagnosis Confirmation
+
+The RFC's diagnosis is correct: too much pipeline behavior is executed "in prompt space." The `izan/improvements` branch is evidence of pressure in that direction — snapshot streaming, caching, cleanup, and effort-based model selection are all runtime responsibilities encoded as prose.
+
+The hard truth: **we are already paying the complexity cost of a workflow engine** — just in the least testable, least deterministic form (LLM-followed prose). The stage caching rules already show contradictions: `--from-stage` restarts rely on cached outputs, but cache is marked "ephemeral" and cleaned at the end of every run. These two are in direct tension and will cause operational failures unless lifecycle semantics are formalized in code.
+
+### Recommendation: Option B
+
+**Prefer Option B as the primary path** with one constraint: **define and enforce a single canonical run model and artifact model across both halves from day one.**
+
+Rationale:
+
+1. **Implementation risk and calendar time**: Building a runtime engine for real-world orchestrations is about hard edges — retries, partial failures, artifacting, isolation, determinism, and debugging. TF already has these. Option A means rebuilding wave scheduling, hazard detection, retry envelopes, isolation, output normalization, and forensic artifacts in TypeScript. The moment you ship an executor without these properties, the runtime becomes "a faster way to get stuck."
+
+2. **Maintenance burden and duplication**: Maintaining two workflow engines in parallel (TypeScript + Rust) is the highest-cost outcome. Option B consolidates the engine in one place and uses Lineup as the templating/bridge layer.
+
+3. **User experience**: Option A can be "one CLI, one mental model." Option B introduces "TF does the mid-pipeline work." But that UX benefit is not worth the engineering and long-term correctness cost of building a second orchestrator for a small team. Option B's UX can be made coherent by presenting it as "Lineup Run = one pipeline; internally it delegates the execution engine for the heavy stages." TF's debug story (exact role payloads, normalized diffs, command hooks, validation records, apply-back records by attempt and wave) is far stronger than anything prompt-driven.
+
+4. **Extensibility**: TF already validates manifests, normalizes diffs, enforces concurrency and hazard exclusion, and maintains a simple contract boundary for provider adapters. This is a better long-term base for real orchestration than a TypeScript runtime that still depends on an LLM to properly enact host primitives.
+
+### Critical Findings
+
+#### 1. The LLM/CLI control-plane boundary is the hard part
+
+In host environments (Claude Code, Codex CLI, OpenCode), the CLI cannot directly "spawn an agent" or "ask a question." The LLM orchestrator must still act as the host-primitive dispatcher. Option A replaces "LLM follows large prose instructions" with "LLM follows a smaller protocol" — an improvement, but not determinism. Option B avoids this for the core stages by using TF's subprocess model, where the Rust runner invokes adapter scripts with hard stdin/stdout contracts.
+
+#### 2. The seam in Option B is a product boundary, not just an implementation detail
+
+Users will experience it through different logs, artifacts, and failure modes. This is manageable only if designed intentionally:
+
+- **Single run ID** across both halves. TF already generates a `run_id` and writes output under a run directory. Lineup must adopt that run ID for everything in that pipeline execution.
+- **Single artifact location.** Do not tolerate split conventions (`.lineup/.cache` vs `.runner-output`). Lineup should write pre-pipeline artifacts into TF's run directory.
+- **Unified approval semantics.** Lineup waits for user approval after Plan. TF applies to canonical workspace on validation OK. Without reconciliation, TF will surprise users by applying before approval. Solution: add a "no-apply-back until approval" mode to TF, or run TF in a mode where apply-back is deferred.
+- **Data model at the boundary.** Do not concatenate structured triage/research output into a string field for TF's `PlannerInput`. Either extend TF's input contract to accept structured Lineup artifacts, or pass a file reference that TF's planner adapter reads.
+
+#### 3. The workflow YAML expression language is a slippery slope
+
+GitHub Actions expressions started small and grew into a complex DSL with many edge cases. If Lineup needs only a small subset of conditions (`==`, `!=`, `>`, `length`, `contains`), keep it small and formalize it early. Do not let it become an undocumented DSL that users depend on.
+
+The workflow YAML should also:
+- **Subsume or explicitly map tactics.** Otherwise we maintain two declarative languages with overlapping capabilities.
+- **Reference existing schemas rather than redeclaring types inline.** The CLI already has agent-output schemas. The workflow YAML should reference them, not duplicate them.
+- **Define "stage skipped" semantics explicitly.** What does `inputs` see if the upstream stage is skipped? This must be specified, not left to the orchestrator's judgment (Windmill-style).
+- **Represent fanout results.** The format must express "N subruns" and their structured outputs (parallel researchers, parallel architects).
+
+#### 4. Concurrency will race under prompt-driven cleanup
+
+`.lineup/.cache` and `.lineup/.ephemeral` with prompt-driven cleanup will break under concurrent runs. TF's per-run worktrees and per-run output directories already solve this. Any runtime we build must have the same.
+
+#### 5. Token savings estimate is directionally correct but fragile
+
+The ~18,000 token claim is plausible as a best-case reduction in orchestrator prompt overhead, but:
+
+**Deflators (save less than expected):**
+- Agent prompts don't disappear — spawned agents still need goal context, snapshots, and scaffolding.
+- Some savings are already baked in by current snapshot discipline (Plan → Verify forwarding only acceptance criteria already saves 8-12k tokens).
+- File references shift token load to downstream agents' context windows, they don't eliminate it.
+
+**Inflators (save more than expected):**
+- Eliminating whole mechanical instruction blocks (init sequence, memory migration, tactic discovery) removes both input tokens and reduces opportunities for LLM procedural drift.
+- Structured artifacts and retry envelopes reduce "redo everything" loops on stage failure, with second-order token savings.
+
+**Bottom line**: expect large savings in orchestrator overhead, but don't treat "18k per run" as a stable number. It varies by tier, host, and how much content is streamed to disk and re-ingested by agents.
+
+### Missing Considerations the RFC Must Address
+
+| Area | Gap | Required Action |
+|---|---|---|
+| **Testing strategy** | No testing plan for the runtime | Separate deterministic runtime logic tests (expression evaluator, cache keys, state transitions) from mock-LLM integration tests. Follow TF's mock adapter pattern. |
+| **Operational CLI UX** | No CLI surface for debugging | Add `--resume`, `--rerun-stage`, `--show-artifacts`, and a way to view/validate intermediate outputs. Windmill's "test up to step" / "restart from step" is the benchmark. |
+| **Unified artifact model** | Two separate artifact conventions | If Option B: Lineup writes pre-pipeline artifacts into TF's run directory. One place to look for everything. |
+| **Model/tool selection policy** | No first-class stage-level config | The workflow YAML needs a way to express which model/tool profile a stage uses, with explicit defaults and override precedence. |
+| **Security boundaries for cleanup** | Prompt-driven cleanup deletes files based on heuristics | TF's approach (isolated workspace + apply-back of explicitly declared files) should be the standard. |
+| **Replay and determinism semantics** | No definition of "replay" in an LLM pipeline | Follow Temporal's model: deterministic orchestration + nondeterministic side effects via agents. Define what "retry" means: same prompt? cached output? record "what the model saw"? |
+| **Schema governance** | Tactic schema requires `verification` but docs say it's optional | Once workflow YAML becomes "the contract," schema/doc drift becomes a major problem. Include a versioning policy and compatibility guarantees. |
+
+### Amendments to the RFC
+
+Based on this review, the following amendments should be applied:
+
+1. **Recommend Option B as the primary path.** Option A remains a valid fallback if TF integration proves impractical, but should not be the default investment.
+
+2. **Add "Unified Run Model" as a hard requirement.** Before any implementation:
+   - Define the canonical run directory structure (one location for all artifacts across both halves)
+   - Define run ID generation and propagation
+   - Define approval semantics (no apply-back without explicit user approval)
+   - Define data model at the Lineup/TF boundary (structured, not string-concatenated)
+
+3. **Add "Testing Strategy" section.** Separate deterministic tests from mock-LLM integration tests. Require mock adapters for all roles before shipping.
+
+4. **Add "Operational UX" section.** Define the CLI surface for debugging, resumption, and artifact inspection.
+
+5. **Constrain the expression language.** Start with 5 operators (`==`, `!=`, `>`, `length`, `contains`). Document as a stable subset. Require RFC amendment to expand.
+
+6. **Add concurrency safety as a hard requirement.** Per-run directories, collision-proof IDs, no shared mutable state between concurrent runs. TF's model is the baseline.
+
+7. **Add security threat model.** Path traversal, symlink attacks, environment leakage, artifact poisoning, cleanup safety. The existing restricted YAML parsing is a good start but not sufficient for a runtime executor.
+
+8. **Downgrade token savings from headline to estimate.** Replace "~18,000 tokens per run" with "significant orchestrator overhead reduction; actual savings vary by tier, host, and pipeline complexity."
