@@ -244,6 +244,15 @@ If the triage assessment identified 2+ `independent_areas`:
    - Building a combined `parallelization_strategy` where each area's batches are
      independent of other areas' batches
    - Merging `risks` and deduplicating
+5. **Check for file-level conflicts**: After merging, scan the combined `changes` list
+   for any file path that appears in two or more architects' outputs. If any overlap is
+   found, do not proceed to Approval automatically. Instead, present the conflicting
+   entries to the user:
+   "Warning: The following file(s) appear in plans from multiple architects: <file list>.
+   Please decide how to resolve the overlap before the plan is finalized."
+   Use **{{QUESTION_PRIMITIVE}}** to let the user choose: keep one architect's version,
+   merge both changes, or provide a custom resolution. Update the master plan accordingly
+   before presenting it for final approval.
 
 If only one area exists, spawn a single architect (current behavior).
 
@@ -265,6 +274,17 @@ Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
   - Run batches concurrently when they have no dependencies
   - Wait for a batch to complete before starting dependent batches
   - If no parallelization strategy is provided, run developers sequentially in the plan's change order
+- **Batch failure handling**: After each batch completes, inspect the developer's output for
+  `issues_encountered` entries with `impact: significant`. If any are found:
+  - Do not start any new batches that depend on the failed batch.
+  - Independent batches launched in the same spawn call will have already completed —
+    collect their results normally.
+  - After all batches from the current spawn call have returned, stop the implementation phase.
+  - Report the failure and partial results to the user:
+    "Implementation stopped: batch <N> encountered a significant issue — <summary>.
+    The following batches were not started: <list>. Review before continuing."
+  - Wait for the user to decide whether to proceed to Verify with partial results,
+    retry the failed batch, or abort.
 - Each developer follows the plan -- no improvising beyond the approved scope.
 - **Output:** all code changes committed (or staged for user review).
 
@@ -277,11 +297,12 @@ Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
 
 - Run tests, review the diff against the plan, check for regressions.
 - Flag any issues found -- do not silently pass a broken implementation.
-- **Artifact cleanup**: After the reviewer completes, check for any files written to disk
-  by agents during Stages 0-5 that should not exist (e.g., YAML reports, research artifacts,
-  plan files, memory files created by researchers or architects). Delete any such files.
-  Only files that are part of the actual implementation (code changes from Stage 5) should
-  remain. This ensures the documenter (if Stage 7 runs) starts with a clean working tree.
+- **Artifact cleanup**: After the reviewer completes, run `git status` to identify untracked
+  or modified files not produced by Stage 5 implementation. Delete any ephemeral artifacts
+  found this way — YAML reports, research files, plan drafts, and similar intermediate files
+  written by agents during Stages 0-5. Keep all files that are part of the implementation
+  (code changes from Stage 5) and leave tracked files untouched. This ensures the documenter
+  (if Stage 7 runs) starts with a clean working tree.
 - **Output:** verification report presented to the user.
 
 ## Stage 7 -- Document (Optional)
@@ -306,12 +327,16 @@ proceed to **Pipeline Cleanup**.
 
 ## Pipeline Cleanup
 
-Safety net for any teammates that were not shut down eagerly during the pipeline.
-**Skip entirely if `TEAMS_MODE = false`.**
+Runs after the final stage completes — or when the pipeline exits early due to
+user abort or error.
 
-After the final stage completes, check if any teammates are still running. If so,
-send a `shutdown_request` to each one. Do not call `TeamDelete` -- Claude Code
-manages the team entity lifecycle.
+1. **Artifact cleanup**: Run `git status` and delete any ephemeral artifacts (YAML reports,
+   research files, plan drafts) that are not part of Stage 5 implementation or Stage 7
+   documentation. This is the same procedure as Stage 6 artifact cleanup, applied here as
+   a safety net for early exits.
+2. **Teammate shutdown** (skip if `TEAMS_MODE = false`): Check if any teammates are still
+   running. If so, send a `shutdown_request` to each one. Do not call `TeamDelete` --
+   Claude Code manages the team entity lifecycle.
 
 ---
 
@@ -343,10 +368,19 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Never do deep exploration yourself** -- always delegate to `researcher`.
 - **Always get user approval** before moving from Plan to Implement.
 - **Always use {{QUESTION_PRIMITIVE}}** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
-- **Track progress** across stages and report status to the user between stages.
+- **Report stage completion**: After each stage completes, show a single factual summary
+  line before moving to the next stage. Base it on what the stage produced — for example:
+  "Research complete — found 12 files across 3 modules. Moving to Clarification Gate."
+  or "Plan approved — 4 changes across 2 batches. Starting implementation."
+  Keep it one sentence. Do not editorialize or predict future stages.
 - **Manage context actively**: Between stages, review the upstream output you are about to pass downstream. If it contains raw file contents, long code blocks, or verbose exploration logs, compress it to structured summaries with file path references before passing it to the next agent. The snapshot table defines *which* sections to pass; this rule says to also compress *within* those sections.
 - **Cap researcher narratives**: When summarizing researcher output for downstream stages, cap the `how_it_works` section at ~500 words. If the researcher produced more, compress to the essential execution flow, data flow, and pattern descriptions. Discard examples and inline code unless they are critical to the plan.
 - **Omit empty sections**: When passing agent output YAML downstream, strip any sections that are empty, null, or contain only placeholder values (e.g., `gaps: []`, `risks: null`). Do not pass skeleton structure -- pass only sections with substantive content.
 - **Prefer structured lists over prose**: When compressing agent output between stages, convert prose paragraphs to bullet-point lists with file path references. Downstream agents parse lists faster and more accurately than paragraphs.
-- **Clean up ephemeral artifacts**: Agents may write intermediate files (research YAML, plan drafts, reports) to disk during the pipeline if those files serve downstream stages. However, these files are **ephemeral** -- they must be cleaned up once they are no longer needed. The artifact cleanup step in Stage 6 (Verify) handles this. Only files produced by Stage 5 (implementation code) and Stage 7 (documentation markdown) should persist after the pipeline completes.
+- **Clean up ephemeral artifacts**: Agents may write intermediate files (research YAML, plan drafts, reports) to disk during the pipeline if those files serve downstream stages. However, these files are **ephemeral** -- they must be cleaned up once they are no longer needed. Only files produced by Stage 5 (implementation code) and Stage 7 (documentation markdown) should persist after the pipeline completes. The rule below governs when and how cleanup runs.
+- **Run artifact cleanup on any pipeline exit**: Whenever the pipeline ends — whether at
+  Stage 6 completion, on user abort, or on an error that terminates a stage early — run
+  `git status` and delete any ephemeral artifacts (YAML reports, research files, plan drafts)
+  that are not part of the Stage 5 implementation or Stage 7 documentation. Apply this same
+  cleanup before returning control to the user in any pipeline tier.
 - **Always run Pipeline Cleanup** at the end of the pipeline when `TEAMS_MODE = true`. This applies to all pipeline tiers (Full, Lightweight, Direct) and to tactic pipelines.

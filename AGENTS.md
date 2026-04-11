@@ -101,7 +101,12 @@ Frontmatter fields:
 ### Claude Code Teams Mode
 
 When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and `TeamCreate` is available,
-the kick-off pipeline runs in **teams mode**:
+the kick-off pipeline runs in **teams mode**, subject to a terminal width check:
+
+- **Terminal width gate**: At pipeline start, `tput cols` is run to detect width.
+  If the terminal is narrower than 80 columns, Teams mode is disabled and agents
+  spawn as standard subagents instead. If `tput` fails, a warning is logged and
+  the pipeline continues with Teams mode enabled.
 
 - A session-scoped team named `lineup-<session_id>` is created once during initialization
   (the 6-character `session_id` is generated randomly to isolate concurrent runs).

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Terminal width detection in kick-off initialization -- Teams mode is automatically disabled on terminals narrower than 80 columns, falling back to standard subagents to avoid layout issues with side-by-side panels
+- Inter-stage progress reporting -- orchestrator now shows a one-sentence factual summary after each stage completes
+
+### Fixed
+- Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics
+- Artifact cleanup runs on any pipeline exit (abort, error, or normal completion), not only at Stage 6
+- Parallel architect merge now detects file-level conflicts and presents them to the user for resolution
+- Developer batch failure handling -- significant issues block dependent batches, independent batches finish, user decides next step
+- Memory migration enforces write-then-clean order to prevent data loss on interruption
+- Terminal width detection logs a warning when `tput` fails instead of silently assuming wide terminal
+- Tactic variable fallback injects a note into affected stage prompts listing unresolved variable references
+
 ## [2.1.1] - 2026-03-20
 
 ### Fixed

@@ -93,6 +93,11 @@ For each agent that needs migration:
 ### Safety rules
 
 - **Read before write**: Read the full global MEMORY.md into context before making any changes. Do not alternate between reading and writing.
+- **Write-then-clean order**: When migrating a section, always write it to the destination
+  first, then remove it from the source. Never remove from the source before confirming the
+  destination write succeeded. If the pipeline is interrupted between these two steps, the
+  section exists in both locations — on the next retry, it will be detected as already
+  present in project-scoped memory and the source copy will be cleaned up normally.
 - **Idempotency**: If project-scoped memory already contains a section with the same header as the global file, skip that section (already migrated in a partial previous run). Do not duplicate content.
 - **Preserve on failure**: If writing to project-scoped memory fails, leave the global memory unchanged. Report the failure and continue the pipeline without migration. The user can retry on the next run.
 - **One agent at a time**: Complete migration for one agent fully (read, write, clean) before starting the next. This limits the blast radius of any interruption.
@@ -172,8 +177,11 @@ If any `${variable_name}` reference does not match a defined variable:
    - "Provide a value for this variable"
    - "Continue with the literal string (agent will see '${variable_name}')"
    - "Abort tactic execution"
-3. If the user provides values, substitute them. If they choose to continue,
-   proceed with a warning.
+3. If the user provides values, substitute them. If they choose to continue with
+   the literal string, inject a note at the top of each affected stage prompt:
+   "Note: The following variable references could not be resolved and appear as
+   literal text: ${var1}, ${var2}."
+   List only the unresolved references that appear in that specific stage's prompt.
 
 ### Tactic Execution
 
@@ -206,7 +214,22 @@ When a tactic is selected, **replace the default pipeline** with the tactic's st
 
 ## Team Setup
 
-After tactic resolution, check whether Claude Code Teams are available.
+After tactic resolution, check whether Claude Code Teams are available and
+whether the terminal is wide enough to support side-by-side teammate panels.
+
+### Terminal width check
+
+Before checking for Teams availability, detect the terminal width:
+
+1. Run `tput cols` using the Bash tool.
+2. If the command succeeds and returns a number **less than 80**, the terminal is
+   too narrow for Teams. Set `TEAMS_MODE = false` and skip the rest of this
+   section (Detection, Creating the team, etc.). Log briefly:
+   "Note: Terminal width (<N> cols) below 80 — using standard agents."
+3. If the command fails (non-zero exit, no output, or non-numeric output), log a
+   warning: "Warning: Could not detect terminal width — assuming wide terminal."
+   Then continue to Detection below. Do not abort the pipeline over a failed width check.
+4. If the width is **80 or greater**, continue to Detection below.
 
 ### Detection
 
