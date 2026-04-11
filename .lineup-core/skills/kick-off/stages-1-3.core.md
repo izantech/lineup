@@ -19,6 +19,21 @@ Refine the request before any work begins using **structured questions**.
 Spawn one or more `researcher` agents to explore the codebase and gather context.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent).
 
+### Ollama-assisted research
+
+When `OLLAMA_AVAILABLE = true`, augment each researcher spawn as follows:
+
+- Append `mcp__ollama__ollama_chat, mcp__ollama__ollama_generate` to the researcher's
+  `tools` list in the Agent spawn call.
+- Add the following to each researcher's spawn prompt:
+
+  "You have access to Ollama tools (`mcp__ollama__ollama_chat`,
+  `mcp__ollama__ollama_generate`) for delegating text summarization and context
+  gathering to a local model (use the model name from `OLLAMA_MODEL` in working context). Use these for: summarizing large
+  documents, pre-digesting verbose documentation, gathering context from long files.
+  Do NOT use Ollama for: code analysis, architectural decisions, generating code, or
+  any task requiring reasoning about code structure."
+
 - **Use triage search targets**: The triage assessment provides specific directories,
   file patterns, and questions per affected area. Use these as the basis for each
   researcher's spawn prompt instead of deriving scope from scratch.

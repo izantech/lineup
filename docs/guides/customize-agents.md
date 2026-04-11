@@ -66,6 +66,12 @@ Controls how each agent stores persistent knowledge across sessions.
 
 Valid scopes: `user`, `project`, `local`.
 
+### Ollama
+
+Enables or disables an optional local Ollama model for researcher agents. When enabled, researchers can delegate text summarization and context gathering to a local model at no API cost.
+
+See the [Ollama Integration guide](/guides/ollama-integration) for prerequisites and setup steps.
+
 ### Reset
 
 Restores all agents to their factory defaults. The configurator deletes all override files in `~/.claude/lineup/agents/`.

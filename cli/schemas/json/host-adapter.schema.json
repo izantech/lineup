@@ -32,7 +32,8 @@
         "HOST_DEFAULTS_TERM",
         "HOST_ARTIFACT_LABEL",
         "HOST_ARTIFACT_LABEL_LOWER",
-        "AGENTS_DIR"
+        "AGENTS_DIR",
+        "OLLAMA_CONFIG_PATH"
       ],
       "properties": {
         "SKILL_NAME_KICKOFF": { "type": "string" },
@@ -53,7 +54,8 @@
         "HOST_DEFAULTS_TERM": { "type": "string" },
         "HOST_ARTIFACT_LABEL": { "type": "string" },
         "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" },
-        "AGENTS_DIR": { "type": "string" }
+        "AGENTS_DIR": { "type": "string" },
+        "OLLAMA_CONFIG_PATH": { "type": "string" }
       }
     }
   }

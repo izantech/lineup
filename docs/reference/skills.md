@@ -141,6 +141,7 @@ The configurator walks through five steps:
 | Model | Keep defaults, set one for all agents, set per-agent |
 | Tools | Replace tools, add tools, remove tools, no changes |
 | Memory | Keep defaults, set one for all agents, set per-agent |
+| Ollama | Enable Ollama for research, disable Ollama, no changes |
 | Reset | Restore all agents to factory defaults |
 
 ### What it modifies

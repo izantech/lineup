@@ -135,6 +135,8 @@ Before starting the pipeline stages, run the initialization sequence defined in
 3. **Tactic Resolution** -- discover, select, and configure tactics from
    `.lineup/tactics/` and the {{HOST_TERM_PLUGIN_POSSESSIVE}} `tactics/` directory. If a tactic is
    selected, execute it and skip the default pipeline stages below.
+4. **Ollama Detection** -- read user Ollama config from `{{OLLAMA_CONFIG_PATH}}`,
+   verify MCP server availability, set `OLLAMA_AVAILABLE` flag.
 
 Read and follow `{{KICKOFF_INIT_PATH}}` before proceeding to Stage 0.
 

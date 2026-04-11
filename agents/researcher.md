@@ -97,4 +97,40 @@ are too large to pass inline (over ~2 KB). Use the naming convention
 - These files are ephemeral and will be cleaned up by Pipeline Cleanup.
 - Do not write final documentation or code — only intermediate research artifacts.
 
+## Ollama-Assisted Research
+
+When your spawn prompt indicates Ollama tools are available, you can delegate
+text-processing subtasks to a local Ollama model for faster, cost-free results.
+
+### Available tools
+
+- `mcp__ollama__ollama_chat` — multi-turn chat with a local model. Use for:
+  summarizing documents, extracting key points from verbose text, generating
+  plain-language explanations of complex content.
+- `mcp__ollama__ollama_generate` — single-turn text generation. Use for:
+  quick summaries, reformatting text, extracting structured data from prose.
+
+### When to use Ollama
+
+- Summarizing large files (>200 lines) before reporting findings
+- Pre-digesting documentation pages fetched via WebFetch
+- Extracting key facts from verbose configuration or log output
+- Generating plain-language descriptions of complex data structures
+
+### When NOT to use Ollama
+
+- Code analysis or understanding code logic (use your own reasoning)
+- Architectural decisions or trade-off evaluation
+- Generating code, even boilerplate
+- Any task where accuracy is critical (Ollama models are smaller and less reliable)
+
+### Usage pattern
+
+When summarizing a large document:
+1. Read the document (or relevant sections) using Read with offset/limit
+2. Call `mcp__ollama__ollama_generate` with the content and a focused prompt
+   (e.g., "Summarize the key API endpoints and their parameters from this documentation")
+3. Include the Ollama summary in your findings, noting it was model-generated
+4. Always verify critical claims from the summary against the source
+
 Refer to AGENTS.md for persistent memory and document output instructions.

@@ -329,3 +329,30 @@ Do not call `TeamDelete` at pipeline end -- Claude Code manages the team entity
 lifecycle. However, you **must** shut down individual teammates when the pipeline
 completes. See the Pipeline Cleanup section in the core pipeline definition for
 the shutdown procedure.
+
+---
+
+## Ollama Detection
+
+After Team Setup, check whether Ollama is available for use by researcher agents.
+
+1. Check if `{{OLLAMA_CONFIG_PATH}}` exists. If the file does not exist or cannot be
+   read, set `OLLAMA_AVAILABLE = false` and skip the rest of this section silently.
+
+2. Read the file and parse the YAML. If `enabled` is missing or `false`, set
+   `OLLAMA_AVAILABLE = false` and skip silently.
+
+3. If `enabled: true`, verify the MCP server is actually running. Use ToolSearch
+   with query `"select:mcp__ollama__ollama_list"` to check if the tool is available.
+
+   a. If the tool is found and calling `mcp__ollama__ollama_list` returns a non-empty
+      model list, set `OLLAMA_AVAILABLE = true` and store `OLLAMA_MODEL` from the
+      `model` field in the YAML.
+
+   b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
+      "Warning: Ollama is enabled in config but the MCP server is not available.
+      Run `claude mcp add ollama -- npx -y ollama-mcp` to set it up."
+
+Store in working context:
+- `OLLAMA_AVAILABLE` — boolean, whether Ollama is ready for use
+- `OLLAMA_MODEL` — string, the model name from config (only set when `OLLAMA_AVAILABLE = true`)

@@ -12,6 +12,7 @@
     "KICKOFF_INIT_PATH": "skills/kick-off/INIT.md",
     "QUESTION_PRIMITIVE": "AskUserQuestion",
     "OVERRIDES_DIR": "~/.claude/lineup/agents/",
+    "OLLAMA_CONFIG_PATH": "~/.claude/lineup/ollama.yaml",
     "MEMORY_USER_DIR": "~/.claude/agent-memory",
     "MEMORY_PROJECT_DIR": "~/.claude/projects",
     "HOST_TERM_PLUGIN": "plugin",

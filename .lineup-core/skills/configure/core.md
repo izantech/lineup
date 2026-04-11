@@ -91,6 +91,38 @@ Present the configuration options using **{{QUESTION_PRIMITIVE}}**. Offer these 
 - **Set one scope for all agents** — ask which: `user`, `project`, or `local`
 - **Set per-agent** — ask for each agent individually
 
+### Ollama
+
+- **Enable Ollama for research** — walks the user through setup:
+  1. Check if Ollama is installed by running `ollama --version` via Bash. If the
+     command fails or is not found, provide install instructions (`https://ollama.com`)
+     and stop.
+  2. Check if the MCP server is configured by looking for `ollama` in the MCP config.
+     If not found, offer to run `claude mcp add ollama -- npx -y ollama-mcp` via Bash.
+  3. Ask which model to use. Run `ollama list` via Bash to show available models.
+     Default recommendation: `llama3.1:8b` or whatever model is already pulled.
+  4. Write `{{OLLAMA_CONFIG_PATH}}`:
+     ```yaml
+     enabled: true
+     model: llama3.1:8b
+     scope: research
+     ```
+     (Use the user-selected model instead of the hardcoded default.)
+  5. Confirm: "Ollama enabled for research tasks. Researchers will use `<model>` for
+     text summarization and context gathering."
+
+- **Disable Ollama** — set `enabled: false` in `{{OLLAMA_CONFIG_PATH}}` (or delete the
+  file if the user prefers a clean state)
+- **No changes** — skip
+
+**Validation rules** when reading `{{OLLAMA_CONFIG_PATH}}`:
+- `enabled` must be a boolean
+- `model` must be a non-empty string
+- `scope` must be `research` (only supported value)
+
+If any field is invalid, report the specific issue and treat the file as if Ollama is
+disabled.
+
 ### Reset
 - **Restore all agents to {{HOST_DEFAULTS_TERM}}** — delete all override files
 
