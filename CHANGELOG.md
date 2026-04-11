@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- OpenCode host support -- `lineup install|update|uninstall|status --host opencode` achieves full parity with Claude and Codex; skills install globally to `~/.config/opencode/skills/` as directories with `SKILL.md` (same format as Codex); config overrides and Ollama settings go to `~/.config/opencode/lineup/`; slash commands use no namespace prefix (e.g. `/lineup-kick-off`)
 - Staged prompt loading -- orchestrator core split into on-demand stage files (STAGES-1-3.md, STAGES-4-5.md, STAGES-6-7.md) to reduce upfront token cost; each file is self-contained and loaded when entering that stage group
 - Effort-based model selection -- triage complexity drives model assignment per agent role (haiku/sonnet/opus); user overrides act as a floor (can upgrade but not downgrade below effort level)
 - Context snapshot size threshold (~2 KB) -- snapshots exceeding the threshold are compressed to key findings with file path references before passing downstream

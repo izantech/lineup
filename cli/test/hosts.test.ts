@@ -7,6 +7,7 @@ describe("host selection", () => {
   it("normalizes known host options", () => {
     expect(normalizeHostOption("claude")).toBe("claude");
     expect(normalizeHostOption("CoDeX")).toBe("codex");
+    expect(normalizeHostOption("opencode")).toBe("opencode");
     expect(normalizeHostOption("all")).toBe("all");
   });
 
@@ -15,7 +16,7 @@ describe("host selection", () => {
   });
 
   it("expands all to both hosts", () => {
-    expect(hostOptionToHosts("all")).toEqual(["claude", "codex"]);
+    expect(hostOptionToHosts("all")).toEqual(["claude", "codex", "opencode"]);
   });
 
   it("fails when host is omitted in non-interactive mode", async () => {

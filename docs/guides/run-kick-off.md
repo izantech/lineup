@@ -51,7 +51,7 @@ If no tactics exist, the orchestrator prompts you to describe your task directly
 
 Every time you run `/lineup:kick-off`, the orchestrator runs an initialization sequence before the first stage begins:
 
-1. **Agent configuration** -- reads your override files from `~/.claude/lineup/agents/` (if any) and merges them with plugin defaults. If you customized agent models or tools via `/lineup:configure`, those customizations are applied here.
+1. **Agent configuration** -- reads your override files from the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode) and merges them with plugin defaults. If you customized agent models or tools via the configure skill, those customizations are applied here.
 2. **Memory migration** -- checks if any agent has global memory that should be migrated to project-scoped memory. This is a one-time operation per project, and it runs silently if there is nothing to migrate.
 3. **Tactic discovery** -- scans `.lineup/tactics/` (your project) and the plugin's `tactics/` directory for available tactics. This is what powers the menu mode selection and tactic-by-name invocation.
 
@@ -154,7 +154,7 @@ Would you like to generate documentation for these changes?
 
 ## How to respond to prompts
 
-Throughout the pipeline, the orchestrator uses structured prompts called **AskUserQuestion**. These always follow the same pattern:
+Throughout the pipeline, the orchestrator uses structured prompts (`AskUserQuestion` on Claude, native `question` tool on OpenCode). These always follow the same pattern:
 
 - A question with context
 - Numbered options (usually 3-5)

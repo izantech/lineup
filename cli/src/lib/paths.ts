@@ -58,6 +58,14 @@ export function codexHostRoot(homeDir = os.homedir()): string {
   return path.join(lineupHome(homeDir), "hosts", "codex");
 }
 
+export function opencodeGlobalSkillsDir(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".config", "opencode", "skills");
+}
+
+export function opencodeHostRoot(homeDir = os.homedir()): string {
+  return path.join(lineupHome(homeDir), "hosts", "opencode");
+}
+
 export function claudeManagedPluginDir(version: string, homeDir = os.homedir()): string {
   return path.join(claudeMarketplaceRoot(homeDir), "plugins", "lineup", version);
 }
@@ -70,7 +78,7 @@ export function codexRepoLocalSkillsDir(cwd = process.cwd()): string {
   return path.join(cwd, ".agents", "skills");
 }
 
-export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex">, homeDir = os.homedir()): string[] {
+export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex" | "opencode">, homeDir = os.homedir()): string[] {
   const targets: string[] = [];
 
   if (hosts.includes("claude")) {
@@ -80,6 +88,10 @@ export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex">, homeDir =
   if (hosts.includes("codex")) {
     targets.push(path.join(homeDir, ".codex", "lineup", "agents"));
     targets.push(path.join(homeDir, ".codex", "lineup", "memory"));
+  }
+
+  if (hosts.includes("opencode")) {
+    targets.push(path.join(homeDir, ".config", "opencode", "lineup"));
   }
 
   return targets;

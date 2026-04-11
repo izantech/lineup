@@ -11,10 +11,10 @@ npm install -g @izantech/lineup-cli
 ## Commands
 
 ```bash
-lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]
-lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]
-lineup uninstall [--host claude|codex|all] [--yes] [--purge]
-lineup status [--host claude|codex|all] [--json]
+lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
+lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
+lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
+lineup status [--host claude|codex|opencode|all] [--json]
 ```
 
 ## Release source model
@@ -55,11 +55,19 @@ Codex managed assets:
 - `~/.agents/skills/lineup-explain/`
 - `~/.agents/skills/lineup-playbook/`
 
+OpenCode managed assets:
+
+- `~/.config/opencode/skills/lineup-kick-off/`
+- `~/.config/opencode/skills/lineup-configure/`
+- `~/.config/opencode/skills/lineup-explain/`
+- `~/.config/opencode/skills/lineup-playbook/`
+
 Optional uninstall purge targets:
 
 - `~/.claude/lineup/agents/`
 - `~/.codex/lineup/agents/`
 - `~/.codex/lineup/memory/`
+- `~/.config/opencode/lineup/`
 
 ## Interactive and non-interactive rules
 

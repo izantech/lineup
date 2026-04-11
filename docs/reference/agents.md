@@ -53,8 +53,8 @@ memory: project
 
 | Value | Storage location | Shared across |
 | ----- | ---------------- | ------------- |
-| `user` | `~/.claude/agent-memory/<agent>/` | All projects for this user |
-| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` | Only the current project (default) |
+| `user` | `~/.claude/agent-memory/<agent>/` (Claude) | All projects for this user |
+| `project` | `~/.claude/projects/<project-path>/agent-memory/<agent>/` (Claude) | Only the current project (default) |
 | `local` | `.lineup/memory/<agent>/` | Only the current directory |
 
 ## Default agent configurations

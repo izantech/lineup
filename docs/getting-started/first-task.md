@@ -1,16 +1,18 @@
 # Your First Task
 
-This walkthrough takes about 5 minutes. You'll run a complete `/lineup:kick-off` pipeline on a simple task and see what each stage looks like.
+This walkthrough takes about 5 minutes. You'll run a complete kick-off pipeline on a simple task and see what each stage looks like.
 
 ## The task
 
-We'll use a realistic example:
+We'll use a realistic example. Type the command for your host into a session with Lineup installed:
 
-```bash
-/lineup:kick-off Add input validation to the login form
-```
+| Host | Command |
+| ---- | ------- |
+| Claude Code | `/lineup:kick-off Add input validation to the login form` |
+| Codex CLI | `$lineup-kick-off Add input validation to the login form` |
+| OpenCode | `/lineup-kick-off Add input validation to the login form` |
 
-Type that into a Claude Code session with Lineup installed. Here's what happens next.
+Here's what happens next.
 
 ## Stage 1: Clarify
 

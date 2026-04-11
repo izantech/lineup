@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { CODEX_REQUIRED_FILES } from "../lib/constants";
+import { CODEX_REQUIRED_FILES, OPENCODE_REQUIRED_FILES } from "../lib/constants";
 import { CliError, asErrorMessage } from "../lib/errors";
 import { generateHostFiles, loadHostAdapter } from "../lib/generate";
 import { packageRoot } from "../lib/paths";
@@ -8,12 +8,14 @@ import { packageRoot } from "../lib/paths";
 function assertDeterministic(sourceRoot: string): void {
   const first = {
     claude: generateHostFiles(sourceRoot, "claude"),
-    codex: generateHostFiles(sourceRoot, "codex")
+    codex: generateHostFiles(sourceRoot, "codex"),
+    opencode: generateHostFiles(sourceRoot, "opencode")
   };
 
   const second = {
     claude: generateHostFiles(sourceRoot, "claude"),
-    codex: generateHostFiles(sourceRoot, "codex")
+    codex: generateHostFiles(sourceRoot, "codex"),
+    opencode: generateHostFiles(sourceRoot, "opencode")
   };
 
   if (JSON.stringify(first) !== JSON.stringify(second)) {
@@ -26,6 +28,7 @@ function assertDeterministic(sourceRoot: string): void {
 function assertRequiredOutputs(sourceRoot: string): void {
   const claude = generateHostFiles(sourceRoot, "claude");
   const codex = generateHostFiles(sourceRoot, "codex");
+  const opencode = generateHostFiles(sourceRoot, "opencode");
 
   const claudeAdapter = loadHostAdapter(sourceRoot, "claude");
   const expectedClaude = new Set<string>([
@@ -54,6 +57,15 @@ function assertRequiredOutputs(sourceRoot: string): void {
     if (!actualCodex.has(required)) {
       throw new CliError(`Missing generated Codex output: ${required}`, {
         code: "missing_codex_generated_file"
+      });
+    }
+  }
+
+  const actualOpencode = new Set<string>(opencode.map((file) => file.target));
+  for (const required of OPENCODE_REQUIRED_FILES) {
+    if (!actualOpencode.has(required)) {
+      throw new CliError(`Missing generated OpenCode output: ${required}`, {
+        code: "missing_opencode_generated_file"
       });
     }
   }

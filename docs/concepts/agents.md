@@ -121,7 +121,7 @@ Key differences from standard subagent mode:
 - **Tool restrictions advisory**: the tool list from agent frontmatter is not enforced by the platform in team mode -- it is treated as a guideline only.
 - **No sub-teammates**: teammates cannot spawn their own teammates. Nesting is blocked by the platform.
 
-If `TeamCreate` is not available (standard Claude Code without the experiment flag, or Codex CLI), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
+If `TeamCreate` is not available (standard Claude Code without the experiment flag, Codex CLI, or OpenCode), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
 
 ## Full configuration reference
 

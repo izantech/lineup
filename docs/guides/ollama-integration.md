@@ -50,7 +50,11 @@ When prompted for which category to configure, choose **Ollama**. The configurat
 
 3. **Model selection** — runs `ollama list` to show your pulled models and asks which to use. The default recommendation is `llama3.1:8b`.
 
-When complete, the configurator writes `~/.claude/lineup/ollama.yaml`:
+When complete, the configurator writes the Ollama config file for your host:
+
+- Claude: `~/.claude/lineup/ollama.yaml`
+- Codex: `~/.codex/lineup/ollama.yaml`
+- OpenCode: `~/.config/opencode/lineup/ollama.yaml`
 
 ```yaml
 enabled: true
@@ -58,11 +62,11 @@ model: llama3.1:8b
 scope: research
 ```
 
-That file is the single switch. To disable Ollama at any time, run `/lineup:configure` again and choose **Disable Ollama**.
+That file is the single switch. To disable Ollama at any time, run the configure skill again and choose **Disable Ollama**.
 
 ## How it works during the pipeline
 
-During kick-off initialization (before Stage 1), the orchestrator reads `~/.claude/lineup/ollama.yaml` and verifies the MCP server is reachable by calling `mcp__ollama__ollama_list`. If the call succeeds, it sets `OLLAMA_AVAILABLE = true` internally.
+During kick-off initialization (before Stage 1), the orchestrator reads the host's Ollama config file and verifies the MCP server is reachable by calling `mcp__ollama__ollama_list`. If the call succeeds, it sets `OLLAMA_AVAILABLE = true` internally.
 
 At Stage 2 (Research), for every researcher spawned while `OLLAMA_AVAILABLE = true`:
 
@@ -113,8 +117,8 @@ Or restart the Ollama application if you are using the desktop app.
 
 ### Ollama not using the right model
 
-Check `~/.claude/lineup/ollama.yaml` — the `model` field must exactly match the name shown in `ollama list`. Re-run `/lineup:configure` to update it.
+Check your host's Ollama config file (`~/.claude/lineup/ollama.yaml` for Claude, `~/.config/opencode/lineup/ollama.yaml` for OpenCode) — the `model` field must exactly match the name shown in `ollama list`. Re-run the configure skill to update it.
 
 ### Disabling Ollama without the configurator
 
-Delete or edit `~/.claude/lineup/ollama.yaml` directly. Setting `enabled: false` disables it; deleting the file has the same effect.
+Delete or edit the host's Ollama config file directly. Setting `enabled: false` disables it; deleting the file has the same effect.

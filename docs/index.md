@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: Lineup
-  text: Structured multi-agent workflow for Claude Code and Codex CLI
+  text: Structured multi-agent workflow for Claude Code, Codex CLI, and OpenCode
   tagline: Break complex tasks into a clear pipeline with specialized agents
   actions:
     - theme: brand

@@ -13,20 +13,22 @@ Lineup 2.0 uses a canonical core plus a CLI-managed install flow across Claude C
 
 ## Commands
 
-Repository checks:
+Dev script:
 
-- `npm --prefix cli run typecheck`
-- `npm --prefix cli test`
-- `npm --prefix cli run schema:check`
-- `npm --prefix cli run generate:check`
-- `npm --prefix cli run build`
+- `./dev check` — run all checks (typecheck, test, schema, generate, build)
+- `./dev build` / `./dev typecheck` / `./dev test` — individual checks
+- `./dev install local` — build from source and install CLI + all host skills
+- `./dev install remote` — install latest from npm
+- `./dev install clean [--purge]` — remove CLI and host skills
+- `./dev docs` — start VitePress dev server
+- `./dev setup` — install dependencies
 
 CLI runtime:
 
-- `lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]`
-- `lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]`
-- `lineup uninstall [--host claude|codex|all] [--yes] [--purge]`
-- `lineup status [--host claude|codex|all] [--json]`
+- `lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]`
+- `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]`
+- `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
+- `lineup status [--host claude|codex|opencode|all] [--json]`
 
 ## Architecture
 
@@ -41,7 +43,7 @@ Lineup avoids prompt drift by keeping one canonical source and generating host a
   kick-off/stages-1-3.core.md → Stages 1-3 (Clarify, Research, Gate) + effort mapping
   kick-off/stages-4-5.core.md → Stages 4-5 (Plan, Implement) + stage result caching
   kick-off/stages-6-7.core.md → Stages 6-7 (Verify, Document) + cleanup + ephemeral lifecycle
-.lineup-core/hosts/*.json     → Host adapter maps (claude, codex)
+.lineup-core/hosts/*.json     → Host adapter maps (claude, codex, opencode)
 agents/*.md                   → Shared agent definitions
 tactics/*.yaml                → Built-in tactics
 templates/*.yaml              → YAML format references
@@ -163,6 +165,7 @@ Runtime overrides are persisted outside the repo:
 
 - Claude: `~/.claude/lineup/agents/`
 - Codex: `~/.codex/lineup/agents/`
+- Opencode: `~/.config/opencode/lineup/agents/`
 
 Override precedence: user override > agent frontmatter defaults.
 
@@ -172,6 +175,7 @@ Command surface is unchanged:
 
 - Claude: `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook`
 - Codex: `$lineup-kick-off`, `$lineup-configure`, `$lineup-explain`, `$lineup-playbook`
+- OpenCode: `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook`
 
 ## Data and Schema Conventions
 
@@ -210,12 +214,7 @@ child defaults.
 
 1. Update versions (`cli/package.json`, `.claude-plugin/plugin.json` as needed)
 2. Update `CHANGELOG.md`
-3. Run checks:
-   - `npm --prefix cli run typecheck`
-   - `npm --prefix cli test`
-   - `npm --prefix cli run schema:check`
-   - `npm --prefix cli run generate:check`
-   - `npm --prefix cli run build`
+3. Run checks: `./dev check`
 4. Commit and push
 5. Create GitHub release tag
 6. Publish npm package via GitHub Actions OIDC (workflow checks tag/version alignment)

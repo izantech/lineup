@@ -13,7 +13,7 @@ export function normalizeHostOption(raw?: string): HostOption | null {
 
   const normalized = raw.trim().toLowerCase();
   if (!HOST_SET.has(normalized)) {
-    throw new CliError(`Invalid --host value: ${raw}. Expected claude, codex, or all.`, {
+    throw new CliError(`Invalid --host value: ${raw}. Expected claude, codex, opencode, or all.`, {
       code: "invalid_host"
     });
   }
@@ -43,7 +43,7 @@ export async function resolveRequestedHosts(
     return (options?.prompt ?? promptHostSelection)();
   }
 
-  throw new CliError("No host selected. Use --host claude|codex|all when running non-interactively.", {
+  throw new CliError("No host selected. Use --host claude|codex|opencode|all when running non-interactively.", {
     code: "host_required"
   });
 }

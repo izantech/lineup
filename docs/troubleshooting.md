@@ -4,9 +4,9 @@ Common issues and solutions when using Lineup. Each entry follows the pattern: *
 
 ## Plugin not found
 
-**Symptom:** Running `/lineup:kick-off` gives "command not recognized" or "no such skill".
+**Symptom:** Running `/lineup:kick-off` (Claude), `$lineup-kick-off` (Codex), or `/lineup-kick-off` (OpenCode) gives "command not recognized" or "no such skill".
 
-**Diagnosis:** The Claude host install is missing, stale, or failed to sync.
+**Diagnosis:** The host install is missing, stale, or failed to sync.
 
 **Solution:**
 
@@ -14,12 +14,15 @@ Check current host status:
 
 ```bash
 lineup status --host claude
+lineup status --host codex
+lineup status --host opencode
 ```
 
-Install or re-install Claude host assets:
+Install or re-install host assets:
 
 ```bash
 lineup install --host claude
+lineup install --host opencode
 ```
 
 Force non-interactive recovery:
@@ -27,6 +30,8 @@ Force non-interactive recovery:
 ```bash
 lineup install --host claude --yes
 lineup update --host claude --version latest --yes
+lineup install --host opencode --yes
+lineup update --host opencode --version latest --yes
 ```
 
 ## Install/update fails with HTTP or release errors
@@ -150,7 +155,7 @@ Stage 0 (Triage) now produces concrete search targets for researchers -- specifi
 
 **Symptom:** An agent applies patterns or conventions from a different project. For example, the developer uses a testing framework you don't use, or the architect references an API pattern from another codebase.
 
-**Diagnosis:** This typically happens when agents are configured with `memory: user` instead of the default `memory: project`. User-scoped memory is stored in `~/.claude/agent-memory/<agent>/` and is shared across all projects, so patterns learned in one project may be applied to another.
+**Diagnosis:** This typically happens when agents are configured with `memory: user` instead of the default `memory: project`. User-scoped memory is shared across all projects, so patterns learned in one project may be applied to another.
 
 **Solution:**
 
@@ -162,26 +167,29 @@ Alternatively, be explicit in your task description about which patterns to foll
 
 **Symptom:** Running `/lineup:kick-off explain` or `/lineup:explain` reports that the `explain` tactic was not found.
 
-**Diagnosis:** Claude host assets are outdated or corrupted, so built-in tactic files are missing from the active install.
+**Diagnosis:** Host assets are outdated or corrupted, so built-in tactic files are missing from the active install.
 
 **Solution:**
 
-Refresh the Claude host install from the latest release:
+Refresh the host install from the latest release:
 
 ```bash
 lineup update --host claude --version latest --yes
+lineup update --host opencode --version latest --yes
 ```
 
 Then verify status:
 
 ```bash
 lineup status --host claude
+lineup status --host opencode
 ```
 
 If needed, reinstall:
 
 ```bash
 lineup install --host claude --yes
+lineup install --host opencode --yes
 ```
 
 ## VitePress build errors (for contributors)
@@ -214,12 +222,12 @@ cd /path/to/lineup/docs && npx vitepress build
 
 Check each part of the chain:
 
-1. **Skill exists:** Verify your install reports healthy status with `lineup status --host claude`, and confirm canonical template `.lineup-core/skills/explain/core.md` exists in source.
+1. **Skill exists:** Verify your install reports healthy status with `lineup status --host <your-host>`, and confirm canonical template `.lineup-core/skills/explain/core.md` exists in source.
 2. **Tactic exists:** Verify `tactics/explain.yaml` is present in the plugin directory.
 3. **No conflicting override:** If your project has `.lineup/tactics/explain.yaml`, the project version takes precedence over the built-in. Check that the project version is valid.
 4. **Kick-off works:** Test with `/lineup:kick-off explain How does authentication work?` to bypass the explain skill and invoke the tactic directly.
 
-If `/lineup:kick-off explain` works but `/lineup:explain` doesn't, the issue is in the skill alias definition for your current host install. Re-run `lineup update --host claude --version latest --yes`.
+If `/lineup:kick-off explain` (or the host equivalent) works but the explain skill doesn't, the issue is in the skill alias definition for your current host install. Re-run `lineup update --host <your-host> --version latest --yes`.
 
 ## Teams mode not activating
 
@@ -264,16 +272,14 @@ updates. The CLI refreshes generated host assets during update/install.
 **Solution:**
 
 Run `/lineup:configure` to re-apply your preferred settings. Customizations are
-stored in `~/.claude/lineup/agents/` and survive future updates when managed
-through overrides.
+stored in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode) and survive future updates when managed through overrides.
 
 ## Override file issues
 
 **Symptom:** An agent is using unexpected settings despite your customization,
 or the configurator shows a version mismatch warning.
 
-**Diagnosis:** The override file in `~/.claude/lineup/agents/` may reference
-settings from an older plugin version.
+**Diagnosis:** The override file in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode) may reference settings from an older plugin version.
 
 **Solution:**
 
@@ -281,4 +287,4 @@ settings from an older plugin version.
 2. The configurator marks overridden fields with `*` so you can see what's
    customized vs default.
 3. Use **Reset** to clear all overrides and start fresh if needed.
-4. You can also manually inspect or delete files in `~/.claude/lineup/agents/`.
+4. You can also manually inspect or delete files in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode).

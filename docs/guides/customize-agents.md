@@ -74,7 +74,7 @@ See the [Ollama Integration guide](/guides/ollama-integration) for prerequisites
 
 ### Reset
 
-Restores all agents to their factory defaults. The configurator deletes all override files in `~/.claude/lineup/agents/`.
+Restores all agents to their factory defaults. The configurator deletes all override files in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode).
 
 ## Step 3: Preview
 
@@ -91,7 +91,7 @@ Review the preview and confirm before changes are applied.
 
 ## Step 4: Apply
 
-The configurator writes override YAML files to `~/.claude/lineup/agents/`, never modifying the plugin's agent `.md` files. This means agent instructions always come from the plugin and benefit from upstream improvements.
+The configurator writes override YAML files to the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode), never modifying the plugin's agent `.md` files. This means agent instructions always come from the plugin and benefit from upstream improvements.
 
 ## Step 5: Confirm
 
@@ -155,9 +155,13 @@ Memory controls where agents store persistent knowledge across sessions:
 
 ## How customizations persist
 
-The configurator saves your changes to `~/.claude/lineup/agents/` as small YAML
-override files. These files live outside the plugin directory, so they survive
-plugin updates.
+The configurator saves your changes as small YAML override files to the host override directory:
+
+- Claude: `~/.claude/lineup/agents/`
+- Codex: `~/.codex/lineup/agents/`
+- OpenCode: `~/.config/opencode/lineup/agents/`
+
+These files live outside the plugin directory, so they survive plugin updates.
 
 Each override file contains only the fields you changed:
 

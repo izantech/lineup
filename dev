@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PKG="@izantech/lineup-cli"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+die() { echo -e "${RED}error:${NC} $1" >&2; exit 1; }
+
+usage() {
+    cat <<EOF
+${BOLD}Lineup Dev Script${NC}
+
+Usage: ./dev <command> [args...]
+
+${BOLD}Install:${NC}
+  install local           Build from source and install CLI + all host skills
+  install remote          Install latest version from npm
+  install clean           Remove CLI and host skills
+  install clean --purge   Also remove custom agent config and memory
+
+${BOLD}Build:${NC}
+  build                   Build CLI
+  typecheck               Run TypeScript type checks
+  test                    Run test suite
+  check                   Run all checks (typecheck, test, schema, generate, build)
+
+${BOLD}Docs:${NC}
+  docs                    Start VitePress dev server
+  docs build              Build docs for production
+  docs preview            Preview production docs build
+
+${BOLD}Other:${NC}
+  setup                   Install dependencies
+  help                    Show this help message
+EOF
+}
+
+install_local() {
+    echo -e "${BOLD}Uninstalling remote CLI (keeping config)...${NC}"
+    npm uninstall -g "$PKG" 2>/dev/null || true
+    lineup uninstall --host all --yes 2>/dev/null || true
+
+    echo -e "${BOLD}Building CLI from source...${NC}"
+    npm --prefix "$ROOT_DIR/cli" run build
+
+    echo -e "${BOLD}Installing CLI globally from local build...${NC}"
+    npm install -g "$ROOT_DIR/cli"
+
+    echo -e "${BOLD}Installing host skills from source...${NC}"
+    lineup install --host all --from-dir "$ROOT_DIR" --yes
+
+    echo -e "\n${GREEN}Done (local). Version: $(lineup --cli-version)${NC}"
+}
+
+install_remote() {
+    echo -e "${BOLD}Uninstalling local CLI (keeping config)...${NC}"
+    npm uninstall -g "$PKG" 2>/dev/null || true
+    lineup uninstall --host all --yes 2>/dev/null || true
+
+    echo -e "${BOLD}Installing latest CLI from npm...${NC}"
+    npm install -g "$PKG@latest"
+
+    echo -e "${BOLD}Installing host skills...${NC}"
+    lineup install --host all --yes
+
+    echo -e "\n${GREEN}Done (remote). Version: $(lineup --cli-version)${NC}"
+}
+
+install_clean() {
+    local purge_flag=""
+    [[ "${1:-}" == "--purge" ]] && purge_flag="--purge"
+
+    echo -e "${BOLD}Uninstalling host skills${purge_flag:+ and purging config}...${NC}"
+    lineup uninstall --host all --yes $purge_flag 2>/dev/null || true
+
+    echo -e "${BOLD}Uninstalling CLI...${NC}"
+    npm uninstall -g "$PKG" 2>/dev/null || true
+
+    echo -e "\n${GREEN}Done (clean).${NC}"
+}
+
+run_build() {
+    echo -e "${BOLD}Building CLI...${NC}"
+    npm --prefix "$ROOT_DIR/cli" run build
+    echo -e "${GREEN}done${NC}"
+}
+
+run_typecheck() {
+    echo -e "${BOLD}Running typecheck...${NC}"
+    npm --prefix "$ROOT_DIR/cli" run typecheck
+    echo -e "${GREEN}done${NC}"
+}
+
+run_test() {
+    echo -e "${BOLD}Running tests...${NC}"
+    npm --prefix "$ROOT_DIR/cli" test
+    echo -e "${GREEN}done${NC}"
+}
+
+run_check() {
+    echo -e "${BOLD}Running all checks...${NC}\n"
+    npm --prefix "$ROOT_DIR/cli" run typecheck
+    npm --prefix "$ROOT_DIR/cli" test
+    npm --prefix "$ROOT_DIR/cli" run schema:check
+    npm --prefix "$ROOT_DIR/cli" run generate:check
+    npm --prefix "$ROOT_DIR/cli" run build
+    echo -e "\n${GREEN}All checks passed${NC}"
+}
+
+run_setup() {
+    echo -e "${BOLD}Installing CLI dependencies...${NC}"
+    npm --prefix "$ROOT_DIR/cli" install
+    echo -e "${BOLD}Installing docs dependencies...${NC}"
+    npm --prefix "$ROOT_DIR/docs" install
+    echo -e "\n${GREEN}Setup complete${NC}"
+}
+
+run_docs() {
+    local subcmd="${1:-dev}"
+    case "$subcmd" in
+        dev)     cd "$ROOT_DIR/docs" && npx vitepress dev ;;
+        build)   cd "$ROOT_DIR/docs" && npx vitepress build ;;
+        preview) cd "$ROOT_DIR/docs" && npx vitepress preview ;;
+        *)       die "unknown docs command '$subcmd' — use dev, build, or preview" ;;
+    esac
+}
+
+main() {
+    local command="${1:-help}"
+    shift || true
+
+    case "$command" in
+        install)
+            local subcmd="${1:-}"
+            shift || true
+            case "$subcmd" in
+                local)  install_local ;;
+                remote) install_remote ;;
+                clean)  install_clean "$@" ;;
+                *)      die "unknown install command '$subcmd' — use local, remote, or clean" ;;
+            esac
+            ;;
+        build)     run_build ;;
+        typecheck) run_typecheck ;;
+        test)      run_test ;;
+        check)     run_check ;;
+        docs)      run_docs "$@" ;;
+        setup)     run_setup ;;
+        help)      usage ;;
+        *)         die "unknown command '$command' — run ./dev help" ;;
+    esac
+}
+
+main "$@"

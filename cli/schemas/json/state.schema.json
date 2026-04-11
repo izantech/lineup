@@ -23,6 +23,9 @@
         },
         "codex": {
           "$ref": "#/$defs/hostState"
+        },
+        "opencode": {
+          "$ref": "#/$defs/hostState"
         }
       }
     }

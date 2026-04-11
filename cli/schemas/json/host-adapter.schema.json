@@ -8,7 +8,7 @@
   "properties": {
     "host": {
       "type": "string",
-      "enum": ["claude", "codex", "gemini"]
+      "enum": ["claude", "codex", "gemini", "opencode"]
     },
     "vars": {
       "type": "object",

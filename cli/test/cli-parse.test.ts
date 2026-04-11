@@ -44,6 +44,20 @@ describe("CLI command parsing", () => {
     );
   });
 
+  it("parses install options for opencode", async () => {
+    const program = buildProgram(handlers);
+    await program.parseAsync(["install", "--host", "opencode", "--yes"], { from: "user" });
+
+    expect(handlers.install).toHaveBeenCalledTimes(1);
+    expect(handlers.install).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "opencode",
+        yes: true
+      }),
+      expect.anything()
+    );
+  });
+
   it("parses update options", async () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["update", "--host", "all", "--version", "latest", "--yes"], {
@@ -84,6 +98,18 @@ describe("CLI command parsing", () => {
       expect.objectContaining({
         host: "all",
         json: true
+      }),
+      expect.anything()
+    );
+  });
+
+  it("parses status options for opencode", async () => {
+    const program = buildProgram(handlers);
+    await program.parseAsync(["status", "--host", "opencode"], { from: "user" });
+
+    expect(handlers.status).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "opencode"
       }),
       expect.anything()
     );

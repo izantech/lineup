@@ -53,7 +53,7 @@ Interactively customize agent settings. Walks you through changing models, tools
 /lineup:configure
 ```
 
-The configurator shows current settings, asks what you want to change, previews the result, and writes override files in `~/.claude/lineup/agents/` (or host equivalent). See [Customize Agents](/guides/customize-agents) for a detailed walkthrough.
+The configurator shows current settings, asks what you want to change, previews the result, and writes override files to the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode). See [Customize Agents](/guides/customize-agents) for a detailed walkthrough.
 
 ### `/lineup:explain`
 

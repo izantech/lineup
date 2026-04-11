@@ -35,10 +35,11 @@ export async function promptHostSelection(): Promise<HostName[]> {
     output.write("Select host(s):\n");
     output.write("  1. claude\n");
     output.write("  2. codex\n");
-    output.write("  3. all\n");
+    output.write("  3. opencode\n");
+    output.write("  4. all\n");
 
     while (true) {
-      const answer = await rl.question("Enter selection [1-3]: ");
+      const answer = await rl.question("Enter selection [1-4]: ");
       const normalized = answer.trim().toLowerCase();
       if (normalized === "1" || normalized === "claude") {
         return ["claude"];
@@ -46,10 +47,13 @@ export async function promptHostSelection(): Promise<HostName[]> {
       if (normalized === "2" || normalized === "codex") {
         return ["codex"];
       }
-      if (normalized === "3" || normalized === "all") {
-        return ["claude", "codex"];
+      if (normalized === "3" || normalized === "opencode") {
+        return ["opencode"];
       }
-      output.write("Invalid selection. Choose 1, 2, or 3.\n");
+      if (normalized === "4" || normalized === "all") {
+        return ["claude", "codex", "opencode"];
+      }
+      output.write("Invalid selection. Choose 1, 2, 3, or 4.\n");
     }
   } finally {
     rl.close();
@@ -87,7 +91,7 @@ export async function promptUninstallPlan(hosts: HostName[]): Promise<{ proceed:
   }
 
   const purge = await promptConfirm(
-    "Also purge Lineup data (~/.claude/lineup/agents, ~/.codex/lineup/agents, ~/.codex/lineup/memory)?",
+    "Also purge Lineup data (~/.claude/lineup/agents, ~/.codex/lineup/agents, ~/.codex/lineup/memory, ~/.config/opencode/lineup)?",
     false
   );
 

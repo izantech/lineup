@@ -179,6 +179,7 @@ function validateExtractedSource(sourceRoot: string): void {
     ".lineup-core/skills/kick-off/core.md",
     ".lineup-core/hosts/claude.json",
     ".lineup-core/hosts/codex.json",
+    ".lineup-core/hosts/opencode.json",
     "agents/researcher.md",
     "templates/tactic.yaml"
   ];
