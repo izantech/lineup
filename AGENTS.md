@@ -36,6 +36,11 @@ Lineup avoids prompt drift by keeping one canonical source and generating host a
 
 ```
 .lineup-core/skills/**        → Canonical workflow templates (source of truth)
+  kick-off/core.md            → Orchestrator core: triage, agent spawning, context flow, rules
+  kick-off/init.core.md       → Initialization: overrides, memory migration, tactics, teams
+  kick-off/stages-1-3.core.md → Stages 1-3 (Clarify, Research, Gate) + effort mapping
+  kick-off/stages-4-5.core.md → Stages 4-5 (Plan, Implement) + stage result caching
+  kick-off/stages-6-7.core.md → Stages 6-7 (Verify, Document) + cleanup + ephemeral lifecycle
 .lineup-core/hosts/*.json     → Host adapter maps (claude, codex)
 agents/*.md                   → Shared agent definitions
 tactics/*.yaml                → Built-in tactics
@@ -70,7 +75,36 @@ Stage 0 (Triage) produces a lightweight assessment that drives downstream behavi
 - **Research scoping**: Researchers receive concrete search targets (directories, file patterns, questions) from the triage assessment instead of deriving scope from scratch.
 - **Conditional approach analysis**: Simple tasks get 1 approach in the Plan stage (no multi-approach comparison); moderate/complex tasks get 2-3.
 - **Parallel architects**: When 2+ independent areas are detected, separate architect agents spawn in parallel. The orchestrator merges their outputs into a single master plan.
-- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages.
+- **Effort-based model selection**: Triage complexity drives model assignment per agent role (haiku/sonnet/opus). User overrides act as a floor — they can upgrade but not downgrade below the effort-assigned level.
+- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages. Snapshots exceeding ~2 KB are compressed to key findings with file path references.
+
+### Staged Prompt Loading
+
+The kick-off orchestrator prompt is split into on-demand files to reduce upfront token cost:
+
+- `core.md` (SKILL.md) loads at startup: context flow, agent spawning, triage, pipeline tiers, rules
+- `stages-1-3.core.md` (STAGES-1-3.md) loads when entering Stage 1
+- `stages-4-5.core.md` (STAGES-4-5.md) loads when entering Stage 4
+- `stages-6-7.core.md` (STAGES-6-7.md) loads when entering Stage 6
+
+Each stage file is self-contained — the orchestrator reads it before executing that stage group.
+
+### Stage Result Caching
+
+Stage outputs can be cached to `.lineup/.cache/<stage>-<hash>.yaml` for re-run and rollback:
+
+- Cache key: SHA-256 of (task prompt + triage assessment), first 12 hex chars
+- On re-run with matching hash, the orchestrator offers to skip the stage
+- `--from-stage N` restarts execution at stage N using cached upstream outputs
+- Cache files are ephemeral — cleaned up by Pipeline Cleanup
+
+### Transient File Lifecycle
+
+Large intermediate outputs are written to `.lineup/.ephemeral/` instead of passed inline:
+
+- Downstream agents receive file path references (e.g., "Read `.lineup/.ephemeral/research-auth.yaml`")
+- Cleanup runs after the reviewer finishes (Stage 6) and again in Pipeline Cleanup
+- Never delete transient files before the reviewer finishes
 
 ### Agent Definitions (`agents/*.md`)
 

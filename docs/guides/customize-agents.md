@@ -109,11 +109,13 @@ Model selection is a cost-vs-quality tradeoff:
 | **Sonnet** | Moderate | Strong general reasoning | Good balance when cost matters |
 | **Opus** | Highest | Best reasoning | Planning, implementation, review -- high-stakes outputs |
 
-The defaults (Haiku for researcher, Opus for everything else) are a good starting point. Consider changing them when:
+The frontmatter defaults (Haiku for researcher, Opus for others) are the baseline, but the orchestrator dynamically selects models based on triage complexity via [effort-based model selection](/concepts/agents#effort-based-model-selection). For example, a complex task automatically upgrades architects to Opus and researchers to Sonnet.
 
-- **Cost is a concern:** Downgrade architects or reviewers to Sonnet. They'll still produce good output for most tasks.
-- **Speed matters more than depth:** Switch all agents to Sonnet for faster pipeline runs.
-- **Research quality matters:** Upgrade the researcher to Sonnet or Opus for tasks where deep code analysis is critical.
+Your `/lineup:configure` overrides act as a **floor** -- the orchestrator never uses a model lower than your override, but may use a higher one when effort requires it. Consider setting overrides when:
+
+- **Cost is a concern:** Set a Sonnet floor for agents that effort might upgrade to Opus. For simple tasks, effort will keep them on a lighter model anyway.
+- **Quality is always critical:** Set an Opus floor for specific agents to guarantee they never run below Opus, regardless of complexity.
+- **Speed matters more than depth:** Set all agents to Haiku. Effort will still upgrade them for moderate/complex tasks, but simple tasks stay fast.
 
 ## How to add or replace tools
 

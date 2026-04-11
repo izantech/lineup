@@ -1,28 +1,41 @@
 # Agents
 
-Lineup uses specialized subagents for different stages of the pipeline. Each agent has a specific role, a curated set of tools, and a model chosen to balance cost and capability.
+Lineup uses specialized subagents for different stages of the pipeline. Each agent has a specific role, a curated set of tools, and a model selected dynamically based on task complexity.
 
 ## Agent roles
 
-| Role | Model | Tools | Purpose |
-| ---- | ----- | ----- | ------- |
+| Role | Default Model | Tools | Purpose |
+| ---- | ------------- | ----- | ------- |
 | **Orchestrator** | -- | All | Coordinates the pipeline, delegates work, interacts with the user |
 | **Researcher** | Haiku | Read-only + Web | Explores code, reads docs, gathers context |
-| **Architect** | Opus | Read-only + Write | Synthesizes findings into actionable plans |
-| **Developer** | Opus | All | Implements the approved plan |
-| **Reviewer** | Opus | Read-only + Bash | Runs tests, reviews diffs, validates work |
+| **Architect** | Sonnet | Read-only + Write | Synthesizes findings into actionable plans |
+| **Developer** | Haiku | All | Implements the approved plan |
+| **Reviewer** | Sonnet | Read-only + Bash | Runs tests, reviews diffs, validates work |
 | **Documenter** | Opus | Read-only + Write + Web | Generates project documentation |
 | **Teacher** | Opus | Read-only + Web | Explains codebase components |
 
-The orchestrator is the main Claude Code session itself -- it's not a subagent file, but the top-level coordinator that delegates to the others.
+The "Default Model" column shows the model used for simple-complexity tasks. The orchestrator is the main Claude Code session itself -- it's not a subagent file, but the top-level coordinator that delegates to the others.
 
-## Why different models?
+## Effort-based model selection
 
-The researcher uses **Haiku** because its job is high-volume, read-only exploration. It needs to scan many files quickly to gather context. Haiku is fast and cost-effective for this kind of work -- you don't need the most capable model to read and summarize code.
+Models are not fixed per agent. The orchestrator selects a model for each agent based on the triage complexity classification from Stage 0:
 
-All other agents use **Opus** because their tasks require deeper reasoning: planning architecture, writing correct code, catching subtle bugs, producing clear explanations. These are high-stakes outputs where quality matters more than speed.
+| Role | simple | moderate | complex |
+| ---- | ------ | -------- | ------- |
+| **Researcher** | Haiku | Sonnet | Sonnet |
+| **Architect** | Sonnet | Sonnet | Opus |
+| **Developer** | Haiku | Haiku | Sonnet |
+| **Reviewer** | Sonnet | Sonnet | Sonnet |
 
-You can change any agent's model with `/lineup:configure`. See [Customize Agents](/guides/customize-agents) for details.
+This means a simple bug fix runs researchers on Haiku (fast and cheap), while a complex multi-module refactor upgrades architects to Opus (deeper reasoning for harder planning).
+
+Agents not in the effort mapping table (documenter, teacher) use their frontmatter default model regardless of complexity.
+
+### Override interaction
+
+User overrides (set via `/lineup:configure`) act as a **floor**, not a ceiling. If you override an agent's model to Opus, it will always use at least Opus -- even for simple tasks. If you override to Haiku but effort assigns Sonnet, the agent uses Sonnet (effort requirements take precedence).
+
+See [Customize Agents](/guides/customize-agents) for details on setting model overrides.
 
 ## Tool assignments
 

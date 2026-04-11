@@ -22,8 +22,8 @@ The main entry point for all Lineup workflows.
 ### Syntax
 
 ```bash
-/lineup:kick-off [task-description | tactic-name]
-$lineup-kick-off [task-description | tactic-name]
+/lineup:kick-off [task-description | tactic-name] [--from-stage N]
+$lineup-kick-off [task-description | tactic-name] [--from-stage N]
 ```
 
 ### Arguments
@@ -32,8 +32,11 @@ $lineup-kick-off [task-description | tactic-name]
 | -------- | -------- | ----------- |
 | `task-description` | No | Free-text description of the work to do |
 | `tactic-name` | No | Name of a tactic to execute (kebab-case, matches a `.yaml` filename) |
+| `--from-stage N` | No | Restart the pipeline from stage N, loading cached outputs for stages 0 through N-1 |
 
 If no argument is provided, the skill enters menu mode.
+
+When `--from-stage N` is used, the orchestrator loads cached stage outputs from `.lineup/.cache/` for all stages before N and begins execution at stage N. If any required cache file is missing, the command reports which stage is missing and suggests a lower restart point.
 
 ### Behavior
 

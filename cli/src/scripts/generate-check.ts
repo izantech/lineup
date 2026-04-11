@@ -31,6 +31,9 @@ function assertRequiredOutputs(sourceRoot: string): void {
   const expectedClaude = new Set<string>([
     `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/SKILL.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/INIT.md`,
+    `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/STAGES-1-3.md`,
+    `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/STAGES-4-5.md`,
+    `skills/${claudeAdapter.vars.SKILL_NAME_KICKOFF}/STAGES-6-7.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_CONFIGURE}/SKILL.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_EXPLAIN}/SKILL.md`,
     `skills/${claudeAdapter.vars.SKILL_NAME_PLAYBOOK}/SKILL.md`

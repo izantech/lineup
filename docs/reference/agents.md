@@ -59,7 +59,7 @@ memory: project
 
 ## Default agent configurations
 
-These are the factory defaults. Use `/lineup:configure` to customize, or reset to these values at any time. See [Customize Agents](/guides/customize-agents) for a walkthrough.
+These are the factory defaults stored in agent frontmatter. At runtime, the orchestrator may override the model field via [effort-based model selection](/concepts/agents#effort-based-model-selection) based on triage complexity. Use `/lineup:configure` to customize, or reset to these values at any time. See [Customize Agents](/guides/customize-agents) for a walkthrough.
 
 ### Researcher
 
