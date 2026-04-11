@@ -21,18 +21,13 @@ Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subage
 
 ### Ollama-assisted research
 
-When `OLLAMA_AVAILABLE = true`, augment each researcher spawn as follows:
+When `OLLAMA_AVAILABLE = true`, augment each researcher spawn:
 
 - Append `mcp__ollama__ollama_chat, mcp__ollama__ollama_generate, mcp__ollama__ollama_web_search, mcp__ollama__ollama_web_fetch` to the researcher's
   `tools` list in the Agent spawn call.
-- Add the following to each researcher's spawn prompt:
-
-  "You have access to Ollama tools (`mcp__ollama__ollama_chat`,
-  `mcp__ollama__ollama_generate`) for delegating text summarization and context
-  gathering to a local model (use the model name from `OLLAMA_MODEL` in working context). Use these for: summarizing large
-  documents, pre-digesting verbose documentation, gathering context from long files.
-  Do NOT use Ollama for: code analysis, architectural decisions, generating code, or
-  any task requiring reasoning about code structure."
+- Read `{{AGENTS_DIR}}researcher-ollama.md` and append its full contents to the
+  researcher's spawn prompt (after a `---` separator). This file contains all
+  Ollama-specific instructions and is only included when Ollama is available.
 
 - **Use triage search targets**: The triage assessment provides specific directories,
   file patterns, and questions per affected area. Use these as the basis for each
@@ -49,6 +44,9 @@ When `OLLAMA_AVAILABLE = true`, augment each researcher spawn as follows:
 - **Output:** collected findings from all researchers, summarized for the next stage.
   If a researcher's output is verbose, extract the key findings (files, patterns,
   constraints) and discard raw file contents before passing to the next stage.
+  Apply **Snapshot Streaming** from `SKILL.md` — if research findings exceed 500 bytes,
+  write them to `.lineup/.ephemeral/research-<area>.yaml` and pass a file reference
+  to the Clarification Gate and Plan stages instead of embedding inline.
 
 ## Stage 3 -- Clarification Gate
 

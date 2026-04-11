@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental memory migration -- global agent memory files over 50 KB are read incrementally by section headers instead of loading the full file into context
 - Ollama integration (opt-in) -- researcher agents can delegate text summarization and context gathering to a local Ollama model; enabled via `/lineup:configure` which writes `~/.claude/lineup/ollama.yaml`; requires `rawveg/ollama-mcp` MCP server; Ollama is never used for code analysis or generation
 - Digest skill (`/lineup:digest`) -- standalone codebase overview generator that spawns parallel researchers, structures findings via an architect, and writes a regenerable `DIGEST.md`; supports Ollama-assisted research when enabled
+- Lazy agent loading -- orchestrator only reads agent definition files for roles the current pipeline tier will actually spawn; reduces upfront context from all 6 agents (~22 KB) to only the roles needed (as little as ~8 KB for Lightweight tier)
+- Snapshot streaming -- inter-stage snapshots exceeding 500 bytes are written to `.lineup/.ephemeral/` and passed as file references instead of inline content, keeping the orchestrator conversation lean
+- Conditional Ollama appendices -- researcher and architect Ollama instructions extracted into separate `*-ollama.md` files that are only appended to spawn prompts when `OLLAMA_AVAILABLE = true`; saves ~3.6 KB per agent spawn when Ollama is disabled
 
 ### Fixed
 - Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics

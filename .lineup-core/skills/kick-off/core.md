@@ -51,6 +51,26 @@ contents. Retain: structured lists, file paths, function/class names, one-line
 summaries. Keep under 2 KB." Replace the snapshot content with the Ollama output
 before passing it to the next agent.
 
+### Snapshot streaming
+
+When a snapshot exceeds **500 bytes**, write it to `.lineup/.ephemeral/` and pass
+a file path reference to the downstream agent instead of embedding it inline.
+This keeps the orchestrator's conversation lean and lets each agent read only
+what it needs.
+
+File naming: `snapshot-<from-stage>-<to-stage>-<hash>.yaml` (e.g.,
+`snapshot-2-3-a1b2c3.yaml`). The hash is the first 6 characters of the SHA-256
+of the snapshot content.
+
+In the downstream agent's prompt, replace the inline snapshot with:
+
+"Read `.lineup/.ephemeral/snapshot-<from>-<to>-<hash>.yaml` for the <stage name>
+output you need as input."
+
+Do **not** use file references for snapshots under 500 bytes — inline is cheaper
+for small payloads (avoids an extra file read). Apply this threshold *after*
+compression (if applicable).
+
 ---
 
 ## Agent Spawning
@@ -147,6 +167,28 @@ Before starting the pipeline stages, run the initialization sequence defined in
    verify MCP server availability, set `OLLAMA_AVAILABLE` flag.
 
 Read and follow `{{KICKOFF_INIT_PATH}}` before proceeding to Stage 0.
+
+## Lazy Agent Loading
+
+Do not load all agent definitions upfront. Only read `{{AGENTS_DIR}}<role>.md`
+for roles that the current pipeline tier will actually spawn:
+
+| Pipeline Tier | Agents needed |
+|---------------|---------------|
+| Full (Stages 0-7) | researcher, architect, developer, reviewer, documenter |
+| Full (Stage 7 skipped) | researcher, architect, developer, reviewer |
+| Lightweight (0, 4-6) | architect, developer, reviewer |
+| Lightweight + Document | architect, developer, reviewer, documenter |
+| Direct | none (orchestrator handles directly) |
+| Tactic | only agents listed in the tactic's stages |
+
+For **team mode**, this affects the Team Preamble — only write agent instruction
+bodies for roles in the "needed" set. For **subagent mode**, simply do not read
+agent files until the stage that spawns them.
+
+Read each agent file at the **latest responsible moment**: when you are about to
+spawn that role for the first time, not before. This keeps the upfront context
+as small as possible.
 
 ---
 

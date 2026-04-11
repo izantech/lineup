@@ -7,6 +7,10 @@ Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subage
 
 - Run tests, review the diff against the plan, check for regressions.
 - Flag any issues found -- do not silently pass a broken implementation.
+- Apply **Snapshot Streaming** from `SKILL.md` — if the implementation report exceeds
+  500 bytes, the developer should have already written it to
+  `.lineup/.ephemeral/implementation-<hash>.yaml`. Pass a file reference to the
+  reviewer along with the inline acceptance criteria from the plan.
 - **Artifact cleanup**: After the reviewer completes, run `git status` to identify untracked
   or modified files not produced by Stage 5 implementation. Delete any ephemeral artifacts
   found this way — files in `.lineup/.ephemeral/`, `.lineup/.cache/`, YAML reports, research

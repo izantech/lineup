@@ -18,6 +18,16 @@ Include the complexity classification in each architect's spawn prompt:
   produce **2-3 approaches** with trade-offs (current behavior). The architect chooses
   2 or 3 based on how many meaningfully different strategies exist.
 
+### Ollama-assisted planning
+
+When `OLLAMA_AVAILABLE = true`, augment each architect spawn:
+
+- Append `mcp__ollama__ollama_chat, mcp__ollama__ollama_generate` to the architect's
+  `tools` list in the Agent spawn call.
+- Read `{{AGENTS_DIR}}architect-ollama.md` and append its full contents to the
+  architect's spawn prompt (after a `---` separator). This file contains all
+  Ollama-specific instructions and is only included when Ollama is available.
+
 ### Parallel architects
 
 If the triage assessment identified 2+ `independent_areas`:
@@ -49,6 +59,11 @@ If only one area exists, spawn a single architect (current behavior).
 
 - Present the (merged or single) plan to the user and **wait for explicit approval**
   before proceeding.
+- After approval, apply **Snapshot Streaming** from `SKILL.md` — if the plan YAML
+  exceeds 500 bytes, write it to `.lineup/.ephemeral/plan-<hash>.yaml` and pass a
+  file reference to the developer and reviewer instead of embedding inline. The
+  acceptance criteria section (for the reviewer) can still be passed inline if it
+  is under 500 bytes.
 - **Output:** an approved implementation plan.
 
 ## Stage 5 -- Implement

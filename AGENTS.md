@@ -108,6 +108,13 @@ Large intermediate outputs are written to `.lineup/.ephemeral/` instead of passe
 - Cleanup runs after the reviewer finishes (Stage 6) and again in Pipeline Cleanup
 - Never delete transient files before the reviewer finishes
 
+### Snapshot Streaming
+
+Inter-stage context snapshots exceeding 500 bytes are written to `.lineup/.ephemeral/`
+as `snapshot-<from>-<to>-<hash>.yaml`. Downstream agents receive a file reference
+instead of inline content. Snapshots under 500 bytes remain inline (cheaper than an
+extra file read). The threshold applies after compression.
+
 ### Agent Definitions (`agents/*.md`)
 
 Each agent file has YAML frontmatter:
@@ -133,6 +140,30 @@ Frontmatter fields:
 - `tools`: comma-space separated list
 - `model`: `haiku`, `sonnet`, or `opus`
 - `memory`: `user`, `project`, or `local`
+
+### Conditional Ollama Appendices (`agents/*-ollama.md`)
+
+Agents with Ollama integration (researcher, architect) have a separate `*-ollama.md`
+appendix file containing all Ollama-specific instructions. The orchestrator appends
+these to the spawn prompt only when `OLLAMA_AVAILABLE = true`, saving ~3.6 KB per
+agent spawn when Ollama is disabled.
+
+### Lazy Agent Loading
+
+The orchestrator only reads agent definition files for roles the current pipeline
+tier will actually spawn:
+
+| Tier | Agents loaded |
+|------|---------------|
+| Full | researcher, architect, developer, reviewer, documenter |
+| Full (no doc) | researcher, architect, developer, reviewer |
+| Lightweight | architect, developer, reviewer |
+| Direct | none |
+| Tactic | only agents in the tactic's stages |
+
+Agent files are read at the latest responsible moment (when spawning that role),
+not upfront. In Teams mode, the Team Preamble only writes instruction bodies for
+the needed roles.
 
 ### Claude Code Teams Mode
 

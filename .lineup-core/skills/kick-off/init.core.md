@@ -312,16 +312,21 @@ and `name` parameters for the Agent tool.
 After the team is created (`TEAMS_MODE = true`), write a combined agent instruction
 file to reduce per-spawn token cost:
 
-1. For each agent role used in the pipeline (`researcher`, `architect`, `developer`,
-   `reviewer`, `documenter`), read `{{AGENTS_DIR}}<role>.md`.
-2. Extract the body (everything after the closing `---` of the frontmatter).
-3. Write all bodies to `.lineup/.ephemeral/agent-instructions.md`, separated by
+1. Determine which agents are needed using the **Lazy Agent Loading** table in
+   `SKILL.md`. Only include roles that the current pipeline tier will actually spawn.
+2. For each needed role, read `{{AGENTS_DIR}}<role>.md`.
+3. Extract the body (everything after the closing `---` of the frontmatter).
+4. Write all bodies to `.lineup/.ephemeral/agent-instructions.md`, separated by
    `## <role>` headers.
-4. This file is referenced by team-mode spawn prompts instead of embedding the full
+5. This file is referenced by team-mode spawn prompts instead of embedding the full
    body inline. See the Team mode section in the core pipeline definition.
 
 If `.lineup/.ephemeral/` does not exist, create it. This file is cleaned up by
 Pipeline Cleanup like all other ephemeral artifacts.
+
+If a later stage needs an agent that was not in the initial set (e.g., Stage 7
+triggers documenter but the team preamble only had 4 roles), append that agent's
+body section to `.lineup/.ephemeral/agent-instructions.md` at that point.
 
 ### Team teardown
 
