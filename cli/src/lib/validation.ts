@@ -8,7 +8,7 @@ import { parseDocument } from "yaml";
 
 import { CliError } from "./errors";
 import { packageRoot } from "./paths";
-import type { InstallerState, ReleaseManifest } from "./types";
+import type { InstallerState, ReleaseManifest, WorkflowDefinition } from "./types";
 
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
@@ -109,6 +109,12 @@ export function parseRestrictedYaml(content: string, source: string): unknown {
 export function validateTacticYaml(content: string, source: string): void {
   const parsed = parseRestrictedYaml(content, source);
   assertValid("yaml/tactic.schema.json", parsed, `Tactic YAML ${source}`);
+}
+
+export function parseWorkflowYaml(raw: string, source: string): WorkflowDefinition {
+  const parsed = parseRestrictedYaml(raw, source);
+  assertValid("yaml/workflow.schema.json", parsed, `Workflow YAML ${source}`);
+  return parsed as WorkflowDefinition;
 }
 
 const AGENT_SCHEMA_MAP = {

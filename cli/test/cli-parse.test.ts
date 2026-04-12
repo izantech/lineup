@@ -2,12 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildProgram } from "../src/cli";
 
+function createMockHandlers() {
+  return {
+    install: vi.fn(async () => undefined),
+    update: vi.fn(async () => undefined),
+    uninstall: vi.fn(async () => undefined),
+    status: vi.fn(async () => undefined),
+    run: vi.fn(async () => undefined),
+  };
+}
+
 describe("CLI command parsing", () => {
   const handlers = {
     install: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined),
     uninstall: vi.fn(async () => undefined),
-    status: vi.fn(async () => undefined)
+    status: vi.fn(async () => undefined),
+    run: vi.fn(async () => undefined),
   };
 
   beforeEach(() => {
@@ -110,6 +121,63 @@ describe("CLI command parsing", () => {
     expect(handlers.status).toHaveBeenCalledWith(
       expect.objectContaining({
         host: "opencode"
+      }),
+      expect.anything()
+    );
+  });
+});
+
+describe("run command", () => {
+  it("parses --dry-run flag", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "--dry-run"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
+      expect.anything()
+    );
+  });
+
+  it("parses --workflow option", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "--workflow", "my.yaml"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ workflow: "my.yaml" }),
+      expect.anything()
+    );
+  });
+
+  it("parses --tactic option", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "--tactic", "quick-fix"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ tactic: "quick-fix" }),
+      expect.anything()
+    );
+  });
+
+  it("parses --from-stage option", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "--from-stage", "plan"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ fromStage: "plan" }),
+      expect.anything()
+    );
+  });
+
+  it("parses all options together", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "--workflow", "w.yaml", "--dry-run", "--force-rerun", "--json"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflow: "w.yaml",
+        dryRun: true,
+        forceRerun: true,
+        json: true,
       }),
       expect.anything()
     );

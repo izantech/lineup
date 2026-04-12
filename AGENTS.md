@@ -29,6 +29,7 @@ CLI runtime:
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--json]`
+- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--json]`
 
 ## Architecture
 

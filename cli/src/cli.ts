@@ -5,6 +5,7 @@ import process from "node:process";
 import { Command } from "commander";
 
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
+import { runRunCommand, type RunCommandOptions } from "./commands/run";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
 import { runUpdateCommand, type UpdateCommandOptions } from "./commands/update";
@@ -16,6 +17,7 @@ export type CliHandlers = {
   update: (options: UpdateCommandOptions) => Promise<void>;
   uninstall: (options: UninstallCommandOptions) => Promise<void>;
   status: (options: StatusCommandOptions) => Promise<void>;
+  run: (options: RunCommandOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -31,6 +33,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     update: runUpdateCommand,
     uninstall: runUninstallCommand,
     status: runStatusCommand,
+    run: runRunCommand,
     ...handlers
   };
 
@@ -74,6 +77,17 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--host <host>", "Target host(s): claude|codex|opencode|all")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.status);
+
+  program
+    .command("run")
+    .description("Run a Lineup pipeline via Task Foundry")
+    .option("--workflow <path>", "Path to workflow YAML", undefined)
+    .option("--tactic <name>", "Run a specific tactic", undefined)
+    .option("--from-stage <id>", "Resume from a specific stage", undefined)
+    .option("--dry-run", "Parse and validate without executing", false)
+    .option("--force-rerun", "Ignore cache, re-run all stages", false)
+    .option("--json", "Output state as JSON", false)
+    .action(commandHandlers.run);
 
   return program;
 }

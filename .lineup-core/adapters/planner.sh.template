@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Lineup TF Adapter: Planner (Architect)
+# Reads PlannerInput JSON on stdin, outputs TaskManifest YAML on stdout
+
+SYSTEM_PROMPT=$(cat "{{SYSTEM_PROMPT_PATH}}")
+PAYLOAD="$(cat)"
+
+# {{HOST_INVOKE_COMMAND}} is replaced with the host-specific CLI invocation.
+# Example for Claude:
+#   claude --print --bare --model {{MODEL}} -s "$SYSTEM_PROMPT" "$PAYLOAD"
+{{HOST_INVOKE_COMMAND}}

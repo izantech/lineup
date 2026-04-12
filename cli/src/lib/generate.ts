@@ -20,7 +20,7 @@ export function loadHostAdapter(sourceRoot: string, host: HostName): HostAdapter
   return validateHostAdapter(payload, adapterPath);
 }
 
-function renderTemplate(rawTemplate: string, vars: Record<string, string>, source: string, host: HostName): string {
+export function renderTemplate(rawTemplate: string, vars: Record<string, string>, source: string, host: HostName): string {
   return rawTemplate.replace(/\{\{([A-Z0-9_]+)\}\}/g, (full, token) => {
     if (!(token in vars)) {
       throw new CliError(`Missing template variable '${token}' while rendering ${source} for ${host}.`, {

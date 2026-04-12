@@ -1,3 +1,7 @@
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import type { HostName } from "../lib/constants";
 import { printJson, printTableLine } from "../lib/output";
 import { resolveRequestedHosts } from "../lib/hosts";
@@ -34,5 +38,24 @@ export async function runStatusCommand(options: StatusCommandOptions): Promise<v
     }
     printHostStatus(host, item);
   }
+
+  let tfInstalled = false;
+  let tfVersion: string | null = null;
+  try {
+    execSync("which task-foundry", { stdio: "ignore" });
+    tfInstalled = true;
+    try {
+      tfVersion = execSync("task-foundry --version", { encoding: "utf-8" }).trim();
+    } catch {
+      // version unavailable
+    }
+  } catch {
+    // not installed
+  }
+
+  const tfAdaptersGenerated = existsSync(join(process.cwd(), ".lineup", ".tf-adapters"));
+
+  printTableLine(`Task Foundry: ${tfInstalled ? `installed (${tfVersion})` : "not installed"}`);
+  printTableLine(`TF Adapters: ${tfAdaptersGenerated ? "generated" : "not generated (run lineup install first)"}`);
   printTableLine(`state_file: ${status.state_file}`);
 }

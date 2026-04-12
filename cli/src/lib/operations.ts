@@ -1,5 +1,6 @@
 import { rmSync } from "node:fs";
 import os from "node:os";
+import { join } from "node:path";
 
 import type { HostName } from "./constants";
 import { CliError, asErrorMessage } from "./errors";
@@ -14,6 +15,7 @@ import {
 import { installCodex, statusCodex, uninstallCodex } from "./host-codex";
 import { installOpencode, statusOpencode, uninstallOpencode } from "./host-opencode";
 import { codexHostRoot, lineupStateFile, opencodeHostRoot, purgeTargets } from "./paths";
+import { generateTfAdapters } from "./tf-adapters.js";
 import { isInteractive, promptMigrationConfirm, promptUninstallPlan } from "./prompts";
 import { resolveLocalRelease, resolveRelease } from "./release";
 import { loadState, saveState, updateHostState } from "./state";
@@ -256,6 +258,28 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
           message
         });
       }
+    }
+
+    const tfHost = input.hosts[0];
+    try {
+      const tfOutputDir = join(process.cwd(), ".lineup", ".tf-adapters");
+      const defaultModel = ({ claude: "claude-sonnet-4-6", codex: "codex-mini-latest", opencode: "anthropic/claude-sonnet-4-6" } as Record<HostName, string>)[tfHost] ?? "claude-sonnet-4-6";
+      generateTfAdapters({
+        host: tfHost,
+        adaptersSourceDir: join(release.sourceRoot, ".lineup-core", "adapters"),
+        promptsSourceDir: join(release.sourceRoot, ".lineup-core", "prompts"),
+        outputDir: tfOutputDir,
+        agentsDir: join(release.sourceRoot, "agents"),
+        modelMap: {
+          scope_selector: defaultModel,
+          planner: defaultModel,
+          worker: defaultModel,
+          validator: defaultModel
+        }
+      });
+      console.log("Generated TF adapter scripts in .lineup/.tf-adapters/");
+    } catch {
+      console.warn("Warning: could not generate TF adapter scripts (templates may not be available).");
     }
 
     deps.saveState(state);
