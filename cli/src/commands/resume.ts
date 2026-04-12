@@ -3,11 +3,13 @@ import { execSync } from "node:child_process";
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { runPipeline } from "../lib/run-pipeline.js";
-import { assertPipelineStateFresh, loadPipelineState } from "../lib/state.js";
+import { appendPipelineCompletedStage, assertPipelineStateFresh, loadPipelineState, savePipelineState } from "../lib/state.js";
 
 export type ResumeCommandOptions = {
   runId: string;
   json?: boolean;
+  skipTask?: string;
+  retryFailed?: boolean;
 };
 
 const RESUMABLE_STATUSES = new Set(["failed", "blocked", "canceled"]);
@@ -29,8 +31,24 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   const gitTreeSha = resolveGitTreeSha();
   assertPipelineStateFresh(state, gitTreeSha);
 
+  if (options.skipTask) {
+    const updated = appendPipelineCompletedStage(state, options.skipTask);
+    savePipelineState(updated);
+  }
+
   const completedStages = new Set(state.completed_stages ?? []);
-  const fromStage = state.current_stage ?? findFirstIncompleteStage(completedStages);
+
+  if (options.skipTask) {
+    completedStages.add(options.skipTask);
+  }
+
+  let fromStage: string | null;
+
+  if (options.retryFailed && state.status === "failed" && state.current_stage) {
+    fromStage = state.current_stage;
+  } else {
+    fromStage = state.current_stage ?? findFirstIncompleteStage(completedStages);
+  }
 
   const result = await runPipeline({
     workflow: state.workflow,

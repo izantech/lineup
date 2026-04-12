@@ -42,6 +42,13 @@ CLI runtime:
 - `lineup artifacts show <kind> [--run <id>] [--json]`
 - `lineup artifacts path <kind> [--run <id>]`
 - `lineup artifacts diff <kind> [--from <run-id>] [--to <run-id>] [--json]`
+- `lineup init [--workflow <name>] [--json]`
+- `lineup workflow lint <path> [--json]`
+- `lineup workflow list [--json]`
+- `lineup tactic new <name>`
+- `lineup tactic list [--json]`
+- `lineup approve <run-id> [--json]`
+- `lineup pending [--json]`
 
 ## Architecture
 

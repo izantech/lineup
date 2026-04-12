@@ -4,15 +4,24 @@ import process from "node:process";
 
 import { Command } from "commander";
 
+import { runApproveCommand, type ApproveCommandOptions } from "./commands/approve";
 import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
+import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
+import { runPendingCommand, type PendingCommandOptions } from "./commands/pending";
 import { runResumeCommand, type ResumeCommandOptions } from "./commands/resume";
 import { runRunCommand, type RunCommandOptions } from "./commands/run";
 import { runRunsCommand, type RunsCommandOptions } from "./commands/runs";
 import { runShowCommand, type ShowCommandOptions } from "./commands/show";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
 import { runDoctorCommand, type DoctorCommandOptions } from "./commands/doctor";
+import {
+  runTacticNewCommand,
+  runTacticListCommand,
+  type TacticNewOptions,
+  type TacticListOptions
+} from "./commands/tactic";
 import { runTfGenerateCommand } from "./commands/tf";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
 import { runUpdateCommand, type UpdateCommandOptions } from "./commands/update";
@@ -25,6 +34,12 @@ import {
   type ArtifactsDiffOptions,
   type ArtifactsPathOptions
 } from "./commands/artifacts";
+import {
+  runWorkflowLintCommand,
+  runWorkflowListCommand,
+  type WorkflowLintOptions,
+  type WorkflowListOptions
+} from "./commands/workflow";
 import { CliError, asErrorMessage } from "./lib/errors";
 import { packageRoot } from "./lib/paths";
 import type { TfGenerateOptions } from "./lib/types";
@@ -46,6 +61,13 @@ export type CliHandlers = {
   artifactsShow: (options: ArtifactsShowOptions) => Promise<void>;
   artifactsPath: (options: ArtifactsPathOptions) => Promise<void>;
   artifactsDiff: (options: ArtifactsDiffOptions) => Promise<void>;
+  approve: (options: ApproveCommandOptions) => Promise<void>;
+  pending: (options: PendingCommandOptions) => Promise<void>;
+  init: (options: InitCommandOptions) => Promise<void>;
+  workflowLint: (options: WorkflowLintOptions) => Promise<void>;
+  workflowList: (options: WorkflowListOptions) => Promise<void>;
+  tacticNew: (options: TacticNewOptions) => Promise<void>;
+  tacticList: (options: TacticListOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -73,6 +95,13 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     artifactsShow: runArtifactsShowCommand,
     artifactsPath: runArtifactsPathCommand,
     artifactsDiff: runArtifactsDiffCommand,
+    approve: runApproveCommand,
+    pending: runPendingCommand,
+    init: runInitCommand,
+    workflowLint: runWorkflowLintCommand,
+    workflowList: runWorkflowListCommand,
+    tacticNew: runTacticNewCommand,
+    tacticList: runTacticListCommand,
     ...handlers
   };
 
@@ -125,6 +154,13 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .action(commandHandlers.doctor);
 
   program
+    .command("init")
+    .description("Initialize Lineup project structure")
+    .option("--json", "Emit machine-readable JSON output")
+    .option("--workflow <name>", "Workflow template name", "full-pipeline")
+    .action(commandHandlers.init);
+
+  program
     .command("run")
     .description("Run a Lineup pipeline through the native v3 engine")
     .option("--workflow <path>", "Path to workflow YAML", undefined)
@@ -164,7 +200,23 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .command("resume <run-id>")
     .description("Resume a failed, blocked, or canceled pipeline run")
     .option("--json", "Output state as JSON", false)
-    .action((runId: string, opts: { json?: boolean }) => commandHandlers.resume({ runId, ...opts }));
+    .option("--skip-task <id>", "Skip a blocked task before resuming")
+    .option("--retry-failed", "Retry from the exact failed stage")
+    .action((runId: string, opts: { json?: boolean; skipTask?: string; retryFailed?: boolean }) =>
+      commandHandlers.resume({ runId, ...opts })
+    );
+
+  program
+    .command("approve <run-id>")
+    .description("Approve a blocked pipeline run awaiting approval")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((runId: string, opts: { json?: boolean }) => commandHandlers.approve({ runId, ...opts }));
+
+  program
+    .command("pending")
+    .description("List pipeline runs awaiting approval")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.pending);
 
   program
     .command("cancel <run-id>")
@@ -218,6 +270,35 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .action((kind: string, opts: { from?: string; to?: string; json?: boolean }) =>
       commandHandlers.artifactsDiff({ kind, ...opts })
     );
+
+  const workflow = program.command("workflow").description("Workflow authoring commands");
+
+  workflow
+    .command("lint <path>")
+    .description("Validate a workflow YAML file")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((filePath: string, opts: { json?: boolean }) =>
+      commandHandlers.workflowLint({ path: filePath, ...opts })
+    );
+
+  workflow
+    .command("list")
+    .description("List available workflows")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.workflowList);
+
+  const tactic = program.command("tactic").description("Tactic authoring commands");
+
+  tactic
+    .command("new <name>")
+    .description("Scaffold a new tactic YAML file")
+    .action((name: string) => commandHandlers.tacticNew({ name }));
+
+  tactic
+    .command("list")
+    .description("List available tactics")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.tacticList);
 
   return program;
 }

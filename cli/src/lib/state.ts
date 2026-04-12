@@ -26,6 +26,10 @@ export type PipelineStateRecord = {
   completed_stages?: string[];
   artifact_hashes: PipelineArtifactHashes;
   updated_at: string;
+  approval?: {
+    approved_at: string;
+    approved_by: string;
+  };
   errors?: Array<{
     code: string;
     message: string;

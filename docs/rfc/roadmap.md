@@ -59,9 +59,9 @@ These RFC deltas are now part of the tracked plan:
 | [V3-17](./tasks/v3-17-run-inspection-commands.yaml) | Add run inspection commands (runs, show, logs) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
 | [V3-18](./tasks/v3-18-artifact-commands.yaml) | Add artifact commands (validate, artifacts show/path/diff) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
 | [V3-19](./tasks/v3-19-execution-controls.yaml) | Expose execution controls (--max-parallel, --isolation, --resume, --cancel, --approve-plan) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
-| [V3-20](./tasks/v3-20-lineup-init.yaml) | Add lineup init for project bootstrap | `todo` | `V3-17` | 8 | developer | 2026-04-12 |
-| [V3-21](./tasks/v3-21-workflow-tactic-authoring.yaml) | Add workflow and tactic authoring UX | `todo` | `V3-20` | 8 | developer | 2026-04-12 |
-| [V3-22](./tasks/v3-22-approval-gating-ux.yaml) | Add pause/resume and approval/gating UX | `todo` | `V3-19` | 8 | developer | 2026-04-12 |
+| [V3-20](./tasks/v3-20-lineup-init.yaml) | Add lineup init for project bootstrap | `done` | `V3-17` | 8 | developer | 2026-04-12 |
+| [V3-21](./tasks/v3-21-workflow-tactic-authoring.yaml) | Add workflow and tactic authoring UX | `done` | `V3-20` | 8 | developer | 2026-04-12 |
+| [V3-22](./tasks/v3-22-approval-gating-ux.yaml) | Add pause/resume and approval/gating UX | `done` | `V3-19` | 8 | developer | 2026-04-12 |
 | [V3-23](./tasks/v3-23-external-dogfood-and-hardening.yaml) | Add external-repo dogfood corpus and release hardening | `todo` | `V3-17`, `V3-18`, `V3-19`, `V3-22` | 9 | reviewer | 2026-04-12 |
 | [V3-24](./tasks/v3-24-completion-notifications-polish.yaml) | Add shell completion, notifications, DAG viz, and polish | `todo` | `V3-20`, `V3-21` | 9 | developer | 2026-04-12 |
 

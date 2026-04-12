@@ -77,6 +77,21 @@
       "type": "string",
       "format": "date-time"
     },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_at", "approved_by"],
+      "properties": {
+        "approved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "approved_by": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "errors": {
       "type": "array",
       "items": {
