@@ -2,7 +2,7 @@
 name: researcher
 color: blue
 description: Explores codebases, reads documentation, and gathers context for analysis. Use when you need to understand code structure, find patterns, trace dependencies, or investigate how something works. Can run in parallel with other researchers for independent areas.
-tools: Read, Grep, Glob, LS, WebFetch, WebSearch
+tools: Read, Grep, Glob, LS, WebFetch, WebSearch, Write
 model: haiku
 memory: project
 ---
@@ -85,5 +85,16 @@ Then Read the import sites (not full files) to understand usage patterns.
 Grep: pattern="process\\.env\\." type="ts"    -- find env var usage
 Grep: pattern="config\\." path="src/config"   -- find config access patterns
 ```
+
+## Ephemeral Drafts
+
+You may write intermediate research artifacts to `.lineup/.ephemeral/` when findings
+are too large to pass inline (over ~2 KB). Use the naming convention
+`research-<area>.yaml` for structured findings.
+
+**Constraints:**
+- Only write to `.lineup/.ephemeral/` — never write to any other directory.
+- These files are ephemeral and will be cleaned up by Pipeline Cleanup.
+- Do not write final documentation or code — only intermediate research artifacts.
 
 Refer to AGENTS.md for persistent memory and document output instructions.

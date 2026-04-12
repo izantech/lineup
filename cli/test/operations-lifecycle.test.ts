@@ -6,16 +6,19 @@ import { createOperations, type OperationsDeps } from "../src/lib/operations";
 import type { InstallerState } from "../src/lib/types";
 
 type HarnessCalls = {
-  resolveReleaseInputs: Array<{ version?: string }>;
+  resolveReleaseInputs: Array<{ version?: string; hosts?: ReadonlyArray<string> }>;
   validateSourceBundleInputs: string[];
   detectLegacyClaudeInstall: number;
   prepareClaudePluginFromSourceInputs: Array<{ sourceRoot: string; version: string }>;
   installClaudeFromPreparedPluginInputs: Array<{ pluginSource: string; version: string; migrateLegacy: boolean }>;
   updateClaudeLocal: number;
   installCodexInputs: Array<{ sourceRoot: string; workspaceRoot: string; global?: boolean }>;
+  installOpencodeInputs: Array<{ sourceRoot: string; homeDir: string }>;
   uninstallClaude: number;
   uninstallCodexInputs: Array<boolean | undefined>;
+  uninstallOpencodeInputs: string[];
   statusCodexInputs: Array<boolean | undefined>;
+  statusOpencodeInputs: string[];
   loadState: number;
   saveState: number;
   updateHostState: Array<{ host: HostName; patch: Record<string, unknown> }>;
@@ -43,9 +46,12 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
     installClaudeFromPreparedPluginInputs: [],
     updateClaudeLocal: 0,
     installCodexInputs: [],
+    installOpencodeInputs: [],
     uninstallClaude: 0,
     uninstallCodexInputs: [],
+    uninstallOpencodeInputs: [],
     statusCodexInputs: [],
+    statusOpencodeInputs: [],
     loadState: 0,
     saveState: 0,
     updateHostState: [],
@@ -127,6 +133,32 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
       };
     },
     codexHostRoot: () => "/tmp/codex-host",
+    installOpencode: (sourceRoot, homeDir) => {
+      calls.installOpencodeInputs.push({ sourceRoot, homeDir });
+      return {
+        skills_dir: "/tmp/opencode-skills",
+        files_verified: 5
+      };
+    },
+    statusOpencode: (homeDir) => {
+      calls.statusOpencodeInputs.push(homeDir);
+      return {
+        host: "opencode",
+        installed: false,
+        version: null,
+        source: null,
+        last_action: null,
+        error: "Missing 5 required files."
+      };
+    },
+    uninstallOpencode: (homeDir) => {
+      calls.uninstallOpencodeInputs.push(homeDir);
+      return {
+        skills_dir: "/tmp/opencode-skills"
+      };
+    },
+    opencodeHostRoot: () => "/tmp/opencode-home",
+    homeDir: () => "/tmp/opencode-home",
     lineupStateFile: () => "/tmp/lineup-state.json",
     purgeTargets: (hosts) => {
       calls.purgeTargetsInputs.push([...hosts]);
@@ -202,7 +234,7 @@ describe("operations lifecycle flows", () => {
       yes: true
     });
 
-    expect(harness.calls.resolveReleaseInputs).toEqual([{ version: "v2.0.0" }]);
+    expect(harness.calls.resolveReleaseInputs).toEqual([{ version: "v2.0.0", hosts: ["claude", "codex"] }]);
     expect(harness.calls.validateSourceBundleInputs).toEqual(["/tmp/release-source"]);
     expect(harness.calls.detectLegacyClaudeInstall).toBe(1);
     expect(harness.calls.prepareClaudePluginFromSourceInputs).toEqual([
@@ -363,6 +395,58 @@ describe("operations lifecycle flows", () => {
 
     expect(result.cancelled).toBe(false);
     expect(result.purged_paths).toEqual(["/tmp/purge-a", "/tmp/purge-b"]);
+  });
+
+  it("installs opencode successfully", async () => {
+    const harness = createHarness();
+    const operations = createOperations(harness.deps);
+
+    const result = await operations.performInstallOrUpdate({
+      action: "install",
+      hosts: ["opencode"],
+      version: "v2.0.0",
+      yes: true
+    });
+
+    expect(harness.calls.installOpencodeInputs).toEqual([
+      { sourceRoot: "/tmp/release-source", homeDir: "/tmp/opencode-home" }
+    ]);
+    expect(harness.calls.saveState).toBe(1);
+    expect(harness.state.hosts.opencode?.installed).toBe(true);
+    expect(harness.state.hosts.opencode?.last_action).toBe("install");
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.message).toContain("OpenCode install complete");
+  });
+
+  it("uninstalls opencode successfully", async () => {
+    const harness = createHarness();
+    const operations = createOperations(harness.deps);
+
+    const result = await operations.performUninstall({
+      hosts: ["opencode"],
+      yes: true,
+      purge: false
+    });
+
+    expect(harness.calls.uninstallOpencodeInputs).toEqual(["/tmp/opencode-home"]);
+    expect(harness.calls.saveState).toBe(1);
+    expect(result.cancelled).toBe(false);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.host).toBe("opencode");
+    expect(result.results[0]?.ok).toBe(true);
+  });
+
+  it("reads opencode status", async () => {
+    const harness = createHarness();
+    const operations = createOperations(harness.deps);
+
+    const output = await operations.readStatus(["opencode"]);
+
+    expect(harness.calls.statusOpencodeInputs).toEqual(["/tmp/opencode-home"]);
+    expect(output.hosts.opencode).toMatchObject({
+      host: "opencode",
+      installed: false
+    });
   });
 
   it("merges runtime status with state fallbacks", async () => {

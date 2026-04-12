@@ -36,6 +36,43 @@ conversation history. This keeps downstream agents focused and reduces token cos
 - The user can always ask to see any document from any stage -- snapshots control what
   agents receive, not what the user can access.
 
+### Snapshot compression threshold (~2 KB)
+
+Each context snapshot should stay under ~2 KB of text. This threshold governs
+**content size management** — when a snapshot exceeds ~2 KB, compress it to key
+findings with file path references before passing it to the next agent. Strip
+inline code blocks, raw file contents, and verbose explanations. Retain:
+structured lists, file paths, function/class names, and one-line summaries.
+
+When `OLLAMA_AVAILABLE = true`, delegate snapshot compression to Ollama instead
+of compressing manually. Call `mcp__ollama__ollama_generate` with the full
+snapshot text and this prompt: "Compress this to structured bullet points with
+file path references. Strip verbose explanations, inline code, and raw file
+contents. Retain: structured lists, file paths, function/class names, one-line
+summaries. Keep under 2 KB." Replace the snapshot content with the Ollama output
+before passing it to the next agent.
+
+### Snapshot streaming threshold (500 bytes)
+
+After compression, if the snapshot still exceeds **500 bytes**, write it to
+`.lineup/.ephemeral/` and pass a file path reference to the downstream agent
+instead of embedding it inline. This threshold governs **inline vs
+file-reference delivery** — small payloads stay inline (cheaper than an extra
+file read), large payloads go to disk.
+
+File naming: `snapshot-<from-stage>-<to-stage>-<hash>.yaml` (e.g.,
+`snapshot-2-3-a1b2c3.yaml`). The hash is the first 6 characters of the SHA-256
+of the snapshot content.
+
+In the downstream agent's prompt, replace the inline snapshot with:
+
+"Read `.lineup/.ephemeral/snapshot-<from>-<to>-<hash>.yaml` for the <stage name>
+output you need as input."
+
+Do **not** use file references for snapshots under 500 bytes — inline is cheaper
+for small payloads (avoids an extra file read). Apply this threshold *after*
+compression (if applicable).
+
 ---
 
 ## Agent Spawning
@@ -69,10 +106,10 @@ Spawning requires extra steps before calling the Agent tool:
      parameter to the Agent tool (e.g., `reviewer-a3f2k9`). This ensures unique addressing
      across concurrent pipeline runs.
 
-3. **Build the prompt.** Take the body of the agent `.md` file (everything after the
-   closing `---` of the frontmatter block) and prepend it to your task-specific
-   instructions. This replaces the instructions that would normally come from the
-   agent definition.
+3. **Build the prompt.** Instead of embedding the full agent body, include this
+   directive at the top of the prompt: `Read your base instructions from
+   .lineup/.ephemeral/agent-instructions.md, section '## <role>'.` Then append
+   your task-specific instructions after a `---` separator.
 
 4. **Call Agent tool with team parameters:**
 
@@ -81,7 +118,7 @@ Agent(
   team_name="<team_name from working context>",
   name="<name from frontmatter>-<session_id>",
   model="<model from frontmatter>",
-  prompt="<agent body instructions>\n\n---\n\n<task-specific prompt>"
+  prompt="Read your base instructions from .lineup/.ephemeral/agent-instructions.md, section '## <role>'.\n\n---\n\n<task-specific prompt>"
 )
 ```
 
@@ -128,8 +165,32 @@ Before starting the pipeline stages, run the initialization sequence defined in
 3. **Tactic Resolution** -- discover, select, and configure tactics from
    `.lineup/tactics/` and the {{HOST_TERM_PLUGIN_POSSESSIVE}} `tactics/` directory. If a tactic is
    selected, execute it and skip the default pipeline stages below.
+4. **Ollama Detection** -- read user Ollama config from `{{OLLAMA_CONFIG_PATH}}`,
+   verify MCP server availability, set `OLLAMA_AVAILABLE` flag.
 
 Read and follow `{{KICKOFF_INIT_PATH}}` before proceeding to Stage 0.
+
+## Lazy Agent Loading
+
+Do not load all agent definitions upfront. Only read `{{AGENTS_DIR}}<role>.md`
+for roles that the current pipeline tier will actually spawn:
+
+| Pipeline Tier | Agents needed |
+|---------------|---------------|
+| Full (Stages 0-7) | researcher, architect, developer, reviewer, documenter |
+| Full (Stage 7 skipped) | researcher, architect, developer, reviewer |
+| Lightweight (0, 4-6) | architect, developer, reviewer |
+| Lightweight + Document | architect, developer, reviewer, documenter |
+| Direct | none (orchestrator handles directly) |
+| Tactic | only agents listed in the tactic's stages |
+
+For **team mode**, this affects the Team Preamble — only write agent instruction
+bodies for roles in the "needed" set. For **subagent mode**, simply do not read
+agent files until the stage that spawns them.
+
+Read each agent file at the **latest responsible moment**: when you are about to
+spawn that role for the first time, not before. This keeps the upfront context
+as small as possible.
 
 ---
 
@@ -158,160 +219,25 @@ Produce a **triage assessment** with the following fields:
 The triage assessment is not shown to the user as a separate approval gate. It feeds
 directly into Stages 1 and 2.
 
-## Stage 1 -- Clarify
+## Stages 1-3: Clarify, Research, Clarification Gate
 
->  **Stage 1/7: Clarify**
+Read `STAGES-1-3.md` in this skill directory for Stage 1 (Clarify),
+Stage 2 (Research), and Stage 3 (Clarification Gate) instructions.
+This file also contains the **Effort-Based Model Selection** rules
+that govern model assignment for all agent spawns.
 
-Refine the request before any work begins using **structured questions**.
+## Stages 4-5: Plan, Implement
 
-- Analyze the user's request and identify gaps: missing requirements, ambiguous scope, edge cases, non-functional constraints.
-- Use **{{QUESTION_PRIMITIVE}}** to present targeted, context-aware questions with predefined options. For each question:
-  - Provide 3-5 concrete options covering the most likely answers
-  - Always include a free-text option (e.g., "Other (please specify)") as the last choice
-  - Batch related questions together -- do not ask one at a time
-- If the request is already specific and unambiguous, acknowledge that and move on.
-- **Output:** a concise summary of the agreed requirements.
+Read `STAGES-4-5.md` in this skill directory for Stage 4 (Plan)
+and Stage 5 (Implement) instructions. This file also contains the
+**Stage Result Caching** rules for cache format, lookup, and
+`--from-stage N` restart support.
 
-## Stage 2 -- Research
+## Stages 6-7: Verify, Document, Pipeline Cleanup
 
->  **Stage 2/7: Research**
-
-Spawn one or more `researcher` agents to explore the codebase and gather context.
-Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
-
-- **Use triage search targets**: The triage assessment provides specific directories,
-  file patterns, and questions per affected area. Use these as the basis for each
-  researcher's spawn prompt instead of deriving scope from scratch.
-- Spawn one researcher per affected area when the triage identifies 2+ areas.
-  Run them in **parallel** when areas are independent, **sequentially** when findings
-  build on each other.
-- Each researcher is read-only -- it cannot modify files.
-- **Scope the research prompt**: Include the triage search targets verbatim in the
-  researcher's prompt, plus any clarifications from Stage 1. Do not send vague prompts
-  like "explore the codebase."
-- **Set boundaries**: For large codebases, use the triage affected areas to tell each
-  researcher which areas to focus on and which to skip.
-- **Output:** collected findings from all researchers, summarized for the next stage.
-  If a researcher's output is verbose, extract the key findings (files, patterns,
-  constraints) and discard raw file contents before passing to the next stage.
-
-## Stage 3 -- Clarification Gate
-
->  **Stage 3/7: Clarification Gate**
-
-Review the research findings and identify any remaining ambiguities.
-
-- Look for: unresolved edge cases, scope boundaries, conflicting patterns, integration decisions.
-- Use **{{QUESTION_PRIMITIVE}}** to present each ambiguity as a structured question with concrete resolution options. For each ambiguity:
-  - Explain the context briefly (what the research found)
-  - Offer 2-4 resolution options based on the research findings
-  - Always include a free-text option for custom resolution
-- **Skip** this stage only if research yielded clear, complete answers with no open questions.
-- **Output:** final resolved requirements, ready for planning.
-
-## Stage 4 -- Plan
-
->  **Stage 4/7: Plan**
-
-Spawn one or more `architect` agents to create an implementation plan.
-Follow the **Agent Spawning** rules above for spawn mode (team or subagent). The triage
-assessment's `complexity` and `independent_areas` fields drive how this stage runs.
-
-### Conditional approach analysis
-
-Include the complexity classification in each architect's spawn prompt:
-
-- **Simple** (`complexity: simple`): Instruct the architect to produce **1 approach
-  directly** -- skip the multi-approach comparison. Add to spawn prompt:
-  "This task is simple. Produce a single implementation plan without competing
-  approaches."
-- **Moderate/Complex** (`complexity: moderate` or `complex`): Instruct the architect to
-  produce **2-3 approaches** with trade-offs (current behavior). The architect chooses
-  2 or 3 based on how many meaningfully different strategies exist.
-
-### Parallel architects
-
-If the triage assessment identified 2+ `independent_areas`:
-
-1. Spawn one `architect` agent per independent area, in parallel.
-2. Each architect receives only the research findings relevant to its area, plus
-   the full resolved requirements for cross-cutting context.
-3. Each architect produces a plan scoped to its area.
-4. After all architects complete, **merge their outputs yourself** (do not spawn
-   another agent). Produce a single master plan by:
-   - Concatenating `changes` lists with area prefixes
-   - Unifying `acceptance_criteria` from all sub-plans
-   - Building a combined `parallelization_strategy` where each area's batches are
-     independent of other areas' batches
-   - Merging `risks` and deduplicating
-
-If only one area exists, spawn a single architect (current behavior).
-
-### Approval
-
-- Present the (merged or single) plan to the user and **wait for explicit approval**
-  before proceeding.
-- **Output:** an approved implementation plan.
-
-## Stage 5 -- Implement
-
->  **Stage 5/7: Implement**
-
-Spawn one or more `developer` agents to execute the approved plan.
-Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
-
-- Follow the architect's **Parallelization Strategy** from the approved plan:
-  - Spawn developers according to the parallel batches identified in the plan
-  - Run batches concurrently when they have no dependencies
-  - Wait for a batch to complete before starting dependent batches
-  - If no parallelization strategy is provided, run developers sequentially in the plan's change order
-- Each developer follows the plan -- no improvising beyond the approved scope.
-- **Output:** all code changes committed (or staged for user review).
-
-## Stage 6 -- Verify
-
->  **Stage 6/7: Verify**
-
-Spawn a `reviewer` agent to validate the implementation.
-Follow the **Agent Spawning** rules above for spawn mode (team or subagent).
-
-- Run tests, review the diff against the plan, check for regressions.
-- Flag any issues found -- do not silently pass a broken implementation.
-- **Artifact cleanup**: After the reviewer completes, check for any files written to disk
-  by agents during Stages 0-5 that should not exist (e.g., YAML reports, research artifacts,
-  plan files, memory files created by researchers or architects). Delete any such files.
-  Only files that are part of the actual implementation (code changes from Stage 5) should
-  remain. This ensures the documenter (if Stage 7 runs) starts with a clean working tree.
-- **Output:** verification report presented to the user.
-
-## Stage 7 -- Document (Optional)
-
->  **Stage 7/7: Document (Optional)**
-
-After verification passes, ask the user if they want documentation generated for the changes.
-
-- Use **{{QUESTION_PRIMITIVE}}** to offer:
-  1. Generate documentation for the new changes
-  2. Skip documentation
-- If the user chooses to generate documentation, spawn a `documenter` agent
-  following the **Agent Spawning** rules above.
-- Feed it the implementation plan, the implementation report, and the review report as context.
-- The documenter will write documentation files directly to the project.
-- **Output:** documentation report listing what files were created or updated.
-
-After Stage 7 completes (or if the user chose to skip documentation in this stage),
-proceed to **Pipeline Cleanup**.
-
----
-
-## Pipeline Cleanup
-
-Safety net for any teammates that were not shut down eagerly during the pipeline.
-**Skip entirely if `TEAMS_MODE = false`.**
-
-After the final stage completes, check if any teammates are still running. If so,
-send a `shutdown_request` to each one. Do not call `TeamDelete` -- Claude Code
-manages the team entity lifecycle.
+Read `STAGES-6-7.md` in this skill directory for Stage 6 (Verify),
+Stage 7 (Document), Pipeline Cleanup, and the **Transient File Lifecycle**
+rules for `.lineup/.ephemeral/` usage.
 
 ---
 
@@ -326,6 +252,13 @@ Not every task needs the full pipeline. Use your judgment:
 | **Direct** | Just do it | Simple fixes, single file, explicit instructions |
 
 When in doubt, start with the full pipeline. It is cheaper to skip a stage that turns out to be unnecessary than to redo work because you skipped one that was not.
+
+### Custom Approval Gates
+
+The default pipeline has a single approval gate after Stage 4 (Plan). If you need
+additional gates (e.g., approval after Research or before Documentation), create a
+**tactic** in `.lineup/tactics/` with `gate: approval` on the desired stages. See
+the Tactic Resolution section in the initialization file for details.
 
 ## Stage Transitions
 
@@ -343,10 +276,31 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Never do deep exploration yourself** -- always delegate to `researcher`.
 - **Always get user approval** before moving from Plan to Implement.
 - **Always use {{QUESTION_PRIMITIVE}}** for user decisions in Stage 1 (Clarify), Stage 3 (Clarification Gate), and Stage 7 (Document).
-- **Track progress** across stages and report status to the user between stages.
+- **Report stage completion**: After each stage completes, show a single factual summary
+  line before moving to the next stage. Base it on what the stage produced — for example:
+  "Research complete — found 12 files across 3 modules. Moving to Clarification Gate."
+  or "Plan approved — 4 changes across 2 batches. Starting implementation."
+  Keep it one sentence. Do not editorialize or predict future stages.
 - **Manage context actively**: Between stages, review the upstream output you are about to pass downstream. If it contains raw file contents, long code blocks, or verbose exploration logs, compress it to structured summaries with file path references before passing it to the next agent. The snapshot table defines *which* sections to pass; this rule says to also compress *within* those sections.
 - **Cap researcher narratives**: When summarizing researcher output for downstream stages, cap the `how_it_works` section at ~500 words. If the researcher produced more, compress to the essential execution flow, data flow, and pattern descriptions. Discard examples and inline code unless they are critical to the plan.
 - **Omit empty sections**: When passing agent output YAML downstream, strip any sections that are empty, null, or contain only placeholder values (e.g., `gaps: []`, `risks: null`). Do not pass skeleton structure -- pass only sections with substantive content.
 - **Prefer structured lists over prose**: When compressing agent output between stages, convert prose paragraphs to bullet-point lists with file path references. Downstream agents parse lists faster and more accurately than paragraphs.
-- **Clean up ephemeral artifacts**: Agents may write intermediate files (research YAML, plan drafts, reports) to disk during the pipeline if those files serve downstream stages. However, these files are **ephemeral** -- they must be cleaned up once they are no longer needed. The artifact cleanup step in Stage 6 (Verify) handles this. Only files produced by Stage 5 (implementation code) and Stage 7 (documentation markdown) should persist after the pipeline completes.
+- **Clean up ephemeral artifacts**: Agents may write intermediate files to `.lineup/.ephemeral/`
+  during the pipeline. These files are **ephemeral** — they must be cleaned up once they are
+  no longer needed. Only files produced by Stage 5 (implementation code) and Stage 7
+  (documentation markdown) should persist after the pipeline completes.
+- **Run artifact cleanup on any pipeline exit**: Whenever the pipeline ends — whether at
+  Stage 7 completion, on user abort, or on an error that terminates a stage early — delete
+  all files in `.lineup/.ephemeral/`. Only delete files in `.lineup/.cache/` after
+  successful pipeline completion. Never delete files outside these managed directories.
+  Apply this same cleanup before returning control to the user in any pipeline tier.
 - **Always run Pipeline Cleanup** at the end of the pipeline when `TEAMS_MODE = true`. This applies to all pipeline tiers (Full, Lightweight, Direct) and to tactic pipelines.
+- **Assign effort-based models**: Use the effort mapping table in `STAGES-1-3.md` to select
+  the model for each agent spawn. User overrides act as a **floor** — an override can upgrade
+  the agent's model but never downgrade below the effort-assigned level.
+- **Cache stage results**: After each stage completes, write its output to `.lineup/.cache/`
+  using the format defined in `STAGES-4-5.md`. Before spawning agents for a stage, check for
+  cached output with a matching hash. Support `--from-stage N` to restart from a specific stage.
+- **Use file references for transient data**: When agent output exceeds the ~2 KB compression
+  threshold, write it to `.lineup/.ephemeral/` and pass a file path reference to the downstream
+  agent instead of embedding inline. See `STAGES-6-7.md` for the transient file lifecycle.

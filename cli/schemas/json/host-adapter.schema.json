@@ -8,7 +8,7 @@
   "properties": {
     "host": {
       "type": "string",
-      "enum": ["claude", "codex", "gemini"]
+      "enum": ["claude", "codex", "opencode"]
     },
     "vars": {
       "type": "object",
@@ -18,10 +18,12 @@
         "SKILL_NAME_CONFIGURE",
         "SKILL_NAME_EXPLAIN",
         "SKILL_NAME_PLAYBOOK",
+        "SKILL_NAME_DIGEST",
         "CMD_KICKOFF",
         "CMD_CONFIGURE",
         "CMD_EXPLAIN",
         "CMD_PLAYBOOK",
+        "CMD_DIGEST",
         "KICKOFF_INIT_PATH",
         "QUESTION_PRIMITIVE",
         "OVERRIDES_DIR",
@@ -32,17 +34,20 @@
         "HOST_DEFAULTS_TERM",
         "HOST_ARTIFACT_LABEL",
         "HOST_ARTIFACT_LABEL_LOWER",
-        "AGENTS_DIR"
+        "AGENTS_DIR",
+        "OLLAMA_CONFIG_PATH"
       ],
       "properties": {
         "SKILL_NAME_KICKOFF": { "type": "string" },
         "SKILL_NAME_CONFIGURE": { "type": "string" },
         "SKILL_NAME_EXPLAIN": { "type": "string" },
         "SKILL_NAME_PLAYBOOK": { "type": "string" },
+        "SKILL_NAME_DIGEST": { "type": "string" },
         "CMD_KICKOFF": { "type": "string" },
         "CMD_CONFIGURE": { "type": "string" },
         "CMD_EXPLAIN": { "type": "string" },
         "CMD_PLAYBOOK": { "type": "string" },
+        "CMD_DIGEST": { "type": "string" },
         "KICKOFF_INIT_PATH": { "type": "string" },
         "QUESTION_PRIMITIVE": { "type": "string" },
         "OVERRIDES_DIR": { "type": "string" },
@@ -53,7 +58,8 @@
         "HOST_DEFAULTS_TERM": { "type": "string" },
         "HOST_ARTIFACT_LABEL": { "type": "string" },
         "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" },
-        "AGENTS_DIR": { "type": "string" }
+        "AGENTS_DIR": { "type": "string" },
+        "OLLAMA_CONFIG_PATH": { "type": "string" }
       }
     }
   }

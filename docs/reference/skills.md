@@ -6,24 +6,26 @@ This is the complete reference for Lineup's skill commands. For a conceptual ove
 
 Lineup workflows are generated from canonical templates in `.lineup-core/skills/` and rendered to host-specific `SKILL.md` files.
 
-| Workflow | Claude command | Codex command | Generated files (install-time) |
-| ------- | ---------- | ------- | ------- |
-| Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `skills/kick-off/SKILL.md`, `.agents/skills/lineup-kick-off/SKILL.md` |
-| Configure | `/lineup:configure` | `$lineup-configure` | `skills/configure/SKILL.md`, `.agents/skills/lineup-configure/SKILL.md` |
-| Explain | `/lineup:explain` | `$lineup-explain` | `skills/explain/SKILL.md`, `.agents/skills/lineup-explain/SKILL.md` |
-| Playbook | `/lineup:playbook` | `$lineup-playbook` | `skills/playbook/SKILL.md`, `.agents/skills/lineup-playbook/SKILL.md` |
+| Workflow | Claude command | Codex command | OpenCode command | Generated files (install-time) |
+| ------- | ---------- | ------- | ------- | ------- |
+| Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `/lineup-kick-off` | `skills/kick-off/SKILL.md`, `.agents/skills/lineup-kick-off/SKILL.md`, `~/.config/opencode/skills/lineup-kick-off/SKILL.md` |
+| Configure | `/lineup:configure` | `$lineup-configure` | `/lineup-configure` | `skills/configure/SKILL.md`, `.agents/skills/lineup-configure/SKILL.md`, `~/.config/opencode/skills/lineup-configure/SKILL.md` |
+| Explain | `/lineup:explain` | `$lineup-explain` | `/lineup-explain` | `skills/explain/SKILL.md`, `.agents/skills/lineup-explain/SKILL.md`, `~/.config/opencode/skills/lineup-explain/SKILL.md` |
+| Playbook | `/lineup:playbook` | `$lineup-playbook` | `/lineup-playbook` | `skills/playbook/SKILL.md`, `.agents/skills/lineup-playbook/SKILL.md`, `~/.config/opencode/skills/lineup-playbook/SKILL.md` |
+| Digest | `/lineup:digest` | `$lineup-digest` | `/lineup-digest` | `skills/digest/SKILL.md`, `.agents/skills/lineup-digest/SKILL.md`, `~/.config/opencode/skills/lineup-digest/SKILL.md` |
 
-Do not edit generated skill files directly. Edit `.lineup-core/skills/**`; host files are generated during `lineup install` and validated in CI with `npm --prefix cli run generate:check`.
+Do not edit generated skill files directly. Edit `.lineup-core/skills/**`; host files are generated during `lineup install` and validated in CI with `./dev check`.
 
-## Kick-off (`/lineup:kick-off` / `$lineup-kick-off`)
+## Kick-off (`/lineup:kick-off` / `$lineup-kick-off` / `/lineup-kick-off`)
 
 The main entry point for all Lineup workflows.
 
 ### Syntax
 
 ```bash
-/lineup:kick-off [task-description | tactic-name]
-$lineup-kick-off [task-description | tactic-name]
+/lineup:kick-off [task-description | tactic-name] [--from-stage N]
+$lineup-kick-off [task-description | tactic-name] [--from-stage N]
+/lineup-kick-off [task-description | tactic-name] [--from-stage N]
 ```
 
 ### Arguments
@@ -32,8 +34,11 @@ $lineup-kick-off [task-description | tactic-name]
 | -------- | -------- | ----------- |
 | `task-description` | No | Free-text description of the work to do |
 | `tactic-name` | No | Name of a tactic to execute (kebab-case, matches a `.yaml` filename) |
+| `--from-stage N` | No | Restart the pipeline from stage N, loading cached outputs for stages 0 through N-1 |
 
 If no argument is provided, the skill enters menu mode.
+
+When `--from-stage N` is used, the orchestrator loads cached stage outputs from `.lineup/.cache/` for all stages before N and begins execution at stage N. If any required cache file is missing, the command reports which stage is missing and suggests a lower restart point.
 
 ### Behavior
 
@@ -42,6 +47,7 @@ If no argument is provided, the skill enters menu mode.
 ```bash
 /lineup:kick-off Refactor the authentication module to use JWT tokens
 $lineup-kick-off Refactor the authentication module to use JWT tokens
+/lineup-kick-off Refactor the authentication module to use JWT tokens
 ```
 
 **With a tactic name:** The orchestrator looks for the named tactic in `.lineup/tactics/` (project) and the plugin's `tactics/` directory (built-in). If found, it runs the tactic's stage sequence. If not found, it reports the error and lists available tactics.
@@ -49,6 +55,7 @@ $lineup-kick-off Refactor the authentication module to use JWT tokens
 ```bash
 /lineup:kick-off brownfield-docs
 $lineup-kick-off brownfield-docs
+/lineup-kick-off brownfield-docs
 ```
 
 **With no arguments (menu mode):** If tactics exist (project or built-in), the orchestrator presents a selection menu showing each tactic's name and description, plus options for the default pipeline and custom input. If no tactics exist, it prompts for a task description.
@@ -56,14 +63,16 @@ $lineup-kick-off brownfield-docs
 ```bash
 /lineup:kick-off
 $lineup-kick-off
+/lineup-kick-off
 ```
 
 ### Initialization
 
-Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in the host init file (`skills/kick-off/INIT.md` on Claude, `.agents/skills/lineup-kick-off/INIT.md` on Codex):
+Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in the host init file (`skills/kick-off/INIT.md` on Claude, `.agents/skills/lineup-kick-off/INIT.md` on Codex, `~/.config/opencode/skills/lineup-kick-off/INIT.md` on OpenCode):
 
 1. **Agent configuration overrides** -- reads user override files from `~/.claude/lineup/agents/`, validates them, and merges with plugin defaults
    - Codex path: `~/.codex/lineup/agents/`
+   - OpenCode path: `~/.config/opencode/lineup/agents/`
 2. **Memory migration** -- one-time migration of global agent memory to project-scoped memory (skipped silently if already done)
 3. **Tactic resolution** -- discovers tactics from `.lineup/tactics/` and the plugin's `tactics/` directory, presents selection if available
 
@@ -102,9 +111,9 @@ Stage labels use the tactic's count: a 3-stage tactic shows "Stage 1/3", "Stage 
 - The orchestrator never implements code itself -- it delegates to the developer agent
 - The orchestrator never does deep exploration -- it delegates to the researcher agent
 - User approval is always required before moving from Plan to Implement
-- Structured multiple-choice prompts are used for all user decisions in Clarify, Clarification Gate, and Document stages (`AskUserQuestion` on Claude)
+- Structured multiple-choice prompts are used for all user decisions in Clarify, Clarification Gate, and Document stages (`AskUserQuestion` on Claude, native `question` tool on OpenCode)
 
-## Configure (`/lineup:configure` / `$lineup-configure`)
+## Configure (`/lineup:configure` / `$lineup-configure` / `/lineup-configure`)
 
 Interactive agent configurator.
 
@@ -113,6 +122,7 @@ Interactive agent configurator.
 ```bash
 /lineup:configure
 $lineup-configure
+/lineup-configure
 ```
 
 ### Arguments
@@ -128,7 +138,7 @@ The configurator walks through five steps:
 | 1. Read | Reads all agent files and displays current frontmatter as a summary table |
 | 2. Ask | Presents configuration categories (model, tools, memory, reset) and collects choices |
 | 3. Preview | Shows the final frontmatter for each agent that will change |
-| 4. Apply | Writes override YAML files to host override directory (`~/.claude/lineup/agents/` or `~/.codex/lineup/agents/`) |
+| 4. Apply | Writes override YAML files to host override directory (`~/.claude/lineup/agents/`, `~/.codex/lineup/agents/`, or `~/.config/opencode/lineup/agents/`) |
 | 5. Confirm | Reports what changed (which agents, which fields, old and new values) |
 
 ### Configuration categories
@@ -138,11 +148,12 @@ The configurator walks through five steps:
 | Model | Keep defaults, set one for all agents, set per-agent |
 | Tools | Replace tools, add tools, remove tools, no changes |
 | Memory | Keep defaults, set one for all agents, set per-agent |
+| Ollama | Enable Ollama for research, disable Ollama, no changes |
 | Reset | Restore all agents to factory defaults |
 
 ### What it modifies
 
-Writes override files to host override directories (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex) containing only the fields you changed (model, tools, memory). Never modifies agent `.md` files.
+Writes override files to host override directories (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode) containing only the fields you changed (model, tools, memory). Never modifies agent `.md` files.
 
 ### Validation
 
@@ -163,7 +174,7 @@ Writes override files to host override directories (`~/.claude/lineup/agents/` f
 | documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
-## Explain (`/lineup:explain` / `$lineup-explain`)
+## Explain (`/lineup:explain` / `$lineup-explain` / `/lineup-explain`)
 
 Structured codebase explanation via the built-in `explain` tactic.
 
@@ -172,6 +183,7 @@ Structured codebase explanation via the built-in `explain` tactic.
 ```bash
 /lineup:explain <question>
 $lineup-explain <question>
+/lineup-explain <question>
 ```
 
 ### Arguments
@@ -182,7 +194,7 @@ $lineup-explain <question>
 
 ### Behavior
 
-This skill is an alias. It invokes kick-off explain mode (`/lineup:kick-off explain` on Claude, `$lineup-kick-off explain` on Codex) with the user's question as the task description. The kick-off workflow resolves the built-in `explain` tactic and executes its two stages:
+This skill is an alias. It invokes kick-off explain mode (`/lineup:kick-off explain` on Claude, `$lineup-kick-off explain` on Codex, `/lineup-kick-off explain` on OpenCode) with the user's question as the task description. The kick-off workflow resolves the built-in `explain` tactic and executes its two stages:
 
 1. **Research:** A researcher agent explores the codebase, focusing on the topic the user asked about
 2. **Explain:** A teacher agent produces a structured explanation based on the research findings
@@ -205,7 +217,7 @@ Questions about specific components, patterns, data flows, and architectural dec
 
 Create `.lineup/tactics/explain.yaml` in your project to override the built-in explain tactic with a custom workflow.
 
-## Playbook (`/lineup:playbook` / `$lineup-playbook`)
+## Playbook (`/lineup:playbook` / `$lineup-playbook` / `/lineup-playbook`)
 
 Interactive tactic management wizard.
 
@@ -214,6 +226,7 @@ Interactive tactic management wizard.
 ```bash
 /lineup:playbook
 $lineup-playbook
+/lineup-playbook
 ```
 
 ### Arguments
@@ -303,4 +316,57 @@ Writes, renames, or deletes files in `.lineup/tactics/` only. Never modifies rep
 - Example tactics and built-in tactics are read-only
 - Rename in edit mode writes the new file before deleting the old one
 - YAML formatting matches the example tactics exactly (header comments, pipe-blocks, field order)
-- Structured multiple-choice prompts are used for all decisions (`AskUserQuestion` on Claude)
+- Structured multiple-choice prompts are used for all decisions (`AskUserQuestion` on Claude, native `question` tool on OpenCode)
+
+## Digest (`/lineup:digest` / `$lineup-digest` / `/lineup-digest`)
+
+Standalone codebase overview generator.
+
+### Syntax
+
+```bash
+/lineup:digest [output-path]
+$lineup-digest [output-path]
+/lineup-digest [output-path]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `output-path` | No | File path for the generated digest (default: `DIGEST.md` at project root) |
+
+### Behavior
+
+The digest skill runs a lightweight three-phase pipeline:
+
+| Phase | Agent | What happens |
+| ----- | ----- | ------------ |
+| 1. Research | 3× Researcher (parallel) | Scan directory structure, entry points, modules, deps, tests, config |
+| 2. Structure | Architect | Organize findings into a coherent outline |
+| 3. Write | Documenter | Write the final markdown file |
+
+No approval gates or clarification stages — the pipeline runs end-to-end without user interaction.
+
+### Output
+
+A markdown file (default `DIGEST.md`) containing:
+- Project overview and tech stack
+- Architecture and directory structure
+- Module breakdown with file references
+- Data flow description
+- Key patterns and conventions
+- Getting started guide
+- Contributing guidelines (when discoverable)
+
+The file begins with an auto-generated header and can be regenerated by running the skill again.
+
+### Ollama integration
+
+When Ollama is enabled (via `/lineup:configure`), researcher agents use `mcp__ollama__ollama_chat` and `mcp__ollama__ollama_generate` to summarize large files and modules, reducing token cost.
+
+### Initialization
+
+The skill runs its own lightweight initialization:
+1. **Agent configuration overrides** -- reads user override files from `~/.claude/lineup/agents/` (Claude), `~/.codex/lineup/agents/` (Codex), or `~/.config/opencode/lineup/agents/` (OpenCode)
+2. **Ollama detection** -- checks for Ollama config and MCP server availability

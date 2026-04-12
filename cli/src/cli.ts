@@ -38,14 +38,14 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
 
   program
     .name("lineup")
-    .description("Lineup multi-host manager for Claude Code and Codex")
+    .description("Lineup multi-host manager for Claude Code, Codex, and OpenCode")
     .version(packageVersion(), "--cli-version", "output CLI version")
     .showHelpAfterError();
 
   program
     .command("install")
     .description("Install Lineup for selected host(s)")
-    .option("--host <host>", "Target host(s): claude|codex|all")
+    .option("--host <host>", "Target host(s): claude|codex|opencode|all")
     .option("--version <tag>", "Release tag to install", "latest")
     .option("--from-dir <path>", "Install from local directory instead of GitHub release")
     .option("--yes", "Auto-confirm prompts")
@@ -54,7 +54,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
   program
     .command("update")
     .description("Update Lineup for selected host(s)")
-    .option("--host <host>", "Target host(s): claude|codex|all")
+    .option("--host <host>", "Target host(s): claude|codex|opencode|all")
     .option("--version <tag>", "Release tag to install", "latest")
     .option("--from-dir <path>", "Install from local directory instead of GitHub release")
     .option("--yes", "Auto-confirm prompts")
@@ -63,7 +63,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
   program
     .command("uninstall")
     .description("Uninstall Lineup for selected host(s)")
-    .option("--host <host>", "Target host(s): claude|codex|all")
+    .option("--host <host>", "Target host(s): claude|codex|opencode|all")
     .option("--yes", "Auto-confirm prompts")
     .option("--purge", "Purge Lineup data directories")
     .action(commandHandlers.uninstall);
@@ -71,7 +71,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
   program
     .command("status")
     .description("Show Lineup installation status")
-    .option("--host <host>", "Target host(s): claude|codex|all")
+    .option("--host <host>", "Target host(s): claude|codex|opencode|all")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.status);
 

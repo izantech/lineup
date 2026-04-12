@@ -6,9 +6,11 @@ This guide covers how to use `/lineup:explain` to get structured explanations of
 
 Type the command followed by a question about your code:
 
-```bash
-/lineup:explain How does the authentication middleware work?
-```
+| Host | Command |
+| ---- | ------- |
+| Claude Code | `/lineup:explain How does the authentication middleware work?` |
+| Codex CLI | `$lineup-explain How does the authentication middleware work?` |
+| OpenCode | `/lineup-explain How does the authentication middleware work?` |
 
 The skill triggers a two-stage workflow: a researcher explores the relevant code, then a teacher produces a structured, pedagogical explanation.
 
@@ -52,7 +54,7 @@ These are too broad or subjective. The researcher can't focus its exploration, a
 
 ## How it differs from asking the main session
 
-You could ask your question directly in the Claude Code session without using `/lineup:explain`. The difference is in depth and structure:
+You could ask your question directly in the Claude Code (or your host's) session without using the explain skill. The difference is in depth and structure:
 
 | Aspect | Direct question | `/lineup:explain` |
 | ------ | --------------- | ------------------- |

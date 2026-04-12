@@ -3,7 +3,7 @@
 
 # [Lineup](https://lineup.izantech.app)
 
-Lineup is a structured multi-agent workflow for Claude Code and Codex CLI:
+Lineup is a structured multi-agent workflow for Claude Code, Codex CLI, and OpenCode:
 **Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document**.
 
 Lineup 2.0 is distributed through a single CLI manager: `lineup`.
@@ -20,26 +20,26 @@ npm install -g @izantech/lineup-cli
 lineup install --host all
 lineup update --host all
 lineup status --host all
-lineup uninstall --host codex
+lineup uninstall --host opencode
 ```
 
 ### Command surface
 
 ```text
-lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]
-lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]
-lineup uninstall [--host claude|codex|all] [--yes] [--purge]
-lineup status [--host claude|codex|all] [--json]
+lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
+lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
+lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
+lineup status [--host claude|codex|opencode|all] [--json]
 ```
 
 ### Host behavior
 
-| Operation | Claude | Codex |
-| --------- | ------ | ----- |
-| Install | CLI-managed local marketplace plugin install | Atomic sync into `$HOME/.agents/skills/lineup-*` |
-| Update | Refresh local marketplace plugin from selected release tag | Re-sync from selected release tag |
-| Uninstall | Remove CLI-managed plugin | Remove `$HOME/.agents/skills/lineup-*` |
-| Status | Detect install + legacy marketplace state | Verify required skill files |
+| Operation | Claude | Codex | OpenCode |
+| --------- | ------ | ----- | -------- |
+| Install | CLI-managed local marketplace plugin install | Atomic sync into `$HOME/.agents/skills/lineup-*` | Sync into `~/.config/opencode/skills/` |
+| Update | Refresh local marketplace plugin from selected release tag | Re-sync from selected release tag | Re-sync from selected release tag |
+| Uninstall | Remove CLI-managed plugin | Remove `$HOME/.agents/skills/lineup-*` | Remove skill directories from `~/.config/opencode/skills/` |
+| Status | Detect install + legacy marketplace state | Verify required skill files | Verify required skill files |
 
 ## Workflow commands (unchanged)
 
@@ -48,12 +48,21 @@ Claude:
 - `/lineup:configure`
 - `/lineup:explain`
 - `/lineup:playbook`
+- `/lineup:digest`
 
 Codex:
 - `$lineup-kick-off`
 - `$lineup-configure`
 - `$lineup-explain`
 - `$lineup-playbook`
+- `$lineup-digest`
+
+OpenCode:
+- `/lineup-kick-off`
+- `/lineup-configure`
+- `/lineup-explain`
+- `/lineup-playbook`
+- `/lineup-digest`
 
 ## Canonical source model
 
@@ -63,14 +72,18 @@ Lineup uses canonical templates plus host adapters:
 - Host adapters: `.lineup-core/hosts/*.json`
 - Generated host files are install-time artifacts and are not committed to git
 
-## Validation and checks
+## Development
 
 ```bash
-npm --prefix cli run typecheck
-npm --prefix cli test
-npm --prefix cli run schema:check
-npm --prefix cli run generate:check
-npm --prefix cli run build
+./dev check                     # Run all checks (typecheck, test, schema, generate, build)
+./dev build                     # Build CLI
+./dev typecheck                 # Run type checks
+./dev test                      # Run test suite
+./dev install local             # Build from source and install CLI + all host skills
+./dev install remote            # Install latest from npm
+./dev install clean [--purge]   # Remove CLI and host skills
+./dev docs                      # Start docs dev server
+./dev setup                     # Install dependencies
 ```
 
 ## Upgrading from 1.x

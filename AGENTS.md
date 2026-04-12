@@ -13,20 +13,22 @@ Lineup 2.0 uses a canonical core plus a CLI-managed install flow across Claude C
 
 ## Commands
 
-Repository checks:
+Dev script:
 
-- `npm --prefix cli run typecheck`
-- `npm --prefix cli test`
-- `npm --prefix cli run schema:check`
-- `npm --prefix cli run generate:check`
-- `npm --prefix cli run build`
+- `./dev check` — run all checks (typecheck, test, schema, generate, build)
+- `./dev build` / `./dev typecheck` / `./dev test` — individual checks
+- `./dev install local` — build from source and install CLI + all host skills
+- `./dev install remote` — install latest from npm
+- `./dev install clean [--purge]` — remove CLI and host skills
+- `./dev docs` — start VitePress dev server
+- `./dev setup` — install dependencies
 
 CLI runtime:
 
-- `lineup install [--host claude|codex|all] [--version <tag>|latest] [--yes]`
-- `lineup update [--host claude|codex|all] [--version <tag>|latest] [--yes]`
-- `lineup uninstall [--host claude|codex|all] [--yes] [--purge]`
-- `lineup status [--host claude|codex|all] [--json]`
+- `lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
+- `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
+- `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
+- `lineup status [--host claude|codex|opencode|all] [--json]`
 
 ## Architecture
 
@@ -36,7 +38,12 @@ Lineup avoids prompt drift by keeping one canonical source and generating host a
 
 ```
 .lineup-core/skills/**        → Canonical workflow templates (source of truth)
-.lineup-core/hosts/*.json     → Host adapter maps (claude, codex)
+  kick-off/core.md            → Orchestrator core: triage, agent spawning, context flow, rules
+  kick-off/init.core.md       → Initialization: overrides, memory migration, tactics, teams
+  kick-off/stages-1-3.core.md → Stages 1-3 (Clarify, Research, Gate) + effort mapping
+  kick-off/stages-4-5.core.md → Stages 4-5 (Plan, Implement) + stage result caching
+  kick-off/stages-6-7.core.md → Stages 6-7 (Verify, Document) + cleanup + ephemeral lifecycle
+.lineup-core/hosts/*.json     → Host adapter maps (claude, codex, opencode)
 agents/*.md                   → Shared agent definitions
 tactics/*.yaml                → Built-in tactics
 templates/*.yaml              → YAML format references
@@ -70,7 +77,43 @@ Stage 0 (Triage) produces a lightweight assessment that drives downstream behavi
 - **Research scoping**: Researchers receive concrete search targets (directories, file patterns, questions) from the triage assessment instead of deriving scope from scratch.
 - **Conditional approach analysis**: Simple tasks get 1 approach in the Plan stage (no multi-approach comparison); moderate/complex tasks get 2-3.
 - **Parallel architects**: When 2+ independent areas are detected, separate architect agents spawn in parallel. The orchestrator merges their outputs into a single master plan.
-- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages.
+- **Effort-based model selection**: Triage complexity drives model assignment per agent role (haiku/sonnet/opus). User overrides act as a floor — they can upgrade but not downgrade below the effort-assigned level.
+- **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages. Snapshots exceeding ~2 KB are compressed to key findings with file path references.
+
+### Staged Prompt Loading
+
+The kick-off orchestrator prompt is split into on-demand files to reduce upfront token cost:
+
+- `core.md` (SKILL.md) loads at startup: context flow, agent spawning, triage, pipeline tiers, rules
+- `stages-1-3.core.md` (STAGES-1-3.md) loads when entering Stage 1
+- `stages-4-5.core.md` (STAGES-4-5.md) loads when entering Stage 4
+- `stages-6-7.core.md` (STAGES-6-7.md) loads when entering Stage 6
+
+Each stage file is self-contained — the orchestrator reads it before executing that stage group.
+
+### Stage Result Caching
+
+Stage outputs can be cached to `.lineup/.cache/<stage>-<hash>.yaml` for re-run and rollback:
+
+- Cache key: SHA-256 of (task prompt + triage assessment), first 12 hex chars
+- On re-run with matching hash, the orchestrator offers to skip the stage
+- `--from-stage N` restarts execution at stage N using cached upstream outputs
+- Cache files are ephemeral — cleaned up by Pipeline Cleanup
+
+### Transient File Lifecycle
+
+Large intermediate outputs are written to `.lineup/.ephemeral/` instead of passed inline:
+
+- Downstream agents receive file path references (e.g., "Read `.lineup/.ephemeral/research-auth.yaml`")
+- Cleanup runs after the reviewer finishes (Stage 6) and again in Pipeline Cleanup
+- Never delete transient files before the reviewer finishes
+
+### Snapshot Streaming
+
+Inter-stage context snapshots exceeding 500 bytes are written to `.lineup/.ephemeral/`
+as `snapshot-<from>-<to>-<hash>.yaml`. Downstream agents receive a file reference
+instead of inline content. Snapshots under 500 bytes remain inline (cheaper than an
+extra file read). The threshold applies after compression.
 
 ### Agent Definitions (`agents/*.md`)
 
@@ -98,18 +141,48 @@ Frontmatter fields:
 - `model`: `haiku`, `sonnet`, or `opus`
 - `memory`: `user`, `project`, or `local`
 
+### Conditional Ollama Appendices (`agents/*-ollama.md`)
+
+Agents with Ollama integration (researcher, architect) have a separate `*-ollama.md`
+appendix file containing all Ollama-specific instructions. The orchestrator appends
+these to the spawn prompt only when `OLLAMA_AVAILABLE = true`, saving ~3.6 KB per
+agent spawn when Ollama is disabled.
+
+### Lazy Agent Loading
+
+The orchestrator only reads agent definition files for roles the current pipeline
+tier will actually spawn:
+
+| Tier | Agents loaded |
+|------|---------------|
+| Full | researcher, architect, developer, reviewer, documenter |
+| Full (no doc) | researcher, architect, developer, reviewer |
+| Lightweight | architect, developer, reviewer |
+| Direct | none |
+| Tactic | only agents in the tactic's stages |
+
+Agent files are read at the latest responsible moment (when spawning that role),
+not upfront. In Teams mode, the Team Preamble only writes instruction bodies for
+the needed roles.
+
 ### Claude Code Teams Mode
 
 When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and `TeamCreate` is available,
-the kick-off pipeline runs in **teams mode**:
+the kick-off pipeline runs in **teams mode**, subject to a terminal width check:
+
+- **Terminal width gate**: At pipeline start, `tput cols` is run to detect width.
+  If the terminal is narrower than 80 columns, Teams mode is disabled and agents
+  spawn as standard subagents instead. If `tput` fails, a warning is logged and
+  the pipeline continues with Teams mode enabled.
 
 - A session-scoped team named `lineup-<session_id>` is created once during initialization
   (the 6-character `session_id` is generated randomly to isolate concurrent runs).
 - All agent spawns use the Agent tool with `team_name="lineup-<session_id>"`,
   `name="<role>-<session_id>"`, and `model=<frontmatter model>`.
-- Because custom agent definitions (frontmatter + body) are silently dropped by the
-  teams runtime when `team_name` is specified, the orchestrator reads each agent's
-  `.md` file and embeds the body instructions directly in the `prompt` parameter.
+- A **Team Preamble** step writes all agent instruction bodies to
+  `.lineup/.ephemeral/agent-instructions.md` (one `## <role>` section each) after
+  team creation. Spawn prompts reference this file instead of embedding the full
+  body inline, reducing per-spawn token cost.
 - Teammates are visible as tmux panes named after their role.
 - Teammates cannot spawn sub-teammates (nesting is blocked by the platform).
 - Tool restrictions from agent frontmatter are advisory only in team mode (known platform limitation).
@@ -123,6 +196,7 @@ Runtime overrides are persisted outside the repo:
 
 - Claude: `~/.claude/lineup/agents/`
 - Codex: `~/.codex/lineup/agents/`
+- Opencode: `~/.config/opencode/lineup/agents/`
 
 Override precedence: user override > agent frontmatter defaults.
 
@@ -130,8 +204,9 @@ Override precedence: user override > agent frontmatter defaults.
 
 Command surface is unchanged:
 
-- Claude: `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook`
-- Codex: `$lineup-kick-off`, `$lineup-configure`, `$lineup-explain`, `$lineup-playbook`
+- Claude: `/lineup:kick-off`, `/lineup:configure`, `/lineup:explain`, `/lineup:playbook`, `/lineup:digest`
+- Codex: `$lineup-kick-off`, `$lineup-configure`, `$lineup-explain`, `$lineup-playbook`, `$lineup-digest`
+- OpenCode: `/lineup-kick-off`, `/lineup-configure`, `/lineup-explain`, `/lineup-playbook`, `/lineup-digest`
 
 ## Data and Schema Conventions
 
@@ -161,16 +236,16 @@ Project tactics:
 
 Built-ins live in `tactics/`. Project tactics override built-ins by matching `name`.
 
+Tactic composition: a stage can reference another tactic via a `tactic` field (mutually
+exclusive with `type`/`agent`). The orchestrator inlines the referenced tactic's stages
+before execution. Cycle detection prevents infinite recursion; parent variables override
+child defaults.
+
 ## Release Process (2.0)
 
 1. Update versions (`cli/package.json`, `.claude-plugin/plugin.json` as needed)
 2. Update `CHANGELOG.md`
-3. Run checks:
-   - `npm --prefix cli run typecheck`
-   - `npm --prefix cli test`
-   - `npm --prefix cli run schema:check`
-   - `npm --prefix cli run generate:check`
-   - `npm --prefix cli run build`
+3. Run checks: `./dev check`
 4. Commit and push
 5. Create GitHub release tag
 6. Publish npm package via GitHub Actions OIDC (workflow checks tag/version alignment)
@@ -208,3 +283,6 @@ Storage locations:
 - `local`: `.lineup/memory/<agent>/`
 
 Use project memory for project-specific knowledge; user memory for cross-project knowledge.
+
+Migration for global memory files over 50 KB is incremental — section headers are scanned
+first, then only matching sections are read into context.

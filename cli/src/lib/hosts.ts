@@ -5,6 +5,7 @@ import { isInteractive, promptHostSelection } from "./prompts";
 export type HostOption = HostName | "all";
 
 const HOST_SET = new Set<string>([...SUPPORTED_HOSTS, "all"]);
+const HOST_OPTIONS = [...SUPPORTED_HOSTS, "all"];
 
 export function normalizeHostOption(raw?: string): HostOption | null {
   if (!raw) {
@@ -13,7 +14,7 @@ export function normalizeHostOption(raw?: string): HostOption | null {
 
   const normalized = raw.trim().toLowerCase();
   if (!HOST_SET.has(normalized)) {
-    throw new CliError(`Invalid --host value: ${raw}. Expected claude, codex, or all.`, {
+    throw new CliError(`Invalid --host value: ${raw}. Expected ${HOST_OPTIONS.join(", ")}.`, {
       code: "invalid_host"
     });
   }
@@ -43,7 +44,7 @@ export async function resolveRequestedHosts(
     return (options?.prompt ?? promptHostSelection)();
   }
 
-  throw new CliError("No host selected. Use --host claude|codex|all when running non-interactively.", {
+  throw new CliError(`No host selected. Use --host ${HOST_OPTIONS.join("|")} when running non-interactively.`, {
     code: "host_required"
   });
 }

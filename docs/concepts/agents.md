@@ -1,28 +1,41 @@
 # Agents
 
-Lineup uses specialized subagents for different stages of the pipeline. Each agent has a specific role, a curated set of tools, and a model chosen to balance cost and capability.
+Lineup uses specialized subagents for different stages of the pipeline. Each agent has a specific role, a curated set of tools, and a model selected dynamically based on task complexity.
 
 ## Agent roles
 
-| Role | Model | Tools | Purpose |
-| ---- | ----- | ----- | ------- |
+| Role | Default Model | Tools | Purpose |
+| ---- | ------------- | ----- | ------- |
 | **Orchestrator** | -- | All | Coordinates the pipeline, delegates work, interacts with the user |
-| **Researcher** | Haiku | Read-only + Web | Explores code, reads docs, gathers context |
-| **Architect** | Opus | Read-only + Write | Synthesizes findings into actionable plans |
-| **Developer** | Opus | All | Implements the approved plan |
-| **Reviewer** | Opus | Read-only + Bash | Runs tests, reviews diffs, validates work |
+| **Researcher** | Haiku | Read-only + Web + Write (ephemeral) | Explores code, reads docs, gathers context |
+| **Architect** | Sonnet | Read-only + Write | Synthesizes findings into actionable plans |
+| **Developer** | Haiku | All | Implements the approved plan |
+| **Reviewer** | Sonnet | Read-only + Bash | Runs tests, reviews diffs, validates work |
 | **Documenter** | Opus | Read-only + Write + Web | Generates project documentation |
 | **Teacher** | Opus | Read-only + Web | Explains codebase components |
 
-The orchestrator is the main Claude Code session itself -- it's not a subagent file, but the top-level coordinator that delegates to the others.
+The "Default Model" column shows the model used for simple-complexity tasks. The orchestrator is the top-level coordinator that manages and delegates to host-specific subagents.
 
-## Why different models?
+## Effort-based model selection
 
-The researcher uses **Haiku** because its job is high-volume, read-only exploration. It needs to scan many files quickly to gather context. Haiku is fast and cost-effective for this kind of work -- you don't need the most capable model to read and summarize code.
+Models are not fixed per agent. The orchestrator selects a model for each agent based on the triage complexity classification from Stage 0:
 
-All other agents use **Opus** because their tasks require deeper reasoning: planning architecture, writing correct code, catching subtle bugs, producing clear explanations. These are high-stakes outputs where quality matters more than speed.
+| Role | simple | moderate | complex |
+| ---- | ------ | -------- | ------- |
+| **Researcher** | Haiku | Sonnet | Sonnet |
+| **Architect** | Sonnet | Sonnet | Opus |
+| **Developer** | Haiku | Haiku | Sonnet |
+| **Reviewer** | Sonnet | Sonnet | Sonnet |
 
-You can change any agent's model with `/lineup:configure`. See [Customize Agents](/guides/customize-agents) for details.
+This means a simple bug fix runs researchers on Haiku (fast and cheap), while a complex multi-module refactor upgrades architects to Opus (deeper reasoning for harder planning).
+
+Agents not in the effort mapping table (documenter, teacher) use their frontmatter default model regardless of complexity.
+
+### Override interaction
+
+User overrides (set via `/lineup:configure`) act as a **floor**, not a ceiling. If you override an agent's model to Opus, it will always use at least Opus -- even for simple tasks. If you override to Haiku but effort assigns Sonnet, the agent uses Sonnet (effort requirements take precedence).
+
+See [Customize Agents](/guides/customize-agents) for details on setting model overrides.
 
 ## Tool assignments
 
@@ -30,9 +43,9 @@ Each agent gets only the tools it needs. This is intentional -- restricting tool
 
 ### Researcher
 
-`Read, Grep, Glob, LS, WebFetch, WebSearch`
+`Read, Grep, Glob, LS, WebFetch, WebSearch, Write`
 
-Read-only codebase access plus web search. The researcher can explore files and look up external documentation, but it cannot modify anything. This makes research safe to run without supervision.
+Read-only codebase access plus web search, with Write restricted to `.lineup/.ephemeral/` for intermediate research drafts that exceed ~2 KB. The researcher can explore files, look up external documentation, and persist large findings to disk for downstream agents to read via file reference.
 
 ### Architect
 
@@ -108,7 +121,9 @@ Key differences from standard subagent mode:
 - **Tool restrictions advisory**: the tool list from agent frontmatter is not enforced by the platform in team mode -- it is treated as a guideline only.
 - **No sub-teammates**: teammates cannot spawn their own teammates. Nesting is blocked by the platform.
 
-If `TeamCreate` is not available (standard Claude Code without the experiment flag, or Codex CLI), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
+If `TeamCreate` is not available (standard Claude Code without the experiment flag, Codex CLI, or OpenCode), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
+
+Teams mode also falls back to standard subagents when the terminal is narrower than 80 columns or when terminal width detection fails.
 
 ## Full configuration reference
 

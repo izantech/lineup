@@ -51,7 +51,7 @@ If no tactics exist, the orchestrator prompts you to describe your task directly
 
 Every time you run `/lineup:kick-off`, the orchestrator runs an initialization sequence before the first stage begins:
 
-1. **Agent configuration** -- reads your override files from `~/.claude/lineup/agents/` (if any) and merges them with plugin defaults. If you customized agent models or tools via `/lineup:configure`, those customizations are applied here.
+1. **Agent configuration** -- reads your override files from the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode) and merges them with plugin defaults. If you customized agent models or tools via the configure skill, those customizations are applied here.
 2. **Memory migration** -- checks if any agent has global memory that should be migrated to project-scoped memory. This is a one-time operation per project, and it runs silently if there is nothing to migrate.
 3. **Tactic discovery** -- scans `.lineup/tactics/` (your project) and the plugin's `tactics/` directory for available tactics. This is what powers the menu mode selection and tactic-by-name invocation.
 
@@ -154,7 +154,7 @@ Would you like to generate documentation for these changes?
 
 ## How to respond to prompts
 
-Throughout the pipeline, the orchestrator uses structured prompts called **AskUserQuestion**. These always follow the same pattern:
+Throughout the pipeline, the orchestrator uses structured prompts (`AskUserQuestion` on Claude, native `question` tool on OpenCode). These always follow the same pattern:
 
 - A question with context
 - Numbered options (usually 3-5)
@@ -192,6 +192,25 @@ After the Plan stage (and after any stage with `gate: approval`), the orchestrat
 
 The orchestrator won't proceed until you explicitly approve.
 
+## Restarting from a specific stage
+
+If a pipeline run was interrupted or you want to re-run later stages without repeating earlier work, use `--from-stage`:
+
+```bash
+/lineup:kick-off Refactor the auth module --from-stage 4
+```
+
+This loads cached outputs from stages 0 through 3 and begins execution at stage 4 (Plan). Stage outputs are cached in `.lineup/.cache/` during each run, keyed by a hash of the task prompt and triage assessment.
+
+If a required cache file is missing, the orchestrator reports which stage is missing and suggests a lower restart point:
+
+```
+Cannot restart from stage 4: cached output for stage 2 is missing.
+Run the full pipeline first, or use --from-stage 2.
+```
+
+Cache files are ephemeral -- they are cleaned up at the end of every successful pipeline run. Cache from interrupted runs persists until the next successful completion.
+
 ## Choosing what to type
 
 | What you want to do | What to type |
@@ -199,5 +218,6 @@ The orchestrator won't proceed until you explicitly approve.
 | Run the full pipeline on a task | `/lineup:kick-off <task description>` |
 | Run a specific tactic | `/lineup:kick-off <tactic-name>` |
 | See available tactics and choose | `/lineup:kick-off` |
+| Restart from a specific stage | `/lineup:kick-off <task> --from-stage N` |
 | Force the full pipeline on a specific task | `/lineup:kick-off <task>` then say "let's do the full pipeline" |
 | Force a lighter pipeline | `/lineup:kick-off <task>` then say "skip research, I know this codebase" |

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-12
+
+### Added
+- OpenCode host support -- `lineup install|update|uninstall|status --host opencode` achieves full parity with Claude and Codex; skills install globally to `~/.config/opencode/skills/` as directories with `SKILL.md` (same format as Codex); config overrides and Ollama settings go to `~/.config/opencode/lineup/`; slash commands use no namespace prefix (e.g. `/lineup-kick-off`)
+- Staged prompt loading -- orchestrator core split into on-demand stage files (STAGES-1-3.md, STAGES-4-5.md, STAGES-6-7.md) to reduce upfront token cost; each file is self-contained and loaded when entering that stage group
+- Effort-based model selection -- triage complexity drives model assignment per agent role (haiku/sonnet/opus); user overrides act as a floor (can upgrade but not downgrade below effort level)
+- Context snapshot size threshold (~2 KB) -- snapshots exceeding the threshold are compressed to key findings with file path references before passing downstream
+- Stage result caching -- stage outputs cached to `.lineup/.cache/<stage>-<hash>.yaml` for re-run and rollback; supports `--from-stage N` to restart from a specific stage using cached upstream outputs
+- Transient file lifecycle -- large intermediate outputs written to `.lineup/.ephemeral/` with downstream agents receiving file path references instead of inline content; cleanup runs after reviewer finishes and in Pipeline Cleanup
+- Terminal width detection in kick-off initialization -- Teams mode is automatically disabled on terminals narrower than 80 columns, falling back to standard subagents to avoid layout issues with side-by-side panels
+- Inter-stage progress reporting -- orchestrator now shows a one-sentence factual summary after each stage completes
+- Team Preamble -- in Teams mode, all agent instruction bodies are written to a single `.lineup/.ephemeral/agent-instructions.md` file; spawn prompts reference the file instead of embedding the full body, reducing per-spawn token cost
+- Tactic composition -- stages can reference other tactics via a `tactic` field, enabling composable workflows; includes cycle detection, variable scoping (parent overrides child defaults), and automatic stage count recalculation
+- Custom Approval Gates documentation -- default pipeline section now points users to tactics with `gate: approval` for custom approval checkpoints at any stage
+- Researcher Write tool -- researcher agents can write intermediate findings to `.lineup/.ephemeral/` when output exceeds ~2 KB, reducing inline context bloat
+- Incremental memory migration -- global agent memory files over 50 KB are read incrementally by section headers instead of loading the full file into context
+- Ollama integration (opt-in) -- researcher agents can delegate text summarization and context gathering to a local Ollama model; enabled via `/lineup:configure` which writes `~/.claude/lineup/ollama.yaml`; requires `rawveg/ollama-mcp` MCP server; Ollama is never used for code analysis or generation
+- Digest skill (`/lineup:digest`) -- standalone codebase overview generator that spawns parallel researchers, structures findings via an architect, and writes a regenerable `DIGEST.md`; supports Ollama-assisted research when enabled
+- Lazy agent loading -- orchestrator only reads agent definition files for roles the current pipeline tier will actually spawn; reduces upfront context from all 6 agents (~22 KB) to only the roles needed (as little as ~8 KB for Lightweight tier)
+- Snapshot streaming -- inter-stage snapshots exceeding 500 bytes are written to `.lineup/.ephemeral/` and passed as file references instead of inline content, keeping the orchestrator conversation lean
+- Conditional Ollama appendices -- researcher and architect Ollama instructions extracted into separate `*-ollama.md` files that are only appended to spawn prompts when `OLLAMA_AVAILABLE = true`; saves ~3.6 KB per agent spawn when Ollama is disabled
+
+### Fixed
+- Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics
+- Artifact cleanup runs on any pipeline exit (abort, error, or normal completion), not only at Stage 6
+- Parallel architect merge now detects file-level conflicts and presents them to the user for resolution
+- Developer batch failure handling -- significant issues block dependent batches, independent batches finish, user decides next step
+- Memory migration enforces write-then-clean order to prevent data loss on interruption
+- Terminal width detection logs a warning when `tput` fails instead of silently assuming wide terminal
+- Tactic variable fallback injects a note into affected stage prompts listing unresolved variable references
+
 ## [2.1.1] - 2026-03-20
 
 ### Fixed

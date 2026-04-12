@@ -20,8 +20,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "agent"],
         "properties": {
+          "tactic": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Name of another tactic to inline at this position"
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -49,7 +53,15 @@
             "type": ["string", "null"],
             "enum": ["approval", null]
           }
-        }
+        },
+        "if": { "properties": { "tactic": true }, "required": ["tactic"] },
+        "then": {
+          "allOf": [
+            { "not": { "properties": { "type": true }, "required": ["type"] } },
+            { "not": { "properties": { "agent": true }, "required": ["agent"] } }
+          ]
+        },
+        "else": { "properties": { "type": true, "agent": true }, "required": ["type", "agent"] }
       }
     },
     "verification": {

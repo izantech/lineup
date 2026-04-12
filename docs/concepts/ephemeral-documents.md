@@ -6,12 +6,18 @@ Agents produce structured documents at every stage of the pipeline: research fin
 
 Lineup takes an ephemeral-first approach to keep your project clean:
 
-- **No `.lineup/` artifacts** cluttering your repository (tactics are the only exception, and those are user-created)
+- **No persistent `.lineup/` artifacts** cluttering your repository (tactics are the only user-created exception)
 - **No tool-specific files** that your team has to understand or maintain
 - **No stale documents** from previous runs hanging around in the file tree
-- **No gitignore entries** needed for generated pipeline files
 
 The only files Lineup writes to your project are the actual code changes (from the developer agent) and documentation files (from the documenter agent, if you opt in). Everything else stays in the conversation.
+
+During a pipeline run, Lineup may use two temporary directories under `.lineup/`:
+
+- **`.lineup/.cache/`** -- stage result cache for `--from-stage` restarts (keyed by task prompt + triage hash)
+- **`.lineup/.ephemeral/`** -- transient files for large intermediate outputs that exceed the ~2 KB compression threshold. After compression, outputs still exceeding 500 bytes are written here and passed as file references instead of inline content.
+
+Both are ephemeral. Cache files persist until the next successful pipeline completion to support restarts. Ephemeral files are cleaned up during Pipeline Cleanup (after Stage 7 or on abort/error). Neither directory needs to be tracked in version control.
 
 ## The YAML format
 

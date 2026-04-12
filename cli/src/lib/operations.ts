@@ -1,4 +1,5 @@
 import { rmSync } from "node:fs";
+import os from "node:os";
 
 import type { HostName } from "./constants";
 import { CliError, asErrorMessage } from "./errors";
@@ -11,7 +12,8 @@ import {
   updateClaudeLocal
 } from "./host-claude";
 import { installCodex, statusCodex, uninstallCodex } from "./host-codex";
-import { codexHostRoot, lineupStateFile, purgeTargets } from "./paths";
+import { installOpencode, statusOpencode, uninstallOpencode } from "./host-opencode";
+import { codexHostRoot, lineupStateFile, opencodeHostRoot, purgeTargets } from "./paths";
 import { isInteractive, promptMigrationConfirm, promptUninstallPlan } from "./prompts";
 import { resolveLocalRelease, resolveRelease } from "./release";
 import { loadState, saveState, updateHostState } from "./state";
@@ -51,6 +53,11 @@ export type OperationsDeps = {
   statusCodex: typeof statusCodex;
   uninstallCodex: typeof uninstallCodex;
   codexHostRoot: typeof codexHostRoot;
+  installOpencode: typeof installOpencode;
+  statusOpencode: typeof statusOpencode;
+  uninstallOpencode: typeof uninstallOpencode;
+  opencodeHostRoot: typeof opencodeHostRoot;
+  homeDir: () => string;
   lineupStateFile: typeof lineupStateFile;
   purgeTargets: typeof purgeTargets;
   isInteractive: typeof isInteractive;
@@ -77,6 +84,11 @@ const defaultDeps: OperationsDeps = {
   statusCodex,
   uninstallCodex,
   codexHostRoot,
+  installOpencode,
+  statusOpencode,
+  uninstallOpencode,
+  opencodeHostRoot,
+  homeDir: os.homedir,
   lineupStateFile,
   purgeTargets,
   isInteractive,
@@ -156,8 +168,8 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
     yes: boolean;
   }): Promise<InstallUpdateResult> {
     const release = input.fromDir
-      ? deps.resolveLocalRelease(input.fromDir)
-      : await deps.resolveRelease({ version: input.version });
+      ? deps.resolveLocalRelease(input.fromDir, input.hosts)
+      : await deps.resolveRelease({ version: input.version, hosts: input.hosts });
     deps.validateSourceBundle(release.sourceRoot);
 
     const state = deps.loadState();
@@ -215,6 +227,24 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
             host,
             ok: true,
             message: `Codex ${input.action} complete (${release.tag}).`
+          });
+        }
+
+        if (host === "opencode") {
+          const opencodeResult = deps.installOpencode(release.sourceRoot, deps.homeDir());
+
+          deps.updateHostState(state, "opencode", {
+            installed: true,
+            version: release.tag,
+            source: "cli-managed",
+            skills_dir: opencodeResult.skills_dir,
+            last_action: input.action
+          });
+
+          results.push({
+            host,
+            ok: true,
+            message: `OpenCode ${input.action} complete (${release.tag}).`
           });
         }
       } catch (error) {
@@ -306,6 +336,23 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
             message: "Codex uninstall complete."
           });
         }
+
+        if (host === "opencode") {
+          deps.uninstallOpencode(deps.homeDir());
+          deps.updateHostState(state, "opencode", {
+            installed: false,
+            version: null,
+            source: null,
+            skills_dir: null,
+            last_action: "uninstall"
+          });
+
+          results.push({
+            host,
+            ok: true,
+            message: "OpenCode uninstall complete."
+          });
+        }
       } catch (error) {
         const message = deps.asErrorMessage(error);
         failures.push({ host, error: message });
@@ -370,6 +417,21 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
           : undefined;
 
         outputHosts.codex = mergeStatus(stateHost, runtime);
+      }
+
+      if (host === "opencode") {
+        const runtime = deps.statusOpencode(deps.homeDir());
+        const stateHost = state.hosts.opencode
+          ? {
+              host: "opencode" as const,
+              installed: state.hosts.opencode.installed,
+              version: state.hosts.opencode.version ?? null,
+              source: state.hosts.opencode.source ?? null,
+              last_action: state.hosts.opencode.last_action
+            }
+          : undefined;
+
+        outputHosts.opencode = mergeStatus(stateHost, runtime);
       }
     }
 

@@ -1,0 +1,27 @@
+{
+  "host": "opencode",
+  "vars": {
+    "SKILL_NAME_KICKOFF": "lineup-kick-off",
+    "SKILL_NAME_CONFIGURE": "lineup-configure",
+    "SKILL_NAME_EXPLAIN": "lineup-explain",
+    "SKILL_NAME_PLAYBOOK": "lineup-playbook",
+    "SKILL_NAME_DIGEST": "lineup-digest",
+    "CMD_KICKOFF": "/lineup-kick-off",
+    "CMD_CONFIGURE": "/lineup-configure",
+    "CMD_EXPLAIN": "/lineup-explain",
+    "CMD_PLAYBOOK": "/lineup-playbook",
+    "CMD_DIGEST": "/lineup-digest",
+    "KICKOFF_INIT_PATH": "~/.config/opencode/skills/lineup-kick-off/INIT.md",
+    "QUESTION_PRIMITIVE": "question",
+    "OVERRIDES_DIR": "~/.config/opencode/lineup/agents/",
+    "MEMORY_USER_DIR": "~/.config/opencode/agent-memory/",
+    "MEMORY_PROJECT_DIR": "~/.config/opencode/projects/",
+    "HOST_TERM_PLUGIN": "skill",
+    "HOST_TERM_PLUGIN_POSSESSIVE": "skill's",
+    "HOST_DEFAULTS_TERM": "skill defaults",
+    "HOST_ARTIFACT_LABEL": "Skill",
+    "HOST_ARTIFACT_LABEL_LOWER": "skill",
+    "AGENTS_DIR": "agents/",
+    "OLLAMA_CONFIG_PATH": "~/.config/opencode/lineup/ollama.yaml"
+  }
+}

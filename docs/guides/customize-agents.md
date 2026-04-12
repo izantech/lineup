@@ -66,9 +66,15 @@ Controls how each agent stores persistent knowledge across sessions.
 
 Valid scopes: `user`, `project`, `local`.
 
+### Ollama
+
+Enables or disables an optional local Ollama model for researcher agents. When enabled, researchers can delegate text summarization and context gathering to a local model at no API cost.
+
+See the [Ollama Integration guide](/guides/ollama-integration) for prerequisites and setup steps.
+
 ### Reset
 
-Restores all agents to their factory defaults. The configurator deletes all override files in `~/.claude/lineup/agents/`.
+Restores all agents to their factory defaults. The configurator deletes all override files in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode).
 
 ## Step 3: Preview
 
@@ -85,7 +91,7 @@ Review the preview and confirm before changes are applied.
 
 ## Step 4: Apply
 
-The configurator writes override YAML files to `~/.claude/lineup/agents/`, never modifying the plugin's agent `.md` files. This means agent instructions always come from the plugin and benefit from upstream improvements.
+The configurator writes override YAML files to the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode), never modifying the plugin's agent `.md` files. This means agent instructions always come from the plugin and benefit from upstream improvements.
 
 ## Step 5: Confirm
 
@@ -109,11 +115,13 @@ Model selection is a cost-vs-quality tradeoff:
 | **Sonnet** | Moderate | Strong general reasoning | Good balance when cost matters |
 | **Opus** | Highest | Best reasoning | Planning, implementation, review -- high-stakes outputs |
 
-The defaults (Haiku for researcher, Opus for everything else) are a good starting point. Consider changing them when:
+The frontmatter defaults (Haiku for researcher, Opus for others) are the baseline, but the orchestrator dynamically selects models based on triage complexity via [effort-based model selection](/concepts/agents#effort-based-model-selection). For example, a complex task automatically upgrades architects to Opus and researchers to Sonnet.
 
-- **Cost is a concern:** Downgrade architects or reviewers to Sonnet. They'll still produce good output for most tasks.
-- **Speed matters more than depth:** Switch all agents to Sonnet for faster pipeline runs.
-- **Research quality matters:** Upgrade the researcher to Sonnet or Opus for tasks where deep code analysis is critical.
+Your `/lineup:configure` overrides act as a **floor** -- the orchestrator never uses a model lower than your override, but may use a higher one when effort requires it. Consider setting overrides when:
+
+- **Cost is a concern:** Set a Sonnet floor for agents that effort might upgrade to Opus. A Sonnet floor is a minimum model level that will elevate roles that would otherwise run Haiku on simple tasks — for simple tasks, effort keeps them at the floor; for moderate/complex tasks, effort may still upgrade them above the floor.
+- **Quality is always critical:** Set an Opus floor for specific agents to guarantee they never run below Opus, regardless of complexity.
+- **Speed matters more than depth:** Set all agents to Haiku. Effort will still upgrade them for moderate/complex tasks, but simple tasks stay fast.
 
 ## How to add or replace tools
 
@@ -147,9 +155,13 @@ Memory controls where agents store persistent knowledge across sessions:
 
 ## How customizations persist
 
-The configurator saves your changes to `~/.claude/lineup/agents/` as small YAML
-override files. These files live outside the plugin directory, so they survive
-plugin updates.
+The configurator saves your changes as small YAML override files to the host override directory:
+
+- Claude: `~/.claude/lineup/agents/`
+- Codex: `~/.codex/lineup/agents/`
+- OpenCode: `~/.config/opencode/lineup/agents/`
+
+These files live outside the plugin directory, so they survive plugin updates.
 
 Each override file contains only the fields you changed:
 

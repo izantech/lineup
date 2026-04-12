@@ -15,6 +15,7 @@ Generated host files are artifacts, not tracked files.
 | ---- | ------------------- |
 | Claude | Local plugin skills in CLI-managed plugin directory |
 | Codex | `$HOME/.agents/skills/lineup-*` |
+| OpenCode | `~/.config/opencode/skills/lineup-*/` (directory-per-skill with `SKILL.md`) |
 
 Each generated file includes:
 
@@ -27,8 +28,7 @@ Each generated file includes:
 Run from repository root:
 
 ```bash
-npm --prefix cli run schema:check
-npm --prefix cli run generate:check
+./dev check
 ```
 
 - `schema:check` validates JSON/YAML inputs used for generation

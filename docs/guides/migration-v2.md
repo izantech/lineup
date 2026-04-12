@@ -14,7 +14,7 @@ Lineup 2.0 replaces the manual marketplace installation with a CLI manager. This
 
 ## What stays the same
 
-- All `/lineup:*` commands (`kick-off`, `configure`, `explain`, `playbook`) work identically
+- Core skill commands (`kick-off`, `configure`, `explain`, `playbook`) still work identically across all hosts. Lineup 2.0+ adds additional commands like `/lineup:digest`.
 - Agent configuration overrides in `~/.claude/lineup/agents/` are preserved
 - Tactic format (`.lineup/tactics/*.yaml`) is unchanged
 - Agent behavior and pipeline stages are unchanged

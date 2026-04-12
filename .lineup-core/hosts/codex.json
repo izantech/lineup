@@ -5,10 +5,12 @@
     "SKILL_NAME_CONFIGURE": "lineup-configure",
     "SKILL_NAME_EXPLAIN": "lineup-explain",
     "SKILL_NAME_PLAYBOOK": "lineup-playbook",
+    "SKILL_NAME_DIGEST": "lineup-digest",
     "CMD_KICKOFF": "$lineup-kick-off",
     "CMD_CONFIGURE": "$lineup-configure",
     "CMD_EXPLAIN": "$lineup-explain",
     "CMD_PLAYBOOK": "$lineup-playbook",
+    "CMD_DIGEST": "$lineup-digest",
     "KICKOFF_INIT_PATH": ".agents/skills/lineup-kick-off/INIT.md",
     "QUESTION_PRIMITIVE": "structured multiple-choice prompts",
     "OVERRIDES_DIR": "~/.codex/lineup/agents/",
@@ -19,6 +21,7 @@
     "HOST_DEFAULTS_TERM": "skill pack defaults",
     "HOST_ARTIFACT_LABEL": "Skill Pack",
     "HOST_ARTIFACT_LABEL_LOWER": "skill pack",
-    "AGENTS_DIR": "agents/"
+    "AGENTS_DIR": "agents/",
+    "OLLAMA_CONFIG_PATH": "~/.codex/lineup/ollama.yaml"
   }
 }

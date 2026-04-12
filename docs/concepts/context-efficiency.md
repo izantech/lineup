@@ -87,6 +87,12 @@ The orchestrator applies several measures to keep context lean across the full p
    - Omit empty YAML sections (`gaps: []`, `risks: null`) -- pass only sections with substantive content
    - Prefer structured bullet-point lists over prose paragraphs -- downstream agents parse lists faster and more accurately
 
+6. **Snapshot compression threshold (~2 KB).** Each context snapshot passed between stages should stay under ~2 KB of text. When a snapshot exceeds this threshold, the orchestrator compresses it to key findings -- essential conclusions, file path references, and critical decisions -- before forwarding it to the downstream agent. This prevents large research outputs or verbose plans from inflating downstream context. When `OLLAMA_AVAILABLE = true`, this compression is delegated to the local Ollama model.
+
+7. **Snapshot streaming threshold (500 bytes).** After compression, if the snapshot still exceeds 500 bytes, it is written to `.lineup/.ephemeral/snapshot-<from>-<to>-<hash>.yaml` and a file path reference is passed to the downstream agent instead of inline content. This keeps the orchestrator's conversation lean. Snapshots under 500 bytes remain inline since that is cheaper than an extra file read. The streaming threshold applies **after** compression.
+
+8. **Effort-based model selection.** The triage complexity classification drives model selection per agent role, ensuring that simpler tasks use lighter models (lower cost, faster responses) while complex tasks get more capable models where it matters. See [Agents -- Effort-based model selection](/concepts/agents#effort-based-model-selection) for the mapping table.
+
 ## How you benefit
 
 These improvements are invisible to your workflow. Existing pipelines benefit automatically because the strategies are embedded in agent instructions, not in configuration or user-facing settings.

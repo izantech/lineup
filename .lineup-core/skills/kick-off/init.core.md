@@ -75,7 +75,10 @@ already done in a previous session.
 
 For each agent that needs migration:
 
-1. Read `{{MEMORY_USER_DIR}}/lineup-<agent>/MEMORY.md`.
+1. Check the file size of the global MEMORY.md for this agent. If the file exceeds
+   50 KB, read it incrementally: first scan for project-header boundaries (Grep for
+   `## Project:` patterns), then read only the matching section(s) plus surrounding
+   context using offset and limit. For files under 50 KB, read the full file.
 2. Identify sections relevant to the current project. Agent memory files typically organize
    knowledge under `## Project: <name>` headers. Match by:
    - Project name appearing in the header (e.g., `## Project: Lineup`)
@@ -92,7 +95,16 @@ For each agent that needs migration:
 
 ### Safety rules
 
-- **Read before write**: Read the full global MEMORY.md into context before making any changes. Do not alternate between reading and writing.
+- **Read before write**: For files under 50 KB, read the full global MEMORY.md into
+  context before making any changes. For files over 50 KB, read incrementally: scan
+  for project-header boundaries first (Grep for `## Project:` patterns), then read
+  only the matching section(s) plus surrounding context. Do not alternate between
+  reading and writing within a single section migration.
+- **Write-then-clean order**: When migrating a section, always write it to the destination
+  first, then remove it from the source. Never remove from the source before confirming the
+  destination write succeeded. If the pipeline is interrupted between these two steps, the
+  section exists in both locations — on the next retry, it will be detected as already
+  present in project-scoped memory and the source copy will be cleaned up normally.
 - **Idempotency**: If project-scoped memory already contains a section with the same header as the global file, skip that section (already migrated in a partial previous run). Do not duplicate content.
 - **Preserve on failure**: If writing to project-scoped memory fails, leave the global memory unchanged. Report the failure and continue the pipeline without migration. The user can retry on the next run.
 - **One agent at a time**: Complete migration for one agent fully (read, write, clean) before starting the next. This limits the blast radius of any interruption.
@@ -172,12 +184,43 @@ If any `${variable_name}` reference does not match a defined variable:
    - "Provide a value for this variable"
    - "Continue with the literal string (agent will see '${variable_name}')"
    - "Abort tactic execution"
-3. If the user provides values, substitute them. If they choose to continue,
-   proceed with a warning.
+3. If the user provides values, substitute them. If they choose to continue with
+   the literal string, inject a note at the top of each affected stage prompt:
+   "Note: The following variable references could not be resolved and appear as
+   literal text: ${var1}, ${var2}."
+   List only the unresolved references that appear in that specific stage's prompt.
+
+### Tactic Inlining
+
+Before executing stages, expand any tactic references into their constituent stages:
+
+1. **Expand**: Walk the `stages` array. For each stage that has a `tactic` field
+   (instead of `type`/`agent`):
+   a. Load the referenced tactic file (same discovery logic as Tactic Resolution).
+   b. Replace the tactic-reference stage with the referenced tactic's `stages` array
+      (flattened in place).
+   c. If the referencing stage had `prompt`, `optional`, or `gate` fields, apply them
+      as overrides to the **first** inlined stage only.
+2. **Cycle detection**: Maintain a set of tactic names currently being expanded
+   (the "expansion stack"). Before expanding a tactic, check if its name is already
+   in the stack. If so, report an error:
+   "Error: Circular tactic reference detected: <stack trace as A -> B -> A>.
+   Aborting tactic execution."
+   Use **{{QUESTION_PRIMITIVE}}** to let the user choose: abort or run the default pipeline.
+3. **Variable scoping**: When inlining tactic B into tactic A:
+   - Variables defined in A override B's defaults for any `${var}` references that
+     share the same name.
+   - Variables defined only in B use B's defaults.
+   - After inlining, re-run Variable Validation on the expanded stage list.
+4. **Stage count**: Recalculate total stage count after all inlining is complete.
+   Stage labels use the expanded count (e.g., "Stage 3/8" not "Stage 2/5").
+
+Inlining is recursive — an inlined tactic may itself contain tactic references.
+The cycle detection stack prevents infinite recursion.
 
 ### Tactic Execution
 
-When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence:
+When a tactic is selected, **replace the default pipeline** with the tactic's stage sequence (after tactic inlining has expanded all references):
 
 1. Iterate over the tactic's `stages` array in order.
 2. For each stage:
@@ -206,7 +249,23 @@ When a tactic is selected, **replace the default pipeline** with the tactic's st
 
 ## Team Setup
 
-After tactic resolution, check whether Claude Code Teams are available.
+After tactic resolution, check whether Claude Code Teams are available and
+whether the terminal is wide enough to support side-by-side teammate panels.
+
+### Terminal width check
+
+Before checking for Teams availability, detect the terminal width:
+
+1. Run `tput cols` using the Bash tool.
+2. If the command succeeds and returns a number **less than 80**, the terminal is
+   too narrow for Teams. Set `TEAMS_MODE = false` and skip the rest of this
+   section (Detection, Creating the team, etc.). Log briefly:
+   "Note: Terminal width (<N> cols) below 80 — using standard agents."
+3. If the command fails (non-zero exit, no output, or non-numeric output), log a
+   warning: "Warning: Could not detect terminal width — disabling Teams mode."
+   Set `TEAMS_MODE = false` and skip the rest of this section. Do not abort the
+   pipeline over a failed width check.
+4. If the width is **80 or greater**, continue to Detection below.
 
 ### Detection
 
@@ -249,9 +308,66 @@ Store both values in working context:
 All agent spawns in this pipeline will use these values to construct `team_name`
 and `name` parameters for the Agent tool.
 
+### Team Preamble
+
+After the team is created (`TEAMS_MODE = true`), write a combined agent instruction
+file to reduce per-spawn token cost:
+
+1. Determine which agents are needed using the **Lazy Agent Loading** table in
+   `SKILL.md`. Only include roles that the current pipeline tier will actually spawn.
+2. For each needed role, read `{{AGENTS_DIR}}<role>.md`.
+3. Extract the body (everything after the closing `---` of the frontmatter).
+4. Write all bodies to `.lineup/.ephemeral/agent-instructions.md`, separated by
+   `## <role>` headers.
+5. This file is referenced by team-mode spawn prompts instead of embedding the full
+   body inline. See the Team mode section in the core pipeline definition.
+
+If `.lineup/.ephemeral/` does not exist, create it. This file is cleaned up by
+Pipeline Cleanup like all other ephemeral artifacts.
+
+If a later stage needs an agent that was not in the initial set (e.g., Stage 7
+triggers documenter but the team preamble only had 4 roles), append that agent's
+body section to `.lineup/.ephemeral/agent-instructions.md` at that point.
+
 ### Team teardown
 
 Do not call `TeamDelete` at pipeline end -- Claude Code manages the team entity
 lifecycle. However, you **must** shut down individual teammates when the pipeline
 completes. See the Pipeline Cleanup section in the core pipeline definition for
 the shutdown procedure.
+
+---
+
+## Ollama Detection
+
+After Team Setup, check whether Ollama is available for use by researcher agents.
+
+1. Check if `{{OLLAMA_CONFIG_PATH}}` exists. If the file does not exist or cannot be
+   read, set `OLLAMA_AVAILABLE = false` and skip the rest of this section silently.
+
+2. Read the file and parse the YAML. Validate the config:
+   - `enabled` must be a boolean
+   - `model` must be a non-empty string
+   - `scope` must be present
+   If validation fails, set `OLLAMA_AVAILABLE = false`, log:
+   "Warning: Ollama config is invalid (<specific issue>). Disabling Ollama."
+   and skip the rest of this section.
+
+3. If validation passes but `enabled` is `false`, set
+   `OLLAMA_AVAILABLE = false` and skip silently.
+
+4. If `enabled: true`, verify the MCP server is actually running. Use ToolSearch
+   with query `"select:mcp__ollama__ollama_list"` to check if the tool is available.
+
+   a. If the tool is found and calling `mcp__ollama__ollama_list` returns a non-empty
+      model list, set `OLLAMA_AVAILABLE = true` and store `OLLAMA_MODEL` from the
+      `model` field in the YAML.
+
+    b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
+       "Warning: Ollama is enabled in config but the MCP server is not available.
+       Register the Ollama MCP server using your host's configuration method
+       (e.g., for Claude: `claude mcp add ollama -- npx -y ollama-mcp`)."
+
+Store in working context:
+- `OLLAMA_AVAILABLE` — boolean, whether Ollama is ready for use
+- `OLLAMA_MODEL` — string, the model name from config (only set when `OLLAMA_AVAILABLE = true`)
