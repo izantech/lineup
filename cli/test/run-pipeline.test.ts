@@ -170,12 +170,12 @@ stages:
     }
 
     expect(result.status).toBe("success");
-    expect(result.tfOutputDir).toBeDefined();
+    expect(result.outputDir).toBeDefined();
     // No stage execution — stageResults map is empty
     expect(result.stageResults.size).toBe(0);
     // Verify artifacts were written to disk
-    expect(existsSync(join(result.tfOutputDir!, "tf-config.yaml"))).toBe(true);
-    expect(existsSync(join(result.tfOutputDir!, "adapters", "planner.sh"))).toBe(true);
+    expect(existsSync(join(result.outputDir!, "tf-config.yaml"))).toBe(true);
+    expect(existsSync(join(result.outputDir!, "adapters", "planner.sh"))).toBe(true);
   });
 
   it("executes implement and verify through the native executor path", async () => {

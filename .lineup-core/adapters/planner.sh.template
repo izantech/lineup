@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Lineup TF Adapter: Planner (Architect)
-# Reads PlannerInput JSON on stdin, outputs TaskManifest YAML on stdout
+# Lineup reference adapter: Planner (Architect)
+# Reads native plan request payload on stdin, outputs lineup/v3 Plan YAML on stdout
 
 SYSTEM_PROMPT=$(cat "{{SYSTEM_PROMPT_PATH}}")
 PAYLOAD="$(cat)"

@@ -20,6 +20,8 @@ npm install -g @izantech/lineup-cli
 lineup install --host all
 lineup update --host all
 lineup status --host all
+lineup status --host all --artifacts
+lineup doctor
 lineup uninstall --host opencode
 ```
 
@@ -29,7 +31,9 @@ lineup uninstall --host opencode
 lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
 lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
-lineup status [--host claude|codex|opencode|all] [--json]
+lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
+lineup doctor [--json]
+lineup run [--workflow <path>] [--dry-run] [--json]
 ```
 
 ### Host behavior

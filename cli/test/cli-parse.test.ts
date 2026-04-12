@@ -8,6 +8,7 @@ function createMockHandlers() {
     update: vi.fn(async () => undefined),
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
+    doctor: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
   };
 }
@@ -18,6 +19,7 @@ describe("CLI command parsing", () => {
     update: vi.fn(async () => undefined),
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
+    doctor: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
   };
 
@@ -103,12 +105,13 @@ describe("CLI command parsing", () => {
 
   it("parses status options", async () => {
     const program = buildProgram(handlers);
-    await program.parseAsync(["status", "--host", "all", "--json"], { from: "user" });
+    await program.parseAsync(["status", "--host", "all", "--json", "--artifacts"], { from: "user" });
 
     expect(handlers.status).toHaveBeenCalledWith(
       expect.objectContaining({
         host: "all",
-        json: true
+        json: true,
+        artifacts: true
       }),
       expect.anything()
     );
@@ -121,6 +124,18 @@ describe("CLI command parsing", () => {
     expect(handlers.status).toHaveBeenCalledWith(
       expect.objectContaining({
         host: "opencode"
+      }),
+      expect.anything()
+    );
+  });
+
+  it("parses doctor options", async () => {
+    const program = buildProgram(handlers);
+    await program.parseAsync(["doctor", "--json"], { from: "user" });
+
+    expect(handlers.doctor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: true
       }),
       expect.anything()
     );

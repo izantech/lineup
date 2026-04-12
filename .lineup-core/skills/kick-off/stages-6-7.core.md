@@ -89,16 +89,16 @@ Transient files are cleaned up in two places:
 1. **Stage 6 (Verify)**: After TF completes and the validation result is confirmed,
    remove Stage 6-specific artifacts from `.lineup/.ephemeral/` only. Do not delete
    the entire `.lineup/.ephemeral/` directory — the documenter (Stage 7) and Teams-mode
-   spawns may still need files from earlier stages. Do not delete `.runner-output/` —
-   TF manages this directory independently and Stage 7 may read from it.
+   spawns may still need files from earlier stages. Do not delete `.lineup/.runs/<runId>/`
+   while the pipeline is still active — the native runtime and Stage 7 may still read from it.
 2. **Pipeline Cleanup**: Delete all `.yaml` files in `.lineup/.ephemeral/`.
    On successful pipeline completion, also delete `.lineup/.cache/*.yaml`.
    On error or abort, preserve `.lineup/.cache/` to support `--from-stage` restarts.
    Never delete files outside these managed directories.
 
-The `.runner-output/` directory is managed by Task Foundry and persists independently
-from `.lineup/.ephemeral/`. It is not cleaned up by the orchestrator during Pipeline
-Cleanup — TF controls its lifecycle.
+The `.lineup/.runs/<runId>/` directory is managed by the native Lineup runtime. It may
+contain worktree-local request/response files and pipeline-state snapshots while the run is
+active. Cleanup is a CLI-managed concern after the pipeline reaches a terminal state.
 
 Never delete transient files before validation is confirmed. Downstream agents
 may still need to read them.

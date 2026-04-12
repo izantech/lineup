@@ -52,7 +52,9 @@ lineup update --host claude --version latest
 
 ```bash
 lineup status --host all
+lineup status --host all --artifacts
 lineup status --host all --json
+lineup doctor
 ```
 
 `status --json` returns:
@@ -63,6 +65,8 @@ lineup status --host all --json
 - `hosts.<host>.source`
 - `hosts.<host>.last_action`
 - `hosts.<host>.error` (optional)
+
+`status --artifacts` also shows the latest native run, its artifact hashes, and the managed `.lineup/.runs/` and `.lineup/.artifacts/` directories.
 
 ## Uninstall
 

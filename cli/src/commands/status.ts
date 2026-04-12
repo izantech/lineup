@@ -1,8 +1,5 @@
-import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
 import type { HostName } from "../lib/constants";
+import { observeRuntimeStatus } from "../lib/observer";
 import { printJson, printTableLine } from "../lib/output";
 import { resolveRequestedHosts } from "../lib/hosts";
 import { readStatus } from "../lib/operations";
@@ -10,6 +7,7 @@ import { readStatus } from "../lib/operations";
 export type StatusCommandOptions = {
   host?: string;
   json?: boolean;
+  artifacts?: boolean;
 };
 
 function printHostStatus(host: HostName, item: { installed: boolean; version: string | null; source: string | null; last_action: string | null; error?: string }): void {
@@ -25,9 +23,13 @@ function printHostStatus(host: HostName, item: { installed: boolean; version: st
 export async function runStatusCommand(options: StatusCommandOptions): Promise<void> {
   const hosts = await resolveRequestedHosts(options.host);
   const status = await readStatus(hosts);
+  const runtime = options.artifacts ? observeRuntimeStatus() : undefined;
 
   if (options.json) {
-    printJson(status);
+    printJson({
+      ...status,
+      ...(runtime ? { runtime } : {})
+    });
     return;
   }
 
@@ -39,23 +41,21 @@ export async function runStatusCommand(options: StatusCommandOptions): Promise<v
     printHostStatus(host, item);
   }
 
-  let tfInstalled = false;
-  let tfVersion: string | null = null;
-  try {
-    execSync("which task-foundry", { stdio: "ignore" });
-    tfInstalled = true;
-    try {
-      tfVersion = execSync("task-foundry --version", { encoding: "utf-8" }).trim();
-    } catch {
-      // version unavailable
-    }
-  } catch {
-    // not installed
-  }
-
-  const tfAdaptersGenerated = existsSync(join(process.cwd(), ".lineup", ".tf-adapters"));
-
-  printTableLine(`Task Foundry: ${tfInstalled ? `installed (${tfVersion})` : "not installed"}`);
-  printTableLine(`TF Adapters: ${tfAdaptersGenerated ? "generated" : "not generated (run lineup install first)"}`);
   printTableLine(`state_file: ${status.state_file}`);
+
+  if (runtime) {
+    printTableLine(`runs_dir: ${runtime.runs_dir}`);
+    printTableLine(`artifact_store_dir: ${runtime.artifact_store_dir}`);
+    printTableLine(`run_count: ${runtime.run_count}`);
+    if (runtime.latest_run) {
+      printTableLine(`latest_run: ${runtime.latest_run.run_id} (${runtime.latest_run.status})`);
+      printTableLine(`  workflow: ${runtime.latest_run.workflow ?? "unknown"}`);
+      printTableLine(`  current_stage: ${runtime.latest_run.current_stage ?? "none"}`);
+      for (const artifact of runtime.latest_run.artifacts) {
+        printTableLine(`  artifact:${artifact.kind}: ${artifact.sha256} (${artifact.exists ? "present" : "missing"})`);
+      }
+    } else {
+      printTableLine("latest_run: none");
+    }
+  }
 }

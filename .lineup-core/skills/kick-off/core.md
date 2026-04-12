@@ -244,31 +244,32 @@ rules for `.lineup/.ephemeral/` usage.
 ## Runtime Engine Integration
 
 The orchestrator is the **single user-facing entry point** for the Lineup pipeline. Users
-never run `lineup run` or `task-foundry` directly.
+normally enter through the host skill, while the CLI owns the runtime mechanics behind it.
 
-Two mechanical commands are called by the orchestrator on the user's behalf:
+The native v3 engine now owns:
 
-- **`lineup tf generate`** — called at the start of Stage 4 to generate TF adapter
-  scripts, system prompts, and TF config for the current host. Output lands in
-  `.lineup/.ephemeral/<runId>/`.
-- **`task-foundry`** — called during Stage 5 to execute the plan. TF dispatches developer
-  workers, runs the validator, and handles parallelism, retries, and hazard detection. All
-  implementation artifacts are written to TF's `.runner-output/` directory.
+- plan artifact materialization
+- plan-to-task compilation and deterministic wave scheduling
+- native execution, retry handling, and verification dispatch
+- run state and artifact persistence under `.lineup/.runs/<runId>/` and `.lineup/.artifacts/`
+
+Reference adapter generation may still exist for migration or comparison workflows, but it is
+not the normal execution path for `lineup run`.
 
 ### Stage ownership
 
 | Stage range | Owner | Notes |
 |-------------|-------|-------|
 | Stages 0–3 | Host-native (orchestrator + agents) | Triage, Clarify, Research, Gate |
-| Stages 4–6 | Task Foundry (via orchestrator invocation) | Adapter generation, Implement, Verify |
+| Stages 4–6 | Lineup CLI engine + spawned agents | Plan artifact, native task execution, Verify |
 | Stage 7 | Host-native (orchestrator + documenter) | Documentation |
 
 ### Artifact locations
 
-- `.lineup/.ephemeral/<runId>/` — TF adapters, prompts, TF config, and the approved
-  TaskManifest (`planner-output.yaml`)
-- `.runner-output/` — TF-managed directory containing all implementation artifacts and
-  validator output; persists independently from `.lineup/.ephemeral/`
+- `.lineup/.ephemeral/` — large transient context snapshots and stage handoff files
+- `.lineup/.runs/<runId>/` — per-run state, generated request/response handoff files, and
+  runtime-local artifacts
+- `.lineup/.artifacts/` — immutable persisted plan, tasks, review, config, and protocol artifacts
 
 ---
 

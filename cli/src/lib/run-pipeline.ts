@@ -30,7 +30,7 @@ export type PipelineResult = {
   runId: string;
   status: "success" | "failed" | "aborted";
   stageResults: Map<string, StageResult>;
-  tfOutputDir?: string;
+  outputDir?: string;
 };
 
 type StageResult = {
@@ -161,7 +161,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
         projectRoot
       );
       persistProtocolArtifact();
-      return { runId, status: "success", stageResults: new Map<string, StageResult>(), tfOutputDir: artifactDir };
+      return { runId, status: "success", stageResults: new Map<string, StageResult>(), outputDir: artifactDir };
     }
 
     // 6. Resolve execution order

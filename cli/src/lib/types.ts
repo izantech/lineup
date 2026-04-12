@@ -32,10 +32,36 @@ export type StatusHost = {
   error?: string;
 };
 
+export type ObservedArtifact = {
+  kind: ArtifactKind;
+  format: ArtifactFormat;
+  sha256: string;
+  path: string;
+  exists: boolean;
+};
+
+export type ObservedPipelineRun = {
+  run_id: string;
+  status: string;
+  workflow: string | null;
+  current_stage: string | null;
+  updated_at: string;
+  completed_stages: string[];
+  artifacts: ObservedArtifact[];
+};
+
+export type RuntimeStatus = {
+  runs_dir: string;
+  artifact_store_dir: string;
+  run_count: number;
+  latest_run: ObservedPipelineRun | null;
+};
+
 export type StatusOutput = {
   schema_version: number;
   state_file: string;
   hosts: Partial<Record<HostName, StatusHost>>;
+  runtime?: RuntimeStatus;
 };
 
 export type GeneratedFile = {

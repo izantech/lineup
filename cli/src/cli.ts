@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runRunCommand, type RunCommandOptions } from "./commands/run";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
+import { runDoctorCommand, type DoctorCommandOptions } from "./commands/doctor";
 import { runTfGenerateCommand } from "./commands/tf";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
 import { runUpdateCommand, type UpdateCommandOptions } from "./commands/update";
@@ -19,6 +20,7 @@ export type CliHandlers = {
   update: (options: UpdateCommandOptions) => Promise<void>;
   uninstall: (options: UninstallCommandOptions) => Promise<void>;
   status: (options: StatusCommandOptions) => Promise<void>;
+  doctor: (options: DoctorCommandOptions) => Promise<void>;
   run: (options: RunCommandOptions) => Promise<void>;
   tf: (options: TfGenerateOptions) => Promise<void>;
 };
@@ -36,6 +38,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     update: runUpdateCommand,
     uninstall: runUninstallCommand,
     status: runStatusCommand,
+    doctor: runDoctorCommand,
     run: runRunCommand,
     tf: runTfGenerateCommand,
     ...handlers
@@ -79,29 +82,36 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .command("status")
     .description("Show Lineup installation status")
     .option("--host <host>", "Target host(s): claude|codex|opencode|all")
+    .option("--artifacts", "Include latest run and artifact status")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.status);
 
   program
+    .command("doctor")
+    .description("Check native runtime prerequisites and latest run health")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.doctor);
+
+  program
     .command("run")
-    .description("Run a Lineup pipeline via Task Foundry")
+    .description("Run a Lineup pipeline through the native v3 engine")
     .option("--workflow <path>", "Path to workflow YAML", undefined)
     .option("--tactic <name>", "Run a specific tactic", undefined)
     .option("--from-stage <id>", "Resume from a specific stage", undefined)
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
     .option("--json", "Output state as JSON", false)
-    .option("--generate-only", "Generate TF artifacts without executing stages", false)
-    .option("--timeout <seconds>", "Kill TF after N seconds", parseInt)
+    .option("--generate-only", "Generate reference adapter/config artifacts without executing stages", false)
+    .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .action(commandHandlers.run);
 
-  const tf = program.command("tf").description("Task Foundry integration commands");
+  const tf = program.command("tf").description("Reference adapter generation commands");
   tf.command("generate")
-    .description("Generate TF adapters and config for orchestrator-driven execution")
+    .description("Generate reference adapters and config for comparison or migration workflows")
     .option("--host <host>", "Target host (claude|codex|opencode)")
     .option("--output <dir>", "Output directory", undefined)
     .option("--workflow <path>", "Path to workflow YAML", undefined)
-    .option("--manifest-path <path>", "Path to approved task manifest", undefined)
+    .option("--manifest-path <path>", "Path to approved plan/task manifest reference", undefined)
     .action(commandHandlers.tf);
 
   return program;

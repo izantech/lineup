@@ -14,7 +14,9 @@ npm install -g @izantech/lineup-cli
 lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
 lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
-lineup status [--host claude|codex|opencode|all] [--json]
+lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
+lineup doctor [--json]
+lineup run [--workflow <path>] [--dry-run] [--json]
 ```
 
 ## Release source model
@@ -94,3 +96,16 @@ Each host can include:
 - `source`
 - `last_action`
 - `error` (optional)
+
+When you pass `--artifacts`, status also includes:
+
+- `runtime.runs_dir`
+- `runtime.artifact_store_dir`
+- `runtime.run_count`
+- `runtime.latest_run`
+
+## Native runtime commands
+
+- `lineup doctor` checks core runtime prerequisites such as `git`, `node`, host CLIs, and the latest recorded run state.
+- `lineup run` executes the native v3 pipeline. Use `--dry-run` to inspect deterministic stage ordering and `--json` to emit the final run summary.
+- `lineup tf generate` remains available only for reference adapter/config generation during migration or comparison workflows.
