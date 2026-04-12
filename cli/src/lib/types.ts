@@ -45,6 +45,60 @@ export type GeneratedFile = {
   content: string;
 };
 
+export type LineupApiVersion = "lineup/v3";
+
+export type ArtifactKind =
+  | "constitution"
+  | "spec"
+  | "plan"
+  | "tasks"
+  | "review"
+  | "config"
+  | "pipeline-state";
+
+export type ArtifactFormat = "yaml" | "json" | "markdown";
+
+export type ArtifactDescriptor = {
+  kind: ArtifactKind;
+  apiVersion: Extract<LineupApiVersion, "lineup/v3">;
+  format: ArtifactFormat;
+  path?: string;
+  sha256?: string;
+};
+
+export type PipelineArtifactMap = Partial<Record<ArtifactKind, ArtifactDescriptor>>;
+
+export type ModelProvider = "anthropic" | "openai" | "ollama";
+
+export type ModelAliasDefinition = {
+  provider: ModelProvider;
+  model: string;
+  baseUrl?: string;
+  apiKeyEnv?: string;
+};
+
+export type UserConfig = {
+  apiVersion: Extract<LineupApiVersion, "lineup/v3">;
+  defaultHost?: HostName;
+  modelAliases?: Record<string, ModelAliasDefinition>;
+  ollama?: {
+    enabled?: boolean;
+    baseUrl?: string;
+    defaultModel?: string;
+  };
+};
+
+export type ResolvedConfig = {
+  sources: string[];
+  defaultHost: HostName | null;
+  modelAliases: Record<string, ModelAliasDefinition>;
+  ollama: {
+    enabled: boolean;
+    baseUrl: string;
+    defaultModel: string | null;
+  };
+};
+
 export type WorkflowVariable = {
   name: string;
   description?: string;
@@ -53,9 +107,12 @@ export type WorkflowVariable = {
   required?: boolean;
 };
 
-export type StageType = "builtin" | "reasoning" | "agent" | "approval";
+export type StageType = "builtin" | "reasoning" | "agent" | "approval" | "tasks";
 export type AgentRole = "researcher" | "architect" | "developer" | "reviewer" | "documenter" | "teacher";
 export type ErrorCode =
+  | "invalid_path"
+  | "command_not_found"
+  | "command_failed"
   | "timeout"
   | "rate_limit"
   | "build_failure"
@@ -64,7 +121,15 @@ export type ErrorCode =
   | "context_overflow"
   | "tool_unavailable"
   | "agent_spawn_failed"
-  | "data_corruption";
+  | "data_corruption"
+  | "approval_rejected"
+  | "protocol_error"
+  | "artifact_validation_failed"
+  | "state_mismatch"
+  | "isolation_failed"
+  | "worktree_conflict"
+  | "sparse_isolation_disabled"
+  | "sparse_isolation_missing_paths";
 
 export type StageInput = {
   source: string;
@@ -116,6 +181,7 @@ export type WorkflowStage = {
   optional?: boolean;
   gate?: string | boolean;
   parallel?: ParallelConfig;
+  conditional_approach?: Record<string, number>;
 };
 
 export type SnapshotConfig = {
@@ -138,7 +204,7 @@ export type LifecycleConfig = {
 };
 
 export type WorkflowDefinition = {
-  apiVersion: string;
+  apiVersion: LineupApiVersion;
   kind: string;
   name: string;
   description?: string;
@@ -150,6 +216,19 @@ export type WorkflowDefinition = {
 };
 
 export type TfRole = "scope_selector" | "planner" | "worker" | "validator";
+
+export type IsolationMode = "index" | "full" | "sparse";
+
+export type PipelineRunStatus = "success" | "failed" | "aborted";
+
+export type PipelineState = {
+  apiVersion: Extract<LineupApiVersion, "lineup/v3">;
+  runId: string;
+  status: PipelineRunStatus;
+  workflowPath: string;
+  gitTreeSha: string | null;
+  artifacts: PipelineArtifactMap;
+};
 
 export type RunOptions = {
   workflow?: string;

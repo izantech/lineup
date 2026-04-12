@@ -5,7 +5,7 @@ import type { TfGeneratorContext } from "../src/lib/tf-config.js";
 import type { WorkflowDefinition } from "../src/lib/types.js";
 
 const workflow: WorkflowDefinition = {
-  apiVersion: "lineup/v1",
+  apiVersion: "lineup/v3",
   kind: "Workflow",
   name: "test-workflow",
   stages: [

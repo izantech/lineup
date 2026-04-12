@@ -58,7 +58,7 @@ describe("runPipeline", () => {
     const workflowDir = join(tempDir, ".lineup-core", "workflows");
     mkdirSync(workflowDir, { recursive: true });
     writeFileSync(join(workflowDir, "full-pipeline.yaml"), `
-apiVersion: lineup/v1
+apiVersion: lineup/v3
 kind: Workflow
 name: test-pipeline
 stages:
@@ -95,7 +95,7 @@ stages:
     mkdirSync(workflowDir, { recursive: true });
     const workflowPath = join(workflowDir, "full-pipeline.yaml");
     writeFileSync(workflowPath, `
-apiVersion: lineup/v1
+apiVersion: lineup/v3
 kind: Workflow
 name: test-pipeline
 stages:
@@ -139,7 +139,7 @@ stages:
     const workflowDir = join(tempDir, ".lineup-core", "workflows");
     mkdirSync(workflowDir, { recursive: true });
     writeFileSync(join(workflowDir, "cyclic.yaml"), `
-apiVersion: lineup/v1
+apiVersion: lineup/v3
 kind: Workflow
 name: cyclic
 stages:

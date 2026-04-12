@@ -5,7 +5,7 @@ import type { WorkflowDefinition } from "../src/lib/types.js";
 
 function makeWorkflow(stages: WorkflowDefinition["stages"]): WorkflowDefinition {
   return {
-    apiVersion: "lineup/v1",
+    apiVersion: "lineup/v3",
     kind: "Workflow",
     name: "test",
     stages
@@ -49,6 +49,14 @@ describe("validateWorkflowDag", () => {
     expect(() => validateWorkflowDag(workflow)).toThrow(/unknown input source/);
   });
 
+  it("throws on duplicate stage ids", () => {
+    const workflow = makeWorkflow([
+      { id: "a", type: "builtin" },
+      { id: "a", type: "agent", agent: "developer" }
+    ]);
+    expect(() => validateWorkflowDag(workflow)).toThrow(/duplicate stage id/);
+  });
+
   it("accepts root stages with empty depends_on", () => {
     const workflow = makeWorkflow([
       { id: "a", type: "builtin", depends_on: [] },
@@ -89,12 +97,22 @@ describe("resolveExecutionOrder", () => {
 
   it("places root stages in wave 1", () => {
     const workflow = makeWorkflow([
-      { id: "x", type: "builtin" },
-      { id: "y", type: "builtin" }
+      { id: "y", type: "builtin" },
+      { id: "x", type: "builtin" }
     ]);
     const waves = resolveExecutionOrder(workflow);
     expect(waves).toHaveLength(1);
-    expect(waves[0]).toContain("x");
-    expect(waves[0]).toContain("y");
+    expect(waves[0]).toEqual(["y", "x"]);
+  });
+
+  it("preserves deterministic stage order within each wave", () => {
+    const workflow = makeWorkflow([
+      { id: "root", type: "builtin" },
+      { id: "later", type: "builtin", depends_on: ["root"] },
+      { id: "earlier", type: "builtin", depends_on: ["root"] }
+    ]);
+    const waves = resolveExecutionOrder(workflow);
+    expect(waves).toHaveLength(2);
+    expect(waves[1]).toEqual(["later", "earlier"]);
   });
 });

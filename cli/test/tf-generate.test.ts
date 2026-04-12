@@ -32,7 +32,7 @@ You are the architect agent body content here.
 `;
 
 const MINIMAL_WORKFLOW = `
-apiVersion: lineup/v1
+apiVersion: lineup/v3
 kind: Workflow
 name: test-pipeline
 stages:

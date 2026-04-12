@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/json/v3/protocol.schema.json",
+  "title": "Lineup v3 Protocol",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/notification"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "messageMethod": {
+      "type": "string",
+      "enum": [
+        "agent/spawn",
+        "agent/output",
+        "agent/done",
+        "agent/cancel",
+        "gate/request",
+        "pipeline/cancel",
+        "pipeline/complete"
+      ]
+    },
+    "id": {
+      "type": ["string", "integer", "null"]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "method": {
+          "$ref": "#/$defs/messageMethod"
+        },
+        "params": {}
+      }
+    },
+    "notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "$ref": "#/$defs/messageMethod"
+        },
+        "params": {}
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonrpc", "id", "result"],
+          "properties": {
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "id": {
+              "$ref": "#/$defs/id"
+            },
+            "result": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jsonrpc", "id", "error"],
+          "properties": {
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "id": {
+              "$ref": "#/$defs/id"
+            },
+            "error": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

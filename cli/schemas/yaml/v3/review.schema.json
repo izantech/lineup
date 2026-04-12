@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/v3/review.schema.json",
+  "title": "Lineup v3 Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "status", "summary", "issues", "test_results"],
+  "properties": {
+    "apiVersion": {
+      "const": "lineup/v3"
+    },
+    "kind": {
+      "const": "Review"
+    },
+    "type": {
+      "type": "string",
+      "const": "review"
+    },
+    "agent": {
+      "type": "string",
+      "const": "reviewer"
+    },
+    "date": {
+      "type": "string"
+    },
+    "topic": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "PASS_WITH_WARNINGS"]
+    },
+    "pipeline_stage": {
+      "type": ["integer", "null"]
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "confidence", "file", "line", "description", "fix"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "suggestion"]
+          },
+          "confidence": {
+            "type": "integer",
+            "minimum": 75,
+            "maximum": 100
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fix": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "test_results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test_suite"],
+      "properties": {
+        "test_suite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["pass", "fail"]
+            },
+            "tests_run": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tests_passed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tests_failed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "percentage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "uncovered_areas": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

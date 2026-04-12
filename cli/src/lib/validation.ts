@@ -6,9 +6,9 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { parseDocument } from "yaml";
 
-import { CliError } from "./errors";
-import { packageRoot } from "./paths";
-import type { InstallerState, ReleaseManifest, WorkflowDefinition } from "./types";
+import { CliError } from "./errors.js";
+import { packageRoot } from "./paths.js";
+import type { InstallerState, ReleaseManifest, WorkflowDefinition } from "./types.js";
 
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
@@ -72,6 +72,15 @@ export function validateReleaseManifest(payload: unknown, source: string): Relea
   return payload as ReleaseManifest;
 }
 
+function validateYamlArtifact(schemaRelPath: string, content: string, source: string, label: string): void {
+  const parsed = parseRestrictedYaml(content, source);
+  assertValid(schemaRelPath, parsed, label);
+}
+
+function validateJsonArtifact(schemaRelPath: string, payload: unknown, source: string, label: string): void {
+  assertValid(schemaRelPath, payload, label);
+}
+
 export function parseRestrictedYaml(content: string, source: string): unknown {
   if (/(^|\s)&[A-Za-z0-9_-]+/m.test(content)) {
     throw new CliError(`${source}: YAML anchors are not allowed.`, {
@@ -85,7 +94,7 @@ export function parseRestrictedYaml(content: string, source: string): unknown {
     });
   }
 
-  if (/(^|\s)!\S+/m.test(content)) {
+  if (/(^|\s)![A-Za-z_][\w:-]*/m.test(content)) {
     throw new CliError(`${source}: YAML custom tags are not allowed.`, {
       code: "yaml_tag_not_allowed"
     });
@@ -131,6 +140,38 @@ export type AgentOutputKind = keyof typeof AGENT_SCHEMA_MAP;
 export function validateAgentOutputYaml(kind: AgentOutputKind, content: string, source: string): void {
   const parsed = parseRestrictedYaml(content, source);
   assertValid(AGENT_SCHEMA_MAP[kind], parsed, `${kind} output ${source}`);
+}
+
+export function validateConstitutionYaml(content: string, source: string): void {
+  validateYamlArtifact("yaml/v3/constitution.schema.json", content, source, `Constitution ${source}`);
+}
+
+export function validateSpecYaml(content: string, source: string): void {
+  validateYamlArtifact("yaml/v3/spec.schema.json", content, source, `Spec ${source}`);
+}
+
+export function validatePlanYaml(content: string, source: string): void {
+  validateYamlArtifact("yaml/v3/plan.schema.json", content, source, `Plan ${source}`);
+}
+
+export function validateReviewYaml(content: string, source: string): void {
+  validateYamlArtifact("yaml/v3/review.schema.json", content, source, `Review ${source}`);
+}
+
+export function validateConfigYaml(content: string, source: string): void {
+  validateYamlArtifact("yaml/v3/config.schema.json", content, source, `Config ${source}`);
+}
+
+export function validateTasksJson(payload: unknown, source: string): void {
+  validateJsonArtifact("json/v3/tasks.schema.json", payload, source, `Tasks ${source}`);
+}
+
+export function validateProtocolJson(payload: unknown, source: string): void {
+  validateJsonArtifact("json/v3/protocol.schema.json", payload, source, `Protocol ${source}`);
+}
+
+export function validatePipelineStateJson(payload: unknown, source: string): void {
+  validateJsonArtifact("json/v3/pipeline-state.schema.json", payload, source, `Pipeline state ${source}`);
 }
 
 function readJsonFile(filePath: string): unknown {

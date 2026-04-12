@@ -11,6 +11,7 @@ function resolveRef(ref: string, ctx: ExpressionContext): unknown {
   if (parts.length < 4 || parts[0] !== "stages" || parts[2] !== "outputs") {
     throw new Error(`Malformed template reference: {{ ${ref} }}`);
   }
+
   const stageId = parts[1];
   const field = parts.slice(3).join(".");
   const stage = ctx.stages[stageId];
@@ -31,7 +32,19 @@ function applyFilter(value: unknown, filter: string): unknown {
   throw new Error(`Unknown filter: '${filter}'`);
 }
 
-// Resolve a single {{ ref }} or {{ ref | filter }} token, returning a scalar string or number
+function parseScalarLiteral(text: string): string | number {
+  const trimmed = text.trim();
+  const quoted = /^(['"])(.*)\1$/.exec(trimmed);
+  if (quoted) {
+    return quoted[2];
+  }
+  if (trimmed !== "" && !Number.isNaN(Number(trimmed))) {
+    return Number(trimmed);
+  }
+  return trimmed;
+}
+
+// Resolve a single {{ ref }} or {{ ref | filter }} token, returning a scalar string or number.
 function resolveToken(ref: string, filter: string | undefined, ctx: ExpressionContext): string | number {
   const value = resolveRef(ref, ctx);
   if (filter !== undefined) {
@@ -44,31 +57,134 @@ function resolveToken(ref: string, filter: string | undefined, ctx: ExpressionCo
   return String(value);
 }
 
-// Handle contains({{ ref }}, "value") or contains({{ ref | filter }}, "value")
+function isWordBoundaryChar(ch: string | undefined): boolean {
+  return ch === undefined || /\s|\(|\)/.test(ch);
+}
+
+// Split on top-level `and`/`or` keywords, respecting parentheses and quoted strings.
+function splitOnTopLevelKeyword(expr: string, keyword: "and" | "or"): string[] | null {
+  const lower = expr.toLowerCase();
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  let segmentStart = 0;
+  let found = false;
+
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+
+    if (quote !== null) {
+      if (ch === quote && expr[i - 1] !== "\\") {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+
+    if (ch === "(") {
+      depth++;
+      continue;
+    }
+
+    if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (depth !== 0 || !lower.startsWith(keyword, i)) {
+      continue;
+    }
+
+    const before = expr[i - 1];
+    const after = expr[i + keyword.length];
+    if (isWordBoundaryChar(before) && isWordBoundaryChar(after)) {
+      parts.push(expr.slice(segmentStart, i).trim());
+      segmentStart = i + keyword.length;
+      i = segmentStart - 1;
+      found = true;
+    }
+  }
+
+  if (!found) {
+    return null;
+  }
+
+  parts.push(expr.slice(segmentStart).trim());
+  return parts;
+}
+
+function stripWrappingParens(expr: string): string {
+  let trimmed = expr.trim();
+
+  while (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+    let depth = 0;
+    let wrapsWholeExpression = true;
+    let quote: "'" | '"' | null = null;
+
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+
+      if (quote !== null) {
+        if (ch === quote && trimmed[i - 1] !== "\\") {
+          quote = null;
+        }
+        continue;
+      }
+
+      if (ch === "'" || ch === '"') {
+        quote = ch;
+        continue;
+      }
+
+      if (ch === "(") {
+        depth++;
+        continue;
+      }
+
+      if (ch === ")") {
+        depth--;
+        if (depth === 0 && i < trimmed.length - 1) {
+          wrapsWholeExpression = false;
+          break;
+        }
+      }
+    }
+
+    if (!wrapsWholeExpression || depth !== 0) {
+      break;
+    }
+
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
 function evaluateContains(expr: string, ctx: ExpressionContext): boolean {
-  const containsRe = /^contains\(\s*\{\{\s*(stages\.[^\s|}]+(?:\.[^\s|}]+)*)\s*(?:\|\s*(\w+))?\s*\}\}\s*,\s*"([^"]*)"\s*\)$/;
+  const containsRe = /^contains\(\s*\{\{\s*(stages\.[^\s|}]+(?:\.[^\s|}]+)*)\s*(?:\|\s*(\w+))?\s*\}\}\s*,\s*(['"])(.*?)\3\s*\)$/;
   const m = containsRe.exec(expr.trim());
   if (!m) {
     throw new Error(`Malformed contains() expression: ${expr}`);
   }
+
   const ref = m[1];
   const filter = m[2];
-  const searchValue = m[3];
+  const searchValue = m[4];
   const value = resolveRef(ref, ctx);
   const resolved = filter !== undefined ? applyFilter(value, filter) : value;
+
   if (Array.isArray(resolved)) return resolved.includes(searchValue);
   return String(resolved).includes(searchValue);
 }
 
-function coerce(s: string): string | number {
-  const trimmed = s.trim();
-  if (trimmed !== "" && !isNaN(Number(trimmed))) return Number(trimmed);
-  return trimmed;
-}
-
 function compareValues(left: string, op: string, right: string): boolean {
-  const l = coerce(left);
-  const r = coerce(right);
+  const l = parseScalarLiteral(left);
+  const r = parseScalarLiteral(right);
+
   if (typeof l === "number" && typeof r === "number") {
     if (op === "==") return l === r;
     if (op === "!=") return l !== r;
@@ -86,18 +202,19 @@ function compareValues(left: string, op: string, right: string): boolean {
     if (op === ">=") return ls >= rs;
     if (op === "<=") return ls <= rs;
   }
+
   throw new Error(`Unknown operator: '${op}'`);
 }
 
-// Evaluate a single clause (no boolean operators) — either contains(...) or a comparison
+// Evaluate a single clause (no boolean operators) - either contains(...) or a comparison.
 function evaluateClause(clause: string, ctx: ExpressionContext): boolean {
-  const trimmed = clause.trim();
+  const trimmed = stripWrappingParens(clause);
 
   if (trimmed.startsWith("contains(")) {
     return evaluateContains(trimmed, ctx);
   }
 
-  // Resolve all {{ ... }} references in the clause to scalar values
+  // Resolve all {{ ... }} references in the clause to scalar values.
   const resolved = trimmed.replace(TEMPLATE_RE, (_match, ref, filter) => {
     return String(resolveToken(ref, filter, ctx));
   });
@@ -111,63 +228,23 @@ function evaluateClause(clause: string, ctx: ExpressionContext): boolean {
   return compareValues(m[1].trim(), m[2], m[3].trim());
 }
 
-// Split on top-level `and`/`or` keywords, respecting parentheses
-function splitOnBoolean(expr: string): { parts: string[]; op: "and" | "or" } | null {
-  // Try `or` first (lower precedence), then `and`
-  for (const keyword of ["or", "and"] as const) {
-    const re = new RegExp(`\\b${keyword}\\b`, "g");
-    let depth = 0;
-    let lastIndex = 0;
-    const parts: string[] = [];
-    let match;
-    let found = false;
-
-    re.lastIndex = 0;
-    const chars = expr;
-    for (let i = 0; i < chars.length; i++) {
-      if (chars[i] === "(") depth++;
-      else if (chars[i] === ")") depth--;
-      else if (depth === 0) {
-        re.lastIndex = i;
-        match = re.exec(chars);
-        if (match && match.index === i) {
-          parts.push(expr.slice(lastIndex, i));
-          lastIndex = i + keyword.length;
-          found = true;
-          i = lastIndex - 1;
-        }
-      }
-    }
-    if (found) {
-      parts.push(expr.slice(lastIndex));
-      return { parts, op: keyword };
-    }
-  }
-  return null;
-}
-
 function evaluateInner(expr: string, ctx: ExpressionContext): boolean {
-  const trimmed = expr.trim();
+  const trimmed = stripWrappingParens(expr.trim());
 
   // Handle `not <expr>`
   if (/^not\s+/i.test(trimmed)) {
-    const notKeywordLength = 3;
-    const rest = trimmed.slice(notKeywordLength).trim();
+    const rest = trimmed.slice(3).trim();
     return !evaluateInner(rest, ctx);
   }
 
-  // Handle parentheses wrapping
-  if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
-    return evaluateInner(trimmed.slice(1, -1), ctx);
+  const orParts = splitOnTopLevelKeyword(trimmed, "or");
+  if (orParts) {
+    return orParts.some((part) => evaluateInner(part, ctx));
   }
 
-  // Split on boolean operators
-  const split = splitOnBoolean(trimmed);
-  if (split) {
-    if (split.op === "and") {
-      return split.parts.every((p) => evaluateInner(p, ctx));
-    }
-    return split.parts.some((p) => evaluateInner(p, ctx));
+  const andParts = splitOnTopLevelKeyword(trimmed, "and");
+  if (andParts) {
+    return andParts.every((part) => evaluateInner(part, ctx));
   }
 
   return evaluateClause(trimmed, ctx);

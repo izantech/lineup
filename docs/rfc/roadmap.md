@@ -38,14 +38,14 @@ These RFC deltas are now part of the tracked plan:
 | --- | --- | --- | --- | --- | --- | --- |
 | [V3-00](./tasks/v3-00-rfc-corrections.yaml) | Correct RFC and add existing-code mapping | `done` | — | 0 | architect | 2026-04-12 |
 | [V3-01](./tasks/v3-01-roadmap-scaffold.yaml) | Create roadmap/task scaffolding | `done` | `V3-00` | 1 | architect | 2026-04-12 |
-| [V3-02](./tasks/v3-02-artifact-schemas.yaml) | Add v3 artifact/protocol/state schemas | `todo` | `V3-00` | 1 | developer | 2026-04-12 |
+| [V3-02](./tasks/v3-02-artifact-schemas.yaml) | Add v3 artifact/protocol/state schemas | `done` | `V3-00` | 1 | developer | 2026-04-12 |
 | [V3-03](./tasks/v3-03-artifact-store-and-state.yaml) | Implement artifact store, output repair, run-state hashing | `todo` | `V3-02` | 2 | developer | 2026-04-12 |
-| [V3-04](./tasks/v3-04-workflow-v3-upgrade.yaml) | Upgrade workflow/types/expression to v3 | `todo` | `V3-00` | 1 | developer | 2026-04-12 |
-| [V3-05](./tasks/v3-05-config-model-routing-and-ollama.yaml) | Add config resolution, model aliases, and Ollama bridge | `todo` | `V3-00` | 1 | developer | 2026-04-12 |
-| [V3-06](./tasks/v3-06-json-rpc-protocol.yaml) | Add JSON-RPC transport and protocol types | `todo` | `V3-00` | 1 | developer | 2026-04-12 |
+| [V3-04](./tasks/v3-04-workflow-v3-upgrade.yaml) | Upgrade workflow/types/expression to v3 | `done` | `V3-00` | 1 | developer | 2026-04-12 |
+| [V3-05](./tasks/v3-05-config-model-routing-and-ollama.yaml) | Add config resolution, model aliases, and Ollama bridge | `done` | `V3-00` | 1 | developer | 2026-04-12 |
+| [V3-06](./tasks/v3-06-json-rpc-protocol.yaml) | Add JSON-RPC transport and protocol types | `done` | `V3-00` | 1 | developer | 2026-04-12 |
 | [V3-07](./tasks/v3-07-host-adapter-migration.yaml) | Migrate Claude/Codex/OpenCode adapters to JSON-RPC | `todo` | `V3-06` | 2 | developer | 2026-04-12 |
 | [V3-08](./tasks/v3-08-task-compiler-and-waves.yaml) | Compile `Plan` to deterministic `Tasks` and execution waves | `todo` | `V3-02`, `V3-04` | 2 | developer | 2026-04-12 |
-| [V3-09](./tasks/v3-09-native-isolation.yaml) | Implement native isolation layer | `todo` | `V3-00` | 1 | developer | 2026-04-12 |
+| [V3-09](./tasks/v3-09-native-isolation.yaml) | Implement native isolation layer | `done` | `V3-00` | 1 | developer | 2026-04-12 |
 | [V3-10](./tasks/v3-10-native-executor.yaml) | Implement native executor, retry, diff apply, verify hooks | `todo` | `V3-03`, `V3-06`, `V3-08`, `V3-09` | 3 | developer | 2026-04-12 |
 | [V3-11](./tasks/v3-11-prompt-builder-and-skill-pack.yaml) | Refactor prompt builder, agent contracts, and canonical skill pack | `todo` | `V3-02`, `V3-04`, `V3-05`, `V3-07`, `V3-10` | 3 | architect + developer | 2026-04-12 |
 | [V3-12](./tasks/v3-12-command-surface-tests-and-docs.yaml) | Finish command surface, observer, tests, docs, and examples | `todo` | `V3-03`, `V3-05`, `V3-07`, `V3-10`, `V3-11` | 4 | developer + reviewer | 2026-04-12 |
@@ -56,20 +56,19 @@ These RFC deltas are now part of the tracked plan:
 
 ## Current Handoff
 
-- Active task: documentation scaffold complete
+- Active task: wave 1 foundation implementation complete
 - Current state:
   - `V3-00` complete
   - `V3-01` complete
-  - wave 1 is ready to start in parallel
-- Ready-to-start tasks:
-  - `V3-02`
-  - `V3-04`
-  - `V3-05`
-  - `V3-06`
-  - `V3-09`
+  - `V3-02`, `V3-04`, `V3-05`, `V3-06`, and `V3-09` are complete
+  - `./dev check` passes with the new wave 1 surface
+- Ready-to-start tasks after wave 1:
+  - `V3-03`
+  - `V3-07`
+  - `V3-08`
 - Immediate next step:
-  - start `V3-02` and `V3-04` first, because they unblock the widest part of wave 2
+  - start wave 2 with `V3-03` and `V3-08`, then begin `V3-07` once the protocol integration target is chosen in `run-pipeline.ts`
 - Known blockers:
-  - current CLI surface is still `lineup/v1` plus `LINEUP:*` text orchestration
+  - current CLI runtime still emits `LINEUP:*` text orchestration inside `run-pipeline.ts`
   - native executor, operational hardening, and cutover controls are not implemented yet
   - differential regression harness does not exist yet

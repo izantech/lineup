@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-05
 title: Add config resolution, model aliases, and Ollama bridge
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-00

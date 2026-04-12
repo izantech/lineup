@@ -1,4 +1,4 @@
-apiVersion: lineup/v1
+apiVersion: lineup/v3
 kind: Workflow
 name: full-pipeline
 description: |
@@ -166,6 +166,13 @@ stages:
         fields: [changes_made]
     optional: true
     gate: approval
+    outputs:
+      documents:
+        type: list
+        items:
+          type: string
+      report:
+        type: object
 
 snapshots:
   max_size: 2KB

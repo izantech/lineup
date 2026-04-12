@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineup.izantech.app/schemas/yaml/v3/config.schema.json",
+  "title": "Lineup v3 Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind"],
+  "properties": {
+    "apiVersion": {
+      "const": "lineup/v3"
+    },
+    "kind": {
+      "const": "Config"
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "enum": ["native", "tf", "auto"]
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["native", "tf", "auto"]
+        }
+      }
+    },
+    "model_aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ollama": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "base_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "compress_output": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

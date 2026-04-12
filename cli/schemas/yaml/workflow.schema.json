@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "name", "stages"],
   "properties": {
-    "apiVersion": { "const": "lineup/v1" },
+    "apiVersion": { "const": "lineup/v3" },
     "kind": { "const": "Workflow" },
     "name": {
       "type": "string",
@@ -68,7 +68,7 @@
         },
         "outputs": {
           "type": "object",
-          "additionalProperties": true
+          "additionalProperties": { "$ref": "#/$defs/outputDef" }
         },
         "condition": { "type": "string" },
         "skip_if": { "type": "string" },
@@ -76,7 +76,14 @@
         "retry": { "$ref": "#/$defs/retry" },
         "on_failure": { "$ref": "#/$defs/onFailure" },
         "optional": { "type": "boolean" },
-        "gate": { "type": ["string", "boolean"] }
+        "gate": { "type": ["string", "boolean"] },
+        "conditional_approach": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
       },
       "if": {
         "properties": { "type": { "const": "agent" } },
@@ -111,6 +118,27 @@
         },
         "via": { "type": "string", "enum": ["inline", "file-reference"] },
         "fallback": { "type": "string" }
+      }
+    },
+    "outputDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "enum", "list", "object"]
+        },
+        "values": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "items": { "$ref": "#/$defs/outputDef" },
+        "properties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/outputDef" }
+        },
+        "max_length": { "type": "integer", "minimum": 0 }
       }
     },
     "parallel": {

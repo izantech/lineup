@@ -27,6 +27,10 @@ describe("evaluateExpression", () => {
     expect(evaluateExpression("{{ stages.triage.outputs.complexity }} == simple", ctx)).toBe(true);
   });
 
+  it("evaluates == comparison with quoted string literal", () => {
+    expect(evaluateExpression('{{ stages.triage.outputs.complexity }} == "simple"', ctx)).toBe(true);
+  });
+
   it("evaluates == comparison (string mismatch)", () => {
     expect(evaluateExpression("{{ stages.triage.outputs.complexity }} == complex", ctx)).toBe(false);
   });
@@ -78,6 +82,21 @@ describe("evaluateExpression", () => {
     expect(
       evaluateExpression(
         "{{ stages.triage.outputs.complexity }} == complex or {{ stages.triage.outputs.score }} > 10",
+        ctx
+      )
+    ).toBe(false);
+  });
+
+  it("respects parentheses around boolean subexpressions", () => {
+    expect(
+      evaluateExpression(
+        "({{ stages.triage.outputs.complexity }} == complex or {{ stages.triage.outputs.score }} > 1) and {{ stages.triage.outputs.score }} > 2",
+        ctx
+      )
+    ).toBe(true);
+    expect(
+      evaluateExpression(
+        "({{ stages.triage.outputs.complexity }} == complex or {{ stages.triage.outputs.score }} > 1) and {{ stages.triage.outputs.score }} > 5",
         ctx
       )
     ).toBe(false);

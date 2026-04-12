@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-02
 title: Add v3 artifact, protocol, and state schemas
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-00
