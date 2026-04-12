@@ -16,7 +16,7 @@ lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
-lineup run [--workflow <path>] [--dry-run] [--json]
+lineup run [--workflow <path>] [--engine auto|native|tf] [--dry-run] [--json]
 ```
 
 ## Release source model
@@ -107,5 +107,7 @@ When you pass `--artifacts`, status also includes:
 ## Native runtime commands
 
 - `lineup doctor` checks core runtime prerequisites such as `git`, `node`, host CLIs, and the latest recorded run state.
-- `lineup run` executes the native v3 pipeline. Use `--dry-run` to inspect deterministic stage ordering and `--json` to emit the final run summary.
+- `lineup run` executes the v3 pipeline. Use `--engine native` to force the native executor, `--engine tf` to force the reference fallback path, and `--engine auto` to use the current default selection.
+- `lineup run --dry-run` inspects deterministic stage ordering and `--json` emits the final run summary.
+- The first production-ready GA scope is Node-compatible, uses `index`/`full` isolation tiers, and keeps sparse isolation non-default.
 - `lineup tf generate` remains available only for reference adapter/config generation during migration or comparison workflows.

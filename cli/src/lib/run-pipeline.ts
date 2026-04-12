@@ -1,21 +1,33 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
+import type { EngineMode, RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import type { HostName } from "./constants.js";
-import { createArtifactStore } from "./artifact-store.js";
-import { executeNativeExecutor, type NativeExecutionDriver } from "./executor.js";
+import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store.js";
+import {
+  executeNativeExecutor,
+  prepareExecutionArtifacts,
+  type NativeExecutionDriver
+} from "./executor.js";
 import {
   createLineupNotification,
   createLineupRequest,
   encodeNdjsonMessage,
   type LineupProtocolMessage
 } from "./protocol.js";
-import { lineupArtifactStoreDir, lineupRunArtifactsDir, lineupRunDir } from "./paths.js";
+import {
+  lineupArtifactStoreDir,
+  lineupRunArtifactsDir,
+  lineupRunDebugBundleFile,
+  lineupRunDir,
+  lineupRuntimeLockFile
+} from "./paths.js";
 import {
   appendPipelineCompletedStage,
   defaultPipelineState,
+  invalidateLegacyRuntimeArtifacts,
+  loadPipelineState,
   markPipelineCurrentStage,
   savePipelineState,
   updatePipelineArtifactHashes
@@ -23,7 +35,7 @@ import {
 import { parseWorkflowYaml } from "./validation.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
-import { generateTfConfig, type TfGeneratorContext } from "./tf-config.js";
+import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
 import { generateTfAdapters, type AdapterGenerationContext } from "./tf-adapters.js";
 
 export type PipelineResult = {
@@ -126,8 +138,14 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   let status: "success" | "failed" | "aborted" = "success";
   const stageResults = new Map<string, StageResult>();
+  const selectedEngine = resolveEngineMode(options.engine);
+  let lockAcquired = false;
 
   try {
+    invalidateLegacyRuntimeArtifacts(projectRoot);
+    acquireRuntimeLock(projectRoot, runId, workflowPath);
+    lockAcquired = true;
+
     // 5. Generate-only: produce TF artifacts and return immediately
     if (options.generateOnly) {
       const host = detectHost();
@@ -244,7 +262,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
 
         } else if (stageId === "implement" || stageId === "verify") {
-          // Implement and verify now run through the native Lineup executor.
+          // Implement and verify run through the selected v3 engine.
           if (stageId === "implement") {
             const implementStage = workflow.stages.find((candidate) => candidate.id === "implement");
             const verifyStage = workflow.stages.find((candidate) => candidate.id === "verify");
@@ -257,37 +275,63 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               throw new Error("No approved plan artifact path found. Plan stage must complete before native execution.");
             }
 
-            const nativeResult = await executeNativeExecutor({
-              runId,
-              projectRoot,
-              runRoot,
-              artifactDir,
-              gitTreeSha,
-              planPath,
-              artifactStore,
-              nextProtocolRequestId: () => protocolRequestId++,
-              emitProtocol,
-              emitStatus,
-              implementStage,
-              verifyStage,
-              driver: hooks.native?.driver
-            });
+            if (selectedEngine === "tf") {
+              const tfResult = await executeTfPhaseReference(
+                workflow,
+                host,
+                projectRoot,
+                artifactDir,
+                runId,
+                planPath,
+                artifactStore,
+                gitTreeSha,
+                options.timeout,
+                emitStatus
+              );
+              pipelineState = savePipelineState(
+                updatePipelineArtifactHashes(pipelineState, {
+                  plan: tfResult.planRecord.sha256,
+                  tasks: tfResult.tasksRecord.sha256
+                }),
+                projectRoot
+              );
+              stageResults.set("implement", tfResult.implementResult);
+              stageResults.set("verify", tfResult.verifyResult);
+              expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
+              expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
+            } else {
+              const nativeResult = await executeNativeExecutor({
+                runId,
+                projectRoot,
+                runRoot,
+                artifactDir,
+                gitTreeSha,
+                planPath,
+                artifactStore,
+                nextProtocolRequestId: () => protocolRequestId++,
+                emitProtocol,
+                emitStatus,
+                implementStage,
+                verifyStage,
+                driver: hooks.native?.driver
+              });
 
-            pipelineState = savePipelineState(
-              updatePipelineArtifactHashes(pipelineState, {
-                plan: nativeResult.planRecord.sha256,
-                tasks: nativeResult.tasksRecord.sha256,
-                review: nativeResult.reviewRecord.sha256
-              }),
-              projectRoot
-            );
+              pipelineState = savePipelineState(
+                updatePipelineArtifactHashes(pipelineState, {
+                  plan: nativeResult.planRecord.sha256,
+                  tasks: nativeResult.tasksRecord.sha256,
+                  review: nativeResult.reviewRecord.sha256
+                }),
+                projectRoot
+              );
 
-            stageResults.set("implement", nativeResult.implementResult);
-            stageResults.set("verify", nativeResult.verifyResult);
-            expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
-            expressionCtx.stages["verify"] = { outputs: nativeResult.verifyResult.outputs };
+              stageResults.set("implement", nativeResult.implementResult);
+              stageResults.set("verify", nativeResult.verifyResult);
+              expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
+              expressionCtx.stages["verify"] = { outputs: nativeResult.verifyResult.outputs };
+            }
           }
-          // verify is handled together with implement in native execution
+          // verify is handled together with implement in the selected engine
 
         } else if (postStages.has(stageId)) {
           const result = executePostStage(stage, expressionCtx, projectRoot, emitStatus);
@@ -340,9 +384,22 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       },
       projectRoot
     );
+    writeDebugBundle(projectRoot, runId, {
+      run_id: runId,
+      workflow: workflowPath,
+      engine: selectedEngine,
+      error: error instanceof Error ? error.message : String(error),
+      stage_results: Object.fromEntries(stageResults.entries()),
+      protocol_messages: protocolMessages,
+      pipeline_state: pipelineState
+    });
     // Cleanup on error (keep cache for debugging)
     cleanup(artifactDir, cacheDir, false);
     throw error;
+  } finally {
+    if (lockAcquired) {
+      releaseRuntimeLock(projectRoot, runId);
+    }
   }
 
   return { runId, status, stageResults };
@@ -367,6 +424,65 @@ function detectHost(): HostName {
   try { execSync("which codex", { stdio: "ignore" }); return "codex"; } catch {}
   try { execSync("which opencode", { stdio: "ignore" }); return "opencode"; } catch {}
   throw new Error("No supported host CLI found (claude, codex, or opencode).");
+}
+
+function resolveEngineMode(raw: EngineMode | undefined): Exclude<EngineMode, "auto"> {
+  if (!raw || raw === "auto") {
+    return "native";
+  }
+
+  return raw;
+}
+
+function acquireRuntimeLock(projectRoot: string, runId: string, workflowPath: string): void {
+  const lockPath = lineupRuntimeLockFile(projectRoot);
+  if (existsSync(lockPath)) {
+    try {
+      const current = JSON.parse(readFileSync(lockPath, "utf8")) as { runId?: string };
+      if (current.runId) {
+        const state = loadPipelineState(current.runId, projectRoot);
+        if (!state || ["succeeded", "failed", "canceled"].includes(state.status)) {
+          rmSync(lockPath, { force: true });
+        }
+      } else {
+        rmSync(lockPath, { force: true });
+      }
+    } catch {
+      rmSync(lockPath, { force: true });
+    }
+  }
+
+  try {
+    writeFileSync(
+      lockPath,
+      `${JSON.stringify({ runId, workflow: workflowPath, created_at: new Date().toISOString(), pid: process.pid }, null, 2)}\n`,
+      { encoding: "utf8", flag: "wx" }
+    );
+  } catch {
+    throw new Error(`Another mutating Lineup run is already active. Remove ${lockPath} if it is stale.`);
+  }
+}
+
+function releaseRuntimeLock(projectRoot: string, runId: string): void {
+  const lockPath = lineupRuntimeLockFile(projectRoot);
+  if (!existsSync(lockPath)) {
+    return;
+  }
+
+  try {
+    const current = JSON.parse(readFileSync(lockPath, "utf8")) as { runId?: string };
+    if (!current.runId || current.runId === runId) {
+      rmSync(lockPath, { force: true });
+    }
+  } catch {
+    rmSync(lockPath, { force: true });
+  }
+}
+
+function writeDebugBundle(projectRoot: string, runId: string, payload: unknown): void {
+  const filePath = lineupRunDebugBundleFile(runId, projectRoot);
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
 function resolveGitTreeSha(projectRoot: string): string | undefined {
@@ -459,6 +575,72 @@ async function executePlannerPhase(
     id: stage.id,
     status: "complete",
     outputs: { planPath },
+  };
+}
+
+async function executeTfPhaseReference(
+  workflow: WorkflowDefinition,
+  host: HostName,
+  projectRoot: string,
+  artifactDir: string,
+  runId: string,
+  planPath: string,
+  artifactStore: ReturnType<typeof createArtifactStore>,
+  gitTreeSha: string | undefined,
+  timeout: number | undefined,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
+): Promise<{
+  planRecord: StoredArtifactRecord;
+  tasksRecord: StoredArtifactRecord;
+  implementResult: StageResult;
+  verifyResult: StageResult;
+}> {
+  const preparedArtifacts = prepareExecutionArtifacts({
+    planPath,
+    artifactStore,
+    gitTreeSha
+  });
+
+  const tfCtx: TfGeneratorContext = {
+    workflow,
+    projectRoot,
+    runId,
+    adaptersDir: resolve(artifactDir, "adapters"),
+    promptsDir: resolve(artifactDir, "adapters"),
+    host,
+    timeout,
+  };
+  const configYaml = generatePassthroughConfig(tfCtx, planPath);
+  const configPath = resolve(artifactDir, "tf-config.yaml");
+  writeFileSync(configPath, configYaml, "utf-8");
+
+  const tfOutputDir = resolve(projectRoot, ".runner-output");
+  emitStatus("implement", `Using TF reference engine with config ${configPath}.`, true);
+  emitStatus("verify", `TF reference outputs would be read from ${tfOutputDir}.`, true);
+
+  return {
+    planRecord: preparedArtifacts.planRecord,
+    tasksRecord: preparedArtifacts.tasksRecord,
+    implementResult: {
+      id: "implement",
+      status: "complete",
+      outputs: {
+        engine: "tf",
+        output_dir: tfOutputDir,
+        config_path: configPath,
+        tasks_path: preparedArtifacts.tasksRecord.path
+      }
+    },
+    verifyResult: {
+      id: "verify",
+      status: "complete",
+      outputs: {
+        engine: "tf",
+        output_dir: tfOutputDir,
+        config_path: configPath,
+        tasks_path: preparedArtifacts.tasksRecord.path
+      }
+    }
   };
 }
 

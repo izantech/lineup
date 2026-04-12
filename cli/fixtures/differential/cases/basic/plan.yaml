@@ -1,0 +1,27 @@
+apiVersion: lineup/v3
+kind: Plan
+status: approved
+summary: Land the native executor runtime surface
+approaches:
+  - name: Native
+    strategy: Keep execution inside the CLI runtime
+recommendation:
+  approach: Native
+  rationale: Preserve deterministic artifacts across engines
+changes:
+  - file: cli/src/lib/executor.ts
+    change: Add native execution entrypoint
+    rationale: Replace the TF bridge for the active path
+  - file: cli/src/lib/run-pipeline.ts
+    change: Route implement and verify through the selected engine
+    rationale: Make engine selection explicit and testable
+dependencies:
+  - from_change: 2
+    to_change: 1
+    description: Pipeline integration depends on executor primitives
+acceptance_criteria:
+  - criterion: Task graph is deterministic
+  - criterion: Implement and verify succeed under native mode
+risks:
+  - risk: Fallback mode could drift from native artifact contracts
+    mitigation: Compare shared plan/tasks artifacts in the regression harness

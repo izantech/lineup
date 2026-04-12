@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-13
 title: Add transitional engine mode and GA scope guards
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-07
@@ -34,3 +34,7 @@ notes:
   determinism_rules:
     - Engine selection must be explicit and auditable
     - Fallback should not change artifact contracts
+  completed_scope:
+    - Added explicit auto|native|tf engine selection on lineup run
+    - Kept fallback behavior available through the TF reference path
+    - Documented the narrow GA scope with native-first defaults and non-default sparse isolation

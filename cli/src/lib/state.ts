@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { HostName } from "./constants";
 import { CliError } from "./errors";
-import { lineupRunStateFile, lineupStateFile } from "./paths";
+import { lineupProjectRoot, lineupRunStateFile, lineupStateFile } from "./paths";
 import type { HostState, InstallerState } from "./types";
 import { validateInstallerState, validatePipelineStateJson } from "./validation";
 
@@ -138,6 +138,10 @@ export function loadPipelineState(runId: string, cwd = process.cwd()): PipelineS
   try {
     const raw = readFileSync(filePath, "utf8");
     const parsed = JSON.parse(raw);
+    if (parsed?.apiVersion !== PIPELINE_STATE_SCHEMA_VERSION || parsed?.kind !== "PipelineState") {
+      rmSync(filePath, { force: true });
+      return null;
+    }
     validatePipelineStateJson(parsed, filePath);
     return parsed as PipelineStateRecord;
   } catch (error) {
@@ -149,6 +153,26 @@ export function loadPipelineState(runId: string, cwd = process.cwd()): PipelineS
       code: "data_corruption"
     });
   }
+}
+
+export function invalidateLegacyRuntimeArtifacts(cwd = process.cwd()): string[] {
+  const projectRoot = lineupProjectRoot(cwd);
+  const legacyTargets = [
+    path.join(cwd, ".runner-output"),
+    path.join(projectRoot, ".tf-adapters")
+  ];
+
+  const removed: string[] = [];
+  for (const target of legacyTargets) {
+    if (!existsSync(target)) {
+      continue;
+    }
+
+    rmSync(target, { recursive: true, force: true });
+    removed.push(target);
+  }
+
+  return removed;
 }
 
 export function savePipelineState(state: PipelineStateRecord, cwd = process.cwd()): PipelineStateRecord {

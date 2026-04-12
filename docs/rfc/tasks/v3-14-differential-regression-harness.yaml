@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-14
 title: Build differential regression harness and task corpus
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-10
@@ -32,3 +32,7 @@ notes:
   determinism_rules:
     - Compare the same inputs against both engines
     - Preserve fixture inputs and expected outputs under version control
+  completed_scope:
+    - Added cli/fixtures/differential fixture corpus and golden task graph
+    - Added a Vitest differential harness covering native and tf-reference runs on the same plan
+    - Compare task graph, wave ordering, stage outputs, and observed runtime artifacts

@@ -33,7 +33,7 @@ lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
-lineup run [--workflow <path>] [--dry-run] [--json]
+lineup run [--workflow <path>] [--engine auto|native|tf] [--dry-run] [--json]
 ```
 
 ### Host behavior

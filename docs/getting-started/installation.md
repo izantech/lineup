@@ -68,6 +68,8 @@ lineup doctor
 
 `status --artifacts` also shows the latest native run, its artifact hashes, and the managed `.lineup/.runs/` and `.lineup/.artifacts/` directories.
 
+`lineup run --engine auto|native|tf` controls whether the CLI uses the default native executor or the reference fallback path during production-readiness testing.
+
 ## Uninstall
 
 ```bash

@@ -54,8 +54,16 @@ export function lineupRunStateFile(runId: string, cwd = process.cwd()): string {
   return path.join(lineupRunDir(runId, cwd), "pipeline-state.json");
 }
 
+export function lineupRunDebugBundleFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunDir(runId, cwd), "debug-bundle.json");
+}
+
 export function lineupArtifactStoreDir(cwd = process.cwd()): string {
   return path.join(lineupProjectRoot(cwd), ".artifacts");
+}
+
+export function lineupRuntimeLockFile(cwd = process.cwd()): string {
+  return path.join(lineupProjectRoot(cwd), "runtime.lock");
 }
 
 export function lineupHome(homeDir = os.homedir()): string {

@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-15
 title: Add operational hardening and v3 clean-break invalidation
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-03
@@ -37,3 +37,7 @@ notes:
   determinism_rules:
     - Operational safety must not depend on host behavior
     - Invalidation rules must be versioned and explicit
+  completed_scope:
+    - Added runtime lock protection for concurrent mutating runs
+    - Added debug bundle capture on pipeline and native executor failures
+    - Added stale worktree pruning and pre-v3 runtime artifact invalidation

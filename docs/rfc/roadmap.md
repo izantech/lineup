@@ -49,14 +49,14 @@ These RFC deltas are now part of the tracked plan:
 | [V3-10](./tasks/v3-10-native-executor.yaml) | Implement native executor, retry, diff apply, verify hooks | `done` | `V3-03`, `V3-06`, `V3-08`, `V3-09` | 3 | developer | 2026-04-12 |
 | [V3-11](./tasks/v3-11-prompt-builder-and-skill-pack.yaml) | Refactor prompt builder, agent contracts, and canonical skill pack | `done` | `V3-02`, `V3-04`, `V3-05`, `V3-07`, `V3-10` | 3 | architect + developer | 2026-04-12 |
 | [V3-12](./tasks/v3-12-command-surface-tests-and-docs.yaml) | Finish command surface, observer, tests, docs, and examples | `done` | `V3-03`, `V3-05`, `V3-07`, `V3-10`, `V3-11` | 4 | developer + reviewer | 2026-04-12 |
-| [V3-13](./tasks/v3-13-transitional-engine-mode.yaml) | Add transitional engine mode and GA scope guards | `todo` | `V3-07`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
-| [V3-14](./tasks/v3-14-differential-regression-harness.yaml) | Build differential regression harness and task corpus | `todo` | `V3-10`, `V3-12` | 5 | reviewer | 2026-04-12 |
-| [V3-15](./tasks/v3-15-operational-hardening-and-migrations.yaml) | Add operational hardening and v3 clean-break invalidation | `todo` | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
+| [V3-13](./tasks/v3-13-transitional-engine-mode.yaml) | Add transitional engine mode and GA scope guards | `done` | `V3-07`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
+| [V3-14](./tasks/v3-14-differential-regression-harness.yaml) | Build differential regression harness and task corpus | `done` | `V3-10`, `V3-12` | 5 | reviewer | 2026-04-12 |
+| [V3-15](./tasks/v3-15-operational-hardening-and-migrations.yaml) | Add operational hardening and v3 clean-break invalidation | `done` | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
 | [V3-16](./tasks/v3-16-dogfood-metrics-and-cutover.yaml) | Dogfood, readiness metrics, and native-default cutover | `todo` | `V3-13`, `V3-14`, `V3-15` | 6 | reviewer | 2026-04-12 |
 
 ## Current Handoff
 
-- Active task: wave 5 production-readiness controls, regression harness, and operational hardening
+- Active task: wave 6 dogfood evidence, readiness metrics, and native-default cutover
 - Current state:
   - `V3-00` complete
   - `V3-01` complete
@@ -64,12 +64,12 @@ These RFC deltas are now part of the tracked plan:
   - `V3-03`, `V3-07`, and `V3-08` are complete
   - `V3-10` and `V3-11` are complete
   - `V3-12` is complete
-  - `./dev check` passes with native runtime command surfaces and docs refreshed
-- Ready-to-start tasks after wave 5:
-  - `V3-16`
+  - `V3-13`, `V3-14`, and `V3-15` are complete
+  - `./dev check` passes with engine selection, regression harness, and runtime hardening landed
+- Ready-to-start tasks after wave 6:
+  - none; wave 6 is the cutover gate
 - Immediate next step:
-  - add explicit engine selection, the differential regression harness, and operational safety guards without changing v3 artifact contracts
+  - capture dogfood runs, define readiness metrics, and record the evidence needed before native becomes the default without fallback
 - Known blockers:
-  - transitional engine mode and explicit fallback selection do not exist yet
-  - concurrent run protection and debug bundle capture are not implemented
-  - differential regression harness does not exist yet
+  - cutover metrics and dogfood evidence are not yet recorded in tracked docs
+  - native-default switching still lacks an explicit evidence gate

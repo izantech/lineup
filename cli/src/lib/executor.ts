@@ -115,6 +115,13 @@ export type NativeExecutorOptions = {
   isolationMode?: NativeIsolationMode;
 };
 
+export type PreparedExecutionArtifacts = {
+  approvedPlan: ApprovedPlan;
+  tasksArtifact: CompiledTasksArtifact;
+  planRecord: StoredArtifactRecord;
+  tasksRecord: StoredArtifactRecord;
+};
+
 export type NativeExecutorResult = {
   planRecord: StoredArtifactRecord;
   tasksRecord: StoredArtifactRecord;
@@ -176,6 +183,10 @@ function readRequiredTextFile(filePath: string, label: string): string {
 function writeJsonRequest(filePath: string, payload: unknown): void {
   ensureParentDirectory(filePath);
   writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+function writeExecutorFailureSnapshot(artifactDir: string, payload: unknown): void {
+  writeJsonRequest(path.join(artifactDir, "native", "executor-debug.json"), payload);
 }
 
 function buildDeveloperPrompt(input: {
@@ -315,14 +326,16 @@ function mergeImplementationResult(
 }
 
 export async function executeNativeExecutor(options: NativeExecutorOptions): Promise<NativeExecutorResult> {
-  const rawPlan = readRequiredTextFile(options.planPath, "Approved plan");
-  const normalizedPlan = normalizeApprovedPlan(rawPlan, options.planPath);
-  const planRecord = options.artifactStore.persistText("plan", normalizedPlan.raw, "yaml");
-  const { artifact: tasksArtifact } = compilePlanToTasks(normalizedPlan.parsed, {
+  const {
+    approvedPlan,
+    tasksArtifact,
+    planRecord,
+    tasksRecord
+  } = prepareExecutionArtifacts({
+    planPath: options.planPath,
+    artifactStore: options.artifactStore,
     gitTreeSha: options.gitTreeSha
   });
-  validateTasksJson(tasksArtifact, options.planPath);
-  const tasksRecord = options.artifactStore.persistJson("tasks", tasksArtifact);
 
   const driver = options.driver ?? defaultDriver(options.artifactDir);
   const workspace = await createNativeIsolationWorkspace({
@@ -354,73 +367,83 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       options.emitStatus("implement", `Executing native wave ${wave} (${waveTasks.map((task) => task.id).join(", ")}).`);
 
       for (const task of waveTasks) {
-        const retryResult = await retryOperation(
-          {
-            maxAttempts: Math.max(options.implementStage.retry?.max_attempts ?? 1, 1),
-            on: options.implementStage.retry?.on
-          },
-          async (retryContext) => {
-            const prompt = buildDeveloperPrompt({
-              projectRoot: options.projectRoot,
-              approvedPlan: normalizedPlan.parsed,
-              task,
-              attempt: retryContext.attempt,
-              previousErrors: retryContext.previousErrors
-            });
+        try {
+          const retryResult = await retryOperation(
+            {
+              maxAttempts: Math.max(options.implementStage.retry?.max_attempts ?? 1, 1),
+              on: options.implementStage.retry?.on
+            },
+            async (retryContext) => {
+              const prompt = buildDeveloperPrompt({
+                projectRoot: options.projectRoot,
+                approvedPlan,
+                task,
+                attempt: retryContext.attempt,
+                previousErrors: retryContext.previousErrors
+              });
 
-            options.emitProtocol(
-              createLineupRequest({
-                method: "agent/spawn",
-                id: options.nextProtocolRequestId(),
-                params: {
-                  runId: options.runId,
-                  stageId: "implement",
-                  agent: options.implementStage.agent ?? "developer",
-                  prompt,
-                  inputs: {
-                    plan_path: planRecord.path,
-                    tasks_path: tasksRecord.path,
-                    task
-                  },
-                  outputs: {
-                    schema: "ImplementationState"
-                  },
-                  timeoutMs: 600_000,
-                  retryAttempt: retryContext.attempt - 1
-                }
-              })
-            );
+              options.emitProtocol(
+                createLineupRequest({
+                  method: "agent/spawn",
+                  id: options.nextProtocolRequestId(),
+                  params: {
+                    runId: options.runId,
+                    stageId: "implement",
+                    agent: options.implementStage.agent ?? "developer",
+                    prompt,
+                    inputs: {
+                      plan_path: planRecord.path,
+                      tasks_path: tasksRecord.path,
+                      task
+                    },
+                    outputs: {
+                      schema: "ImplementationState"
+                    },
+                    timeoutMs: 600_000,
+                    retryAttempt: retryContext.attempt - 1
+                  }
+                })
+              );
 
-            const result = await driver.executeTask({
-              runId: options.runId,
-              projectRoot: options.projectRoot,
-              runRoot: options.runRoot,
-              artifactDir: options.artifactDir,
-              workspaceRoot: workspace.worktreeRoot,
-              task,
-              wave,
-              prompt,
-              attempt: retryContext.attempt,
-              previousErrors: retryContext.previousErrors
-            });
+              const result = await driver.executeTask({
+                runId: options.runId,
+                projectRoot: options.projectRoot,
+                runRoot: options.runRoot,
+                artifactDir: options.artifactDir,
+                workspaceRoot: workspace.worktreeRoot,
+                task,
+                wave,
+                prompt,
+                attempt: retryContext.attempt,
+                previousErrors: retryContext.previousErrors
+              });
 
-            options.emitProtocol(
-              createLineupNotification({
-                method: "agent/done",
-                params: {
-                  runId: options.runId,
-                  stageId: "implement",
-                  status: "success",
-                  summary: `${task.id}: ${result.summary}`
-                }
-              })
-            );
+              options.emitProtocol(
+                createLineupNotification({
+                  method: "agent/done",
+                  params: {
+                    runId: options.runId,
+                    stageId: "implement",
+                    status: "success",
+                    summary: `${task.id}: ${result.summary}`
+                  }
+                })
+              );
 
-            return result;
-          }
-        );
+              return result;
+            }
+          );
 
-        mergeImplementationResult(implementationState, task, retryResult.attempts, retryResult.value);
+          mergeImplementationResult(implementationState, task, retryResult.attempts, retryResult.value);
+        } catch (error) {
+          writeExecutorFailureSnapshot(options.artifactDir, {
+            phase: "implement",
+            task_id: task.id,
+            error: error instanceof Error ? error.message : String(error),
+            implementation_state: implementationState
+          });
+          throw error;
+        }
       }
     }
 
@@ -428,7 +451,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
 
     const reviewPrompt = buildReviewerPrompt({
       projectRoot: options.projectRoot,
-      approvedPlan: normalizedPlan.parsed,
+      approvedPlan,
       implementationState,
       tasksArtifact
     });
@@ -456,17 +479,27 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       })
     );
 
-    const reviewResult = await driver.executeReview({
-      runId: options.runId,
-      projectRoot: options.projectRoot,
-      runRoot: options.runRoot,
-      artifactDir: options.artifactDir,
-      workspaceRoot: workspace.worktreeRoot,
-      prompt: reviewPrompt,
-      implementationState,
-      approvedPlan: normalizedPlan.parsed,
-      tasksArtifact
-    });
+    let reviewResult;
+    try {
+      reviewResult = await driver.executeReview({
+        runId: options.runId,
+        projectRoot: options.projectRoot,
+        runRoot: options.runRoot,
+        artifactDir: options.artifactDir,
+        workspaceRoot: workspace.worktreeRoot,
+        prompt: reviewPrompt,
+        implementationState,
+        approvedPlan,
+        tasksArtifact
+      });
+    } catch (error) {
+      writeExecutorFailureSnapshot(options.artifactDir, {
+        phase: "verify",
+        error: error instanceof Error ? error.message : String(error),
+        implementation_state: implementationState
+      });
+      throw error;
+    }
     validateReviewYaml(reviewResult.reviewYaml, path.join(options.artifactDir, "review.yaml"));
     const reviewRecord = options.artifactStore.persistText("review", reviewResult.reviewYaml, "yaml");
     const parsedReview = parseRestrictedYaml(reviewResult.reviewYaml, reviewRecord.path) as Record<string, unknown>;
@@ -502,4 +535,26 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
   } finally {
     await workspace.cleanup();
   }
+}
+
+export function prepareExecutionArtifacts(input: {
+  planPath: string;
+  artifactStore: ArtifactStore;
+  gitTreeSha?: string;
+}): PreparedExecutionArtifacts {
+  const rawPlan = readRequiredTextFile(input.planPath, "Approved plan");
+  const normalizedPlan = normalizeApprovedPlan(rawPlan, input.planPath);
+  const planRecord = input.artifactStore.persistText("plan", normalizedPlan.raw, "yaml");
+  const { artifact: tasksArtifact } = compilePlanToTasks(normalizedPlan.parsed, {
+    gitTreeSha: input.gitTreeSha
+  });
+  validateTasksJson(tasksArtifact, input.planPath);
+  const tasksRecord = input.artifactStore.persistJson("tasks", tasksArtifact);
+
+  return {
+    approvedPlan: normalizedPlan.parsed,
+    tasksArtifact,
+    planRecord,
+    tasksRecord
+  };
 }

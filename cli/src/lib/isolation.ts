@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { CliError } from "./errors";
+import { lineupRunsDir } from "./paths";
+import { loadPipelineState } from "./state";
 import type { IsolationMode } from "./types.js";
 import {
   buildExcludedPaths,
@@ -45,6 +47,7 @@ export async function createNativeIsolationWorkspace(options: NativeIsolationOpt
   const runRoot = resolveRunRoot(sourceRoot, options.runId, options.runRoot);
   const worktreeRoot = resolve(runRoot, "worktree");
 
+  await pruneInactiveIsolationWorktrees(sourceRoot, options.runId);
   if (existsSync(runRoot)) {
     rmSync(runRoot, { recursive: true, force: true });
   }
@@ -95,6 +98,27 @@ export async function cleanupNativeIsolationWorkspace(workspace: NativeIsolation
 export async function cleanupStaleNativeIsolationRun(runRoot: string): Promise<void> {
   if (existsSync(runRoot)) {
     rmSync(runRoot, { recursive: true, force: true });
+  }
+}
+
+export async function pruneInactiveIsolationWorktrees(workspaceRoot: string, activeRunId?: string): Promise<void> {
+  const runsDir = lineupRunsDir(workspaceRoot);
+  if (!existsSync(runsDir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    if (activeRunId && entry.name === activeRunId) {
+      continue;
+    }
+
+    const state = loadPipelineState(entry.name, workspaceRoot);
+    if (!state || ["succeeded", "failed", "canceled"].includes(state.status)) {
+      await cleanupStaleNativeIsolationRun(resolve(runsDir, entry.name));
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { rmSync } from "node:fs";
@@ -267,6 +267,122 @@ stages:
     } finally {
       process.chdir(origCwd);
       process.stdout.write = origWrite;
+    }
+  });
+
+  it("writes a debug bundle when native execution fails", async () => {
+    const projectRoot = join(tempDir, "project-failure");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: test-pipeline
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
+  - id: implement
+    type: agent
+    agent: developer
+    depends_on: [plan-approval]
+  - id: verify
+    type: agent
+    agent: reviewer
+    depends_on: [implement]
+`);
+
+    const driver: NativeExecutionDriver = {
+      async executeTask() {
+        throw new Error("simulated native failure");
+      },
+      async executeReview() {
+        return { reviewYaml: REVIEW_YAML };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      await expect(
+        runPipeline(
+          { workflow: workflowPath, engine: "native" },
+          {
+            runId: "failrun",
+            native: {
+              planContent: APPROVED_PLAN,
+              driver
+            }
+          }
+        )
+      ).rejects.toThrow(/simulated native failure/);
+
+      const debugBundle = join(projectRoot, ".lineup", ".runs", "failrun", "debug-bundle.json");
+      expect(existsSync(debugBundle)).toBe(true);
+      expect(readFileSync(debugBundle, "utf8")).toContain("simulated native failure");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("rejects a new run when an active runtime lock is present", async () => {
+    const projectRoot = join(tempDir, "project-lock");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: test-pipeline
+stages:
+  - id: triage
+    type: builtin
+`);
+
+    mkdirSync(join(projectRoot, ".lineup", ".runs", "other"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".lineup", ".runs", "other", "pipeline-state.json"),
+      `${JSON.stringify({
+        apiVersion: "lineup/v3",
+        kind: "PipelineState",
+        run_id: "other",
+        status: "running",
+        workflow: workflowPath,
+        artifact_hashes: {},
+        updated_at: "2026-04-12T00:00:00.000Z"
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    mkdirSync(join(projectRoot, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".lineup", "runtime.lock"),
+      `${JSON.stringify({ runId: "other", created_at: "2026-04-12T00:00:00.000Z" }, null, 2)}\n`,
+      "utf8"
+    );
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      await expect(runPipeline({ workflow: workflowPath })).rejects.toThrow(/already active/i);
+    } finally {
+      process.chdir(origCwd);
     }
   });
 

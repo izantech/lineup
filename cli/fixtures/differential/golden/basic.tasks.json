@@ -1,0 +1,38 @@
+{
+  "apiVersion": "lineup/v3",
+  "kind": "Tasks",
+  "plan_hash": "f6124ea9d16b4f15c8744f0955274fb74a170612ec5a55d4f9cc26979fc46a6a",
+  "compiled_at": "2026-04-12T00:00:00.000Z",
+  "tasks": [
+    {
+      "id": "CHANGE-001",
+      "title": "Add native execution entrypoint",
+      "wave": 1,
+      "status": "todo",
+      "write_scope": [
+        "cli/src/lib/executor.ts"
+      ],
+      "deliverables": [
+        "cli/src/lib/executor.ts"
+      ]
+    },
+    {
+      "id": "CHANGE-002",
+      "title": "Route implement and verify through the selected engine",
+      "wave": 2,
+      "status": "todo",
+      "depends_on": [
+        "CHANGE-001"
+      ],
+      "read_scope": [
+        "cli/src/lib/executor.ts"
+      ],
+      "write_scope": [
+        "cli/src/lib/run-pipeline.ts"
+      ],
+      "deliverables": [
+        "cli/src/lib/run-pipeline.ts"
+      ]
+    }
+  ]
+}
