@@ -1,0 +1,35 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-07
+title: Migrate Claude, Codex, and OpenCode adapters to JSON-RPC
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-06
+parallel_wave: 2
+suggested_agent: developer
+rfc_sections:
+  - Host integration
+  - Existing Code Mapping
+read_scope:
+  - cli/src/lib/host-claude.ts
+  - cli/src/lib/host-codex.ts
+  - cli/src/lib/host-opencode.ts
+  - cli/src/lib/generate.ts
+write_scope:
+  - cli/src/lib/host-claude.ts
+  - cli/src/lib/host-codex.ts
+  - cli/src/lib/host-opencode.ts
+  - .lineup-core/hosts/
+deliverables:
+  - Update adapters to map JSON-RPC methods to host-native primitives
+  - Remove runtime dependence on parsing LINEUP text events
+  - Preserve generated skill installation paths and host packaging behavior
+acceptance_criteria:
+  - Adapter tests cover spawn, stream, cancel, and gate flows
+  - Adapter code does not re-implement workflow logic
+  - Generated host files remain valid after protocol migration
+notes:
+  determinism_rules:
+    - Keep adapters thin
+    - Keep host-specific branching at the adapter edge only

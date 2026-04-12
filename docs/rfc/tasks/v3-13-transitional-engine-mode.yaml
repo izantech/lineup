@@ -1,0 +1,36 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-13
+title: Add transitional engine mode and GA scope guards
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-07
+  - V3-10
+  - V3-12
+parallel_wave: 5
+suggested_agent: developer
+rfc_sections:
+  - Production Readiness Additions
+  - Acceptance Criteria
+read_scope:
+  - cli/src/commands/run.ts
+  - cli/src/lib/run-pipeline.ts
+  - docs/rfc/lineup-v3.md
+write_scope:
+  - cli/src/commands/run.ts
+  - cli/src/lib/run-pipeline.ts
+  - cli/src/lib/types.ts
+  - docs/
+deliverables:
+  - Add an explicit engine selector with native, tf, and auto modes
+  - Define and document the narrow GA scope for the first production-ready cut
+  - Keep fallback behavior available while native execution matures
+acceptance_criteria:
+  - Users can force native or TF execution explicitly
+  - Auto mode behavior is documented and testable
+  - GA scope excludes sparse mode by default
+notes:
+  determinism_rules:
+    - Engine selection must be explicit and auditable
+    - Fallback should not change artifact contracts

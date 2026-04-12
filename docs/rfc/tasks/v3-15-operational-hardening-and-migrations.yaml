@@ -1,0 +1,39 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-15
+title: Add operational hardening and v3 clean-break invalidation
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-03
+  - V3-09
+  - V3-10
+  - V3-12
+parallel_wave: 5
+suggested_agent: developer
+rfc_sections:
+  - Production Readiness Additions
+  - Final Decisions
+read_scope:
+  - cli/src/lib/state.ts
+  - cli/src/lib/paths.ts
+  - cli/src/lib/process.ts
+write_scope:
+  - cli/src/lib/state.ts
+  - cli/src/lib/paths.ts
+  - cli/src/lib/process.ts
+  - cli/src/commands/
+deliverables:
+  - Add per-run directories under .lineup/.runs
+  - Add stale-worktree detection and cleanup
+  - Add run locking or equivalent protection for concurrent mutating runs
+  - Add debug bundle or failure snapshot support
+  - Define invalidation and cleanup behavior for pre-v3 caches, state, and workflow artifacts
+acceptance_criteria:
+  - Concurrent mutating runs are rejected or serialized safely
+  - Failed runs leave enough debug state to diagnose issues
+  - Pre-v3 cache/state/workflow artifacts are invalidated deterministically without a migration layer
+notes:
+  determinism_rules:
+    - Operational safety must not depend on host behavior
+    - Invalidation rules must be versioned and explicit

@@ -1,0 +1,35 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-08
+title: Compile Plan to deterministic Tasks and execution waves
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-02
+  - V3-04
+parallel_wave: 2
+suggested_agent: developer
+rfc_sections:
+  - Stage model
+  - Acceptance Criteria
+read_scope:
+  - cli/src/lib/workflow.ts
+  - TASK_MANIFEST.yaml
+  - deps/task-foundry/src/models.rs
+  - deps/task-foundry/src/pipeline.rs
+write_scope:
+  - cli/src/lib/dag.ts
+  - cli/src/lib/types.ts
+  - cli/src/lib/run-pipeline.ts
+deliverables:
+  - Compile approved plan changes into a v3 Tasks artifact
+  - Build deterministic execution waves with conflict-aware scheduling
+  - Reuse TF task-manifest semantics where they improve determinism, without depending on TF at runtime
+acceptance_criteria:
+  - Identical plan input yields identical tasks and wave order
+  - Overlapping writes are separated into different waves
+  - Dependency cycles fail with stable errors
+notes:
+  determinism_rules:
+    - Preserve source order as a tiebreaker
+    - Treat write conflicts as scheduling hazards

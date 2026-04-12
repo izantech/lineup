@@ -1,0 +1,27 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-00
+title: Correct RFC and add existing-code mapping
+status: done
+last_updated: 2026-04-12
+depends_on: []
+parallel_wave: 0
+suggested_agent: architect
+rfc_sections:
+  - Research-Backed Corrections
+  - Existing Code Mapping
+  - Final Decisions
+write_scope:
+  - docs/rfc/lineup-v3.md
+deliverables:
+  - Align the RFC to a native Lineup executor target
+  - Add repo-backed subsystem mapping for CLI, skills, hosts, and current TF bridge
+  - Record rollout constraints for Node compatibility and sparse isolation gating
+acceptance_criteria:
+  - RFC states that Task Foundry is a migration reference, not the shipped backend
+  - RFC links the major v3 subsystems to current code
+  - RFC defines roadmap.md and tasks as companion tracking docs
+notes:
+  determinism_rules:
+    - Keep the RFC as the primary source of truth
+    - Prefer repo-verified statements over speculative architecture

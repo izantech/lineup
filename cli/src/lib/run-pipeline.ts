@@ -50,6 +50,7 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
   mkdirSync(cacheDir, { recursive: true });
 
   let status: "success" | "failed" | "aborted" = "success";
+  const stageResults = new Map<string, StageResult>();
 
   try {
     // 5. Generate-only: produce TF artifacts and return immediately
@@ -82,7 +83,6 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
 
     // 6. Resolve execution order
     const waves = resolveExecutionOrder(workflow);
-    const stageResults = new Map<string, StageResult>();
     const expressionCtx: ExpressionContext = { stages: {}, variables: {} };
 
     // 7. Dry-run: just print the plan

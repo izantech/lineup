@@ -1,0 +1,35 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-16
+title: Dogfood, readiness metrics, and native-default cutover
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-13
+  - V3-14
+  - V3-15
+parallel_wave: 6
+suggested_agent: reviewer
+rfc_sections:
+  - Production Readiness Additions
+  - Acceptance Criteria
+read_scope:
+  - docs/rfc/roadmap.md
+  - cli/test/
+  - scripts/
+write_scope:
+  - docs/rfc/roadmap.md
+  - docs/
+  - scripts/
+deliverables:
+  - Define readiness metrics for success rate, cleanup correctness, determinism, and runtime
+  - Dogfood native v3 on Lineup and multiple fixture repos
+  - Document the cutover gate for making native the default engine
+acceptance_criteria:
+  - Readiness metrics are documented and repeatable
+  - Dogfood results are captured in tracked docs
+  - Native default cutover requires explicit evidence, not informal confidence
+notes:
+  determinism_rules:
+    - Cutover decisions must be based on recorded measurements
+    - Default switching should be reversible until metrics stabilize

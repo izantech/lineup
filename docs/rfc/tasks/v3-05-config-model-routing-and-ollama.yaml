@@ -1,0 +1,32 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-05
+title: Add config resolution, model aliases, and Ollama bridge
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-00
+parallel_wave: 1
+suggested_agent: developer
+rfc_sections:
+  - Final Decisions
+  - Model routing and Ollama
+read_scope:
+  - cli/src/lib/paths.ts
+  - .lineup-core/skills/configure/core.md
+write_scope:
+  - cli/src/lib/config.ts
+  - cli/src/lib/ollama.ts
+  - cli/src/lib/types.ts
+deliverables:
+  - Resolve CLI, env, project, user, and default config layers
+  - Add model alias routing in the CLI
+  - Implement optional Ollama access through an OpenAI-compatible client surface
+acceptance_criteria:
+  - Config precedence is covered by tests
+  - Ollama can be disabled without changing pipeline correctness
+  - Stage model selection uses aliases instead of provider-specific identifiers
+notes:
+  determinism_rules:
+    - Provider routing belongs in the CLI
+    - Networked model helpers must never become mandatory for correctness

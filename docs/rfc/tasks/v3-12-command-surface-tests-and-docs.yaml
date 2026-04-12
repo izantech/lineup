@@ -1,0 +1,38 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-12
+title: Finish command surface, observer, tests, docs, and examples
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-03
+  - V3-05
+  - V3-07
+  - V3-10
+  - V3-11
+parallel_wave: 4
+suggested_agent: reviewer
+rfc_sections:
+  - Acceptance Criteria
+  - Feasibility Assessment
+read_scope:
+  - cli/test/
+  - ./dev
+  - docs/
+write_scope:
+  - cli/src/commands/
+  - cli/src/lib/observer.ts
+  - cli/test/
+  - docs/
+deliverables:
+  - Add lineup doctor, status-artifacts reporting, and final command-surface refinements
+  - Add observer and reporting coverage
+  - Update docs and examples to reflect the native engine
+acceptance_criteria:
+  - JSON-RPC, executor, artifact, and workflow tests cover the v3 surface
+  - Docs describe the native engine rather than the TF bridge
+  - `./dev check` passes once dependencies are installed
+notes:
+  determinism_rules:
+    - Final docs should reference the RFC and task ledger
+    - Avoid undocumented runtime behavior in examples

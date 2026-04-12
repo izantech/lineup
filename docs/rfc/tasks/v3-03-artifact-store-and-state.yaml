@@ -1,0 +1,34 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-03
+title: Implement artifact store, output repair, and run-state hashing
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-02
+parallel_wave: 2
+suggested_agent: developer
+rfc_sections:
+  - Artifact and Contract Rules
+  - Acceptance Criteria
+read_scope:
+  - cli/src/lib/state.ts
+  - cli/src/lib/paths.ts
+  - cli/src/lib/errors.ts
+write_scope:
+  - cli/src/lib/artifact-store.ts
+  - cli/src/lib/llm-output-repair.ts
+  - cli/src/lib/state.ts
+  - cli/src/lib/paths.ts
+deliverables:
+  - Persist immutable content-addressed artifacts
+  - Add mechanical repair for YAML and JSON agent output before validation
+  - Introduce run-scoped pipeline state with artifact hashes and git tree hashes
+acceptance_criteria:
+  - The same content produces the same artifact hash
+  - Resume state can reject stale upstream artifacts
+  - Repair never bypasses schema validation
+notes:
+  determinism_rules:
+    - Persist artifacts immutably
+    - Keep run state per run, not global mutable state
