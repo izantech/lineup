@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-12
 title: Finish command surface, observer, tests, docs, and examples
-status: todo
+status: in_progress
 last_updated: 2026-04-12
 depends_on:
   - V3-03
@@ -36,3 +36,7 @@ notes:
   determinism_rules:
     - Final docs should reference the RFC and task ledger
     - Avoid undocumented runtime behavior in examples
+  active_scope:
+    - Update command descriptions and status output for the native executor path
+    - Add observer/reporting surfaces for run artifacts
+    - Refresh docs and examples that still describe the TF bridge as the active runtime

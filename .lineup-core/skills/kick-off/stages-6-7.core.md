@@ -2,23 +2,18 @@
 
 > **Stage 6/7: Verify**
 
-Verification is handled by Task Foundry's validator role during Stage 5. The orchestrator
-does not spawn a standalone reviewer agent.
+The CLI runtime owns verification dispatch and retry handling. The orchestrator should focus
+on interpreting reviewer results, presenting failures clearly, and asking the user whether to
+retry or stop when verification does not pass.
 
-After TF completes, read the validation result from
-`.runner-output/<attempt>/validator-output.json`:
+- If verification status is `PASS`: proceed to Stage 7 (Document).
+- If verification status is `FAIL` or `PASS_WITH_WARNINGS`: report the reviewer summary and
+  ask whether to retry or stop. Use **{{QUESTION_PRIMITIVE}}** for this decision.
 
-- If `status` is `"OK"`: proceed to Stage 7 (Document).
-- If `status` is `"FAIL"`: report the validator's `reason` to the user and ask whether
-  to retry (re-run TF from Stage 5) or abort. Use **{{QUESTION_PRIMITIVE}}** for this
-  decision.
+**Artifact cleanup**: After confirmation of the verification result, Stage 6-specific
+ephemeral artifacts may be cleaned up. Full run cleanup remains a CLI-managed concern.
 
-**Artifact cleanup**: After confirming the validation result, Stage 6-specific artifacts
-in `.lineup/.ephemeral/` may be cleaned up. Do not delete `.runner-output/` — TF manages
-this directory independently and the documenter (Stage 7) may read from it. Full ephemeral
-cleanup of `.lineup/.ephemeral/` happens in Pipeline Cleanup.
-
-**Output:** validation status reported to the user.
+**Output:** verification status reported to the user.
 
 ## Stage 7 -- Document (Optional)
 

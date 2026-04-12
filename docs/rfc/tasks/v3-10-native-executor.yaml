@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-10
 title: Implement native executor, retry, diff apply, and verify hooks
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-03
@@ -35,3 +35,7 @@ notes:
   determinism_rules:
     - Keep scheduling deterministic even when retries occur
     - Separate execution side effects from artifact/state decisions
+  completed_scope:
+    - Added cli/src/lib/executor.ts and cli/src/lib/retry.ts
+    - Replaced run-pipeline implement/verify TF handoff with native executor orchestration
+    - Added native executor and run-pipeline execution tests

@@ -2,19 +2,13 @@
 
 > **Stage 4/7: Plan**
 
-Before spawning the architect, generate Task Foundry adapters for the current host via Bash:
-
-```
-lineup tf generate --host <detected-host> --output .lineup/.ephemeral/<runId>/
-```
-
-This produces adapter scripts, system prompts, and a TF config file in the ephemeral run
-directory. The `<runId>` is a short identifier for the current pipeline run (e.g., first 8
-characters of the pipeline session hash).
-
 Then spawn one or more `architect` agents to create an implementation plan.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent). The triage
 assessment's `complexity` and `independent_areas` fields drive how this stage runs.
+
+The CLI runtime owns adapter generation, task compilation, protocol framing, and execution
+setup. Do not describe shell commands or backend mechanics in the architect prompt. The
+architect should focus only on producing the approved implementation plan artifact.
 
 ### Conditional approach analysis
 
@@ -28,22 +22,12 @@ Include the complexity classification in each architect's spawn prompt:
   produce **2-3 approaches** with trade-offs (current behavior). The architect chooses
   2 or 3 based on how many meaningfully different strategies exist.
 
-### TaskManifest output format
+### Plan artifact output format
 
-Instruct each architect to output their plan as a **TaskManifest YAML** with this structure:
-
-```yaml
-version: 1
-goal: "<one-line goal>"
-tasks:
-  - task_id: <short-kebab-id>
-    description: "<what this task does>"
-    depends_on: [<task_ids this depends on>]
-    read_files: [<files to read>]
-    write_files: [<files to create or modify>]
-    steps:
-      - <imperative step description>
-```
+Instruct each architect to output a `lineup/v3` **Plan YAML** artifact. The plan should
+capture the recommended approach, ordered file changes, dependency edges, parallelization
+guidance, acceptance criteria, and risks. The CLI runtime compiles the approved plan into
+deterministic tasks and execution waves after user approval.
 
 ### Ollama-assisted planning
 
@@ -62,68 +46,45 @@ If the triage assessment identified 2+ `independent_areas`:
 1. Spawn one `architect` agent per independent area, in parallel.
 2. Each architect receives only the research findings relevant to its area, plus
    the full resolved requirements for cross-cutting context.
-3. Each architect produces a TaskManifest scoped to its area.
+3. Each architect produces a Plan scoped to its area.
 4. After all architects complete, **merge their outputs yourself** (do not spawn
-   another agent). Produce a single master TaskManifest by:
-   - Merging the `tasks` lists from all sub-manifests, preserving task IDs
-   - Updating `depends_on` references to remain consistent across the merged manifest
-   - Scanning `write_files` entries for file-level conflicts (any path that appears in
-     two or more tasks from different architects)
-5. **Check for file-level conflicts**: If any `write_files` overlap is found, do not
+   another agent). Produce a single master Plan by:
+   - Merging the ordered change lists from all sub-plans
+   - Updating explicit dependency references to remain consistent across the merged plan
+   - Scanning proposed file paths for overlap across architect outputs
+5. **Check for file-level conflicts**: If any overlapping file targets are found, do not
    proceed to Approval automatically. Instead, present the conflicting entries to the user:
    "Warning: The following file(s) appear in plans from multiple architects: <file list>.
    Please decide how to resolve the overlap before the plan is finalized."
    Use **{{QUESTION_PRIMITIVE}}** to let the user choose: keep one architect's version,
-   merge both changes, or provide a custom resolution. Update the master TaskManifest
+   merge both changes, or provide a custom resolution. Update the master Plan
    accordingly before presenting it for final approval.
 
 If only one area exists, spawn a single architect (current behavior).
 
 ### Approval
 
-- After the architect(s) complete, write the (merged or single) TaskManifest to
-  `.lineup/.ephemeral/<runId>/planner-output.yaml`.
-- Present the TaskManifest to the user and **wait for explicit approval**
-  before proceeding.
-- **Output:** an approved TaskManifest at `.lineup/.ephemeral/<runId>/planner-output.yaml`.
+- After the architect(s) complete, present the merged or single Plan to the user and
+  **wait for explicit approval** before proceeding.
+- **Output:** an approved `lineup/v3` Plan artifact.
 
 ## Stage 5 -- Implement
 
 > **Stage 5/7: Implement**
 
-Invoke Task Foundry to execute the approved TaskManifest. Stage 6 (Verify) is bundled into
-this TF invocation — the validator role runs automatically after workers complete.
+The CLI runtime owns task compilation, task-wave execution, retries, isolation, and verifier
+dispatch. The orchestrator should not describe backend shell commands or manually sequence
+developer/reviewer subprocesses in prompt prose.
 
-1. Write the user's original request to `.lineup/.ephemeral/<runId>/request.txt`.
-2. Regenerate the TF config with the **passthrough planner** so TF uses the approved manifest
-   instead of re-planning from scratch:
+During this stage:
 
-   ```
-   lineup tf generate --host <detected-host> --output .lineup/.ephemeral/<runId>/ \
-     --manifest-path .lineup/.ephemeral/<runId>/planner-output.yaml
-   ```
+1. Hand the approved Plan to the CLI runtime.
+2. Let the runtime compile the plan into deterministic Tasks and execution waves.
+3. Let the runtime dispatch developer work per wave and collect implementation state.
+4. Report only user-relevant progress and blockers.
 
-   This overwrites `tf-config.yaml` with a Phase 2 config where the planner adapter simply
-   reads and emits the approved manifest. Without this step, TF would invoke the real planner
-   and discard the user-approved plan.
-
-3. Run via Bash:
-
-   ```
-   task-foundry --config .lineup/.ephemeral/<runId>/tf-config.yaml --input-file .lineup/.ephemeral/<runId>/request.txt
-   ```
-
-   TF dispatches developer workers and runs the validator according to the adapter scripts.
-   It handles parallelism, retries, and hazard detection internally.
-
-4. Read `.runner-output/` for TF's execution results.
-5. On TF exit status:
-   - **Exit 0**: proceed to Stage 7 (Document).
-   - **Non-zero**: report the failure and TF's output to the user and stop the pipeline.
-
-**Note:** The orchestrator does not spawn individual developer or reviewer agents in this
-stage. TF manages all worker dispatch, parallelism, and retry logic via the generated
-adapter scripts.
+**Note:** Keep Stage 5 focused on implementation intent, acceptance criteria, and user-facing
+status. Runtime mechanics belong to the CLI, not the skill pack.
 
 ---
 

@@ -46,9 +46,9 @@ These RFC deltas are now part of the tracked plan:
 | [V3-07](./tasks/v3-07-host-adapter-migration.yaml) | Migrate Claude/Codex/OpenCode adapters to JSON-RPC | `done` | `V3-06` | 2 | developer | 2026-04-12 |
 | [V3-08](./tasks/v3-08-task-compiler-and-waves.yaml) | Compile `Plan` to deterministic `Tasks` and execution waves | `done` | `V3-02`, `V3-04` | 2 | developer | 2026-04-12 |
 | [V3-09](./tasks/v3-09-native-isolation.yaml) | Implement native isolation layer | `done` | `V3-00` | 1 | developer | 2026-04-12 |
-| [V3-10](./tasks/v3-10-native-executor.yaml) | Implement native executor, retry, diff apply, verify hooks | `todo` | `V3-03`, `V3-06`, `V3-08`, `V3-09` | 3 | developer | 2026-04-12 |
-| [V3-11](./tasks/v3-11-prompt-builder-and-skill-pack.yaml) | Refactor prompt builder, agent contracts, and canonical skill pack | `todo` | `V3-02`, `V3-04`, `V3-05`, `V3-07`, `V3-10` | 3 | architect + developer | 2026-04-12 |
-| [V3-12](./tasks/v3-12-command-surface-tests-and-docs.yaml) | Finish command surface, observer, tests, docs, and examples | `todo` | `V3-03`, `V3-05`, `V3-07`, `V3-10`, `V3-11` | 4 | developer + reviewer | 2026-04-12 |
+| [V3-10](./tasks/v3-10-native-executor.yaml) | Implement native executor, retry, diff apply, verify hooks | `done` | `V3-03`, `V3-06`, `V3-08`, `V3-09` | 3 | developer | 2026-04-12 |
+| [V3-11](./tasks/v3-11-prompt-builder-and-skill-pack.yaml) | Refactor prompt builder, agent contracts, and canonical skill pack | `done` | `V3-02`, `V3-04`, `V3-05`, `V3-07`, `V3-10` | 3 | architect + developer | 2026-04-12 |
+| [V3-12](./tasks/v3-12-command-surface-tests-and-docs.yaml) | Finish command surface, observer, tests, docs, and examples | `in_progress` | `V3-03`, `V3-05`, `V3-07`, `V3-10`, `V3-11` | 4 | developer + reviewer | 2026-04-12 |
 | [V3-13](./tasks/v3-13-transitional-engine-mode.yaml) | Add transitional engine mode and GA scope guards | `todo` | `V3-07`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
 | [V3-14](./tasks/v3-14-differential-regression-harness.yaml) | Build differential regression harness and task corpus | `todo` | `V3-10`, `V3-12` | 5 | reviewer | 2026-04-12 |
 | [V3-15](./tasks/v3-15-operational-hardening-and-migrations.yaml) | Add operational hardening and v3 clean-break invalidation | `todo` | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
@@ -56,19 +56,21 @@ These RFC deltas are now part of the tracked plan:
 
 ## Current Handoff
 
-- Active task: wave 2 runtime-state, task-compiler, and adapter integration complete
+- Active task: wave 4 integration, command surface, observer, and docs
 - Current state:
   - `V3-00` complete
   - `V3-01` complete
   - `V3-02`, `V3-04`, `V3-05`, `V3-06`, and `V3-09` are complete
   - `V3-03`, `V3-07`, and `V3-08` are complete
-  - `./dev check` passes with the new wave 2 surface
-- Ready-to-start tasks after wave 2:
-  - `V3-10`
-  - `V3-11`
+  - `V3-10` and `V3-11` are complete
+  - `./dev check` passes with the native executor and prompt-builder wave landed
+- Ready-to-start tasks after wave 4:
+  - `V3-13`
+  - `V3-14`
+  - `V3-15`
 - Immediate next step:
-  - start wave 3 by carving executor/retry/runtime integration away from prompt and skill-pack refactors
+  - finish the wave-4 command surface so `lineup run`, `lineup status`, and related docs reflect the native executor path rather than the TF bridge
 - Known blockers:
-  - current CLI runtime still routes implementation/verification through the TF bridge
-  - native executor, operational hardening, and cutover controls are not implemented yet
+  - CLI descriptions and status output still expose Task Foundry-first wording in places
+  - observer/status surfaces do not yet expose artifact/run details cleanly
   - differential regression harness does not exist yet

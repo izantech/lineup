@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { HostName } from "./constants.js";
 import { renderTemplate } from "./generate.js";
+import { buildAgentSystemPrompt } from "./prompt-builder.js";
 import type { TfRole } from "./types.js";
 
 export type AdapterGenerationContext = {
@@ -26,15 +27,6 @@ const HOST_INVOKE_COMMANDS: Record<string, string> = {
   opencode: `opencode run -m "$MODEL" -s "$SYSTEM_PROMPT" <<< "$PAYLOAD"`,
 };
 
-function extractAgentBody(content: string): string {
-  const parts = content.split("---");
-  // frontmatter is between first and second ---; body starts after second ---
-  if (parts.length >= 3) {
-    return parts.slice(2).join("---").trimStart();
-  }
-  return content.trimStart();
-}
-
 export function generateTfAdapters(ctx: AdapterGenerationContext): Record<TfRole, { adapterPath: string; promptPath: string }> {
   mkdirSync(ctx.outputDir, { recursive: true });
 
@@ -50,9 +42,6 @@ export function generateTfAdapters(ctx: AdapterGenerationContext): Record<TfRole
 
     const adapterTemplate = readFileSync(adapterTemplatePath, "utf8");
     const promptTemplate = readFileSync(promptTemplatePath, "utf8");
-    const agentContent = readFileSync(agentFilePath, "utf8");
-    const agentBody = extractAgentBody(agentContent);
-
     const adapterPath = join(ctx.outputDir, `${role}.sh`);
     const promptPath = join(ctx.outputDir, `${role}-system.txt`);
 
@@ -63,7 +52,10 @@ export function generateTfAdapters(ctx: AdapterGenerationContext): Record<TfRole
     };
 
     const renderedAdapter = renderTemplate(adapterTemplate, vars, `${role}.sh.template`, ctx.host);
-    const renderedPrompt = promptTemplate.replace("{{AGENT_BODY}}", agentBody);
+    const renderedPrompt = buildAgentSystemPrompt({
+      agentFilePath,
+      promptTemplate
+    }).prompt;
 
     writeFileSync(adapterPath, renderedAdapter, "utf8");
     chmodSync(adapterPath, 0o755);

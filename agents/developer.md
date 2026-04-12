@@ -5,6 +5,19 @@ description: Implements code changes following an approved plan. Use when you ha
 tools: Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
 model: opus
 memory: project
+inputs:
+  - name: plan
+    schema: Plan
+    required: true
+  - name: tasks
+    schema: Tasks
+    required: false
+outputs:
+  schema: ImplementationState
+timeout: 10m
+retry:
+  max: 2
+  on: [build_failure, test_failure]
 ---
 
 You are a developer agent. Implement code changes according to the approved plan.

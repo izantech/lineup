@@ -3,6 +3,9 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "no
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { rmSync } from "node:fs";
+import { execSync } from "node:child_process";
+
+import type { NativeExecutionDriver } from "../src/lib/executor.js";
 
 const ADAPTER_TEMPLATE = `#!/usr/bin/env bash
 SYSTEM_PROMPT=$(cat "{{SYSTEM_PROMPT_PATH}}")
@@ -41,6 +44,46 @@ function writeTemplatesTo(projectRoot: string): void {
     writeFileSync(join(projectRoot, "agents", `${agent}.md`), AGENT_CONTENT);
   }
 }
+
+function initGitRepo(projectRoot: string): void {
+  execSync("git init", { cwd: projectRoot, stdio: "ignore" });
+  execSync("git config user.email 'lineup@example.com'", { cwd: projectRoot, stdio: "ignore" });
+  execSync("git config user.name 'Lineup Tests'", { cwd: projectRoot, stdio: "ignore" });
+  writeFileSync(join(projectRoot, "README.md"), "# test\n", "utf8");
+  execSync("git add README.md", { cwd: projectRoot, stdio: "ignore" });
+  execSync("git commit -m 'init'", { cwd: projectRoot, stdio: "ignore" });
+}
+
+const APPROVED_PLAN = `apiVersion: lineup/v3
+kind: Plan
+status: approved
+summary: Integrate native executor
+approaches:
+  - name: Native
+    strategy: Execute inside Lineup
+recommendation:
+  approach: Native
+  rationale: Avoid the TF bridge
+changes:
+  - file: cli/src/lib/executor.ts
+    change: Add executor
+    rationale: Run tasks natively
+acceptance_criteria:
+  - criterion: Pipeline reaches verify
+risks:
+  - risk: Tests could depend on external host tooling
+    mitigation: Seed native driver in tests
+`;
+
+const REVIEW_YAML = `apiVersion: lineup/v3
+kind: Review
+status: PASS
+summary: Pipeline completed through native executor.
+issues: []
+test_results:
+  test_suite:
+    status: pass
+`;
 
 describe("runPipeline", () => {
   let tempDir: string;
@@ -133,6 +176,98 @@ stages:
     // Verify artifacts were written to disk
     expect(existsSync(join(result.tfOutputDir!, "tf-config.yaml"))).toBe(true);
     expect(existsSync(join(result.tfOutputDir!, "adapters", "planner.sh"))).toBe(true);
+  });
+
+  it("executes implement and verify through the native executor path", async () => {
+    const projectRoot = join(tempDir, "project-native");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: test-pipeline
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
+  - id: implement
+    type: agent
+    agent: developer
+    depends_on: [plan-approval]
+    retry:
+      max_attempts: 2
+      on: [build_failure]
+  - id: verify
+    type: agent
+    agent: reviewer
+    depends_on: [implement]
+`);
+
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        return {
+          status: "complete",
+          summary: `completed ${input.task.id}`,
+          changes_made: [
+            {
+              file: input.task.write_scope?.[0] ?? "unknown",
+              description: "updated file",
+              task_id: input.task.id
+            }
+          ]
+        };
+      },
+      async executeReview() {
+        return {
+          reviewYaml: REVIEW_YAML
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const stdoutChunks: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const origCwd = process.cwd();
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath
+        },
+        {
+          runId: "native1",
+          native: {
+            planContent: APPROVED_PLAN,
+            driver
+          }
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("implement")?.outputs).toHaveProperty("tasks_path");
+      expect(result.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
+      expect(result.stageResults.get("implement")?.outputs).not.toHaveProperty("tfOutputDir");
+      expect(stdoutChunks.join("")).not.toContain("Task Foundry output directory");
+    } finally {
+      process.chdir(origCwd);
+      process.stdout.write = origWrite;
+    }
   });
 
   it("rejects workflow with cycle", async () => {

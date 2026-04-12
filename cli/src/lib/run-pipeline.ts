@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import type { HostName } from "./constants.js";
 import { createArtifactStore } from "./artifact-store.js";
+import { executeNativeExecutor, type NativeExecutionDriver } from "./executor.js";
 import {
   createLineupNotification,
   createLineupRequest,
@@ -22,7 +23,7 @@ import {
 import { parseWorkflowYaml } from "./validation.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
-import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
+import { generateTfConfig, type TfGeneratorContext } from "./tf-config.js";
 import { generateTfAdapters, type AdapterGenerationContext } from "./tf-adapters.js";
 
 export type PipelineResult = {
@@ -39,10 +40,18 @@ type StageResult = {
   duration?: number;
 };
 
+export type RunPipelineHooks = {
+  runId?: string;
+  native?: {
+    driver?: NativeExecutionDriver;
+    planContent?: string;
+  };
+};
+
 /**
- * Run the Lineup pipeline: pre-pipeline stages (native) → TF core → post-pipeline stages (native).
+ * Run the Lineup pipeline: orchestration stages → native execution → post-pipeline stages.
  */
-export async function runPipeline(options: RunOptions): Promise<PipelineResult> {
+export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
   // 1. Load workflow
   const workflowPath = options.workflow ?? findDefaultWorkflow();
   const raw = readFileSync(workflowPath, "utf-8");
@@ -52,10 +61,12 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
   validateWorkflowDag(workflow);
 
   // 3. Generate run ID (6 char hex from random bytes)
-  const runId = createHash("sha256")
-    .update(Date.now().toString() + Math.random().toString())
-    .digest("hex")
-    .slice(0, 6);
+  const runId =
+    hooks.runId ??
+    createHash("sha256")
+      .update(Date.now().toString() + Math.random().toString())
+      .digest("hex")
+      .slice(0, 6);
 
   // 4. Setup directories
   const projectRoot = resolve(".");
@@ -168,7 +179,6 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
 
     // 9. Execute stages in wave order
     const preStages = new Set(["triage", "clarify", "research", "gate"]);
-    const tfStages = new Set(["plan", "plan-approval", "implement", "verify"]);
     const postStages = new Set(["document"]);
 
     for (const wave of waves) {
@@ -202,15 +212,14 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
           // Phase 1: invoke planner adapter directly
           const planResult = await executePlannerPhase(
             stage,
-            workflow,
-            expressionCtx,
             host,
             projectRoot,
             artifactDir,
             runId,
             () => protocolRequestId++,
             emitProtocol,
-            emitStatus
+            emitStatus,
+            hooks
           );
           stageResults.set(stageId, planResult);
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
@@ -235,23 +244,50 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
           expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
 
         } else if (stageId === "implement" || stageId === "verify") {
-          // Phase 2: invoke TF with passthrough planner for workers + validator
+          // Implement and verify now run through the native Lineup executor.
           if (stageId === "implement") {
-            const tfResult = await executeTfPhase(
-              workflow,
-              expressionCtx,
-              host,
+            const implementStage = workflow.stages.find((candidate) => candidate.id === "implement");
+            const verifyStage = workflow.stages.find((candidate) => candidate.id === "verify");
+            if (!implementStage || !verifyStage) {
+              throw new Error("Workflow must define both implement and verify stages.");
+            }
+
+            const planPath = expressionCtx.stages["plan"]?.outputs?.planPath as string | undefined;
+            if (!planPath) {
+              throw new Error("No approved plan artifact path found. Plan stage must complete before native execution.");
+            }
+
+            const nativeResult = await executeNativeExecutor({
+              runId,
               projectRoot,
+              runRoot,
               artifactDir,
-              options.timeout,
-              emitStatus
+              gitTreeSha,
+              planPath,
+              artifactStore,
+              nextProtocolRequestId: () => protocolRequestId++,
+              emitProtocol,
+              emitStatus,
+              implementStage,
+              verifyStage,
+              driver: hooks.native?.driver
+            });
+
+            pipelineState = savePipelineState(
+              updatePipelineArtifactHashes(pipelineState, {
+                plan: nativeResult.planRecord.sha256,
+                tasks: nativeResult.tasksRecord.sha256,
+                review: nativeResult.reviewRecord.sha256
+              }),
+              projectRoot
             );
-            stageResults.set("implement", tfResult.implementResult);
-            stageResults.set("verify", tfResult.verifyResult);
-            expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
-            expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
+
+            stageResults.set("implement", nativeResult.implementResult);
+            stageResults.set("verify", nativeResult.verifyResult);
+            expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
+            expressionCtx.stages["verify"] = { outputs: nativeResult.verifyResult.outputs };
           }
-          // verify is handled together with implement in TF invocation
+          // verify is handled together with implement in native execution
 
         } else if (postStages.has(stageId)) {
           const result = executePostStage(stage, expressionCtx, projectRoot, emitStatus);
@@ -377,15 +413,14 @@ function executePreStage(
 
 async function executePlannerPhase(
   stage: WorkflowStage,
-  workflow: WorkflowDefinition,
-  ctx: ExpressionContext,
   host: HostName,
   projectRoot: string,
   artifactDir: string,
   runId: string,
   nextRequestId: () => number,
   emitProtocol: (message: LineupProtocolMessage) => void,
-  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
+  hooks: RunPipelineHooks
 ): Promise<StageResult> {
   // Generate adapters
   const adaptersCtx: AdapterGenerationContext = {
@@ -413,63 +448,17 @@ async function executePlannerPhase(
     })
   );
 
-  // The host orchestrator reads this and invokes the planner
-  // The planner output (TaskManifest YAML) is written to artifactDir
-  const manifestPath = resolve(artifactDir, "planner-output.yaml");
-  emitStatus(stage.id, `Planner output will be written to ${manifestPath}.`, true);
+  const planPath = resolve(artifactDir, "plan.yaml");
+  if (hooks.native?.planContent) {
+    writeFileSync(planPath, hooks.native.planContent, "utf8");
+  }
+
+  emitStatus(stage.id, `Approved plan artifact path: ${planPath}.`, true);
 
   return {
     id: stage.id,
     status: "complete",
-    outputs: { manifestPath },
-  };
-}
-
-async function executeTfPhase(
-  workflow: WorkflowDefinition,
-  ctx: ExpressionContext,
-  host: HostName,
-  projectRoot: string,
-  artifactDir: string,
-  timeout?: number,
-  emitStatus?: (stageId: string, chunk: string, final?: boolean) => void
-): Promise<{ implementResult: StageResult; verifyResult: StageResult }> {
-  const manifestPath = ctx.stages["plan"]?.outputs?.manifestPath as string;
-  if (!manifestPath) {
-    throw new Error("No planner manifest found. Plan stage must complete before TF invocation.");
-  }
-
-  // Generate passthrough config
-  const tfCtx: TfGeneratorContext = {
-    workflow,
-    projectRoot,
-    runId: artifactDir.split("/").pop()!,
-    adaptersDir: resolve(artifactDir, "adapters"),
-    promptsDir: resolve(artifactDir, "adapters"),
-    host,
-    timeout,
-  };
-  const configYaml = generatePassthroughConfig(tfCtx, manifestPath);
-  const configPath = resolve(artifactDir, "tf-config.yaml");
-  writeFileSync(configPath, configYaml, "utf-8");
-
-  // Write input file (user request)
-  const inputPath = resolve(artifactDir, "request.txt");
-  // Input will be populated by the host orchestrator
-
-  emitStatus?.("implement", `Invoking Task Foundry bridge with config ${configPath}.`);
-  if (timeout) {
-    emitStatus?.("implement", `Task Foundry timeout configured for ${timeout}ms.`);
-  }
-
-  // TF output directory
-  const tfOutputDir = resolve(projectRoot, ".runner-output");
-  emitStatus?.("implement", `Task Foundry output directory is ${tfOutputDir}.`, true);
-  emitStatus?.("verify", `Verification will read Task Foundry output from ${tfOutputDir}.`, true);
-
-  return {
-    implementResult: { id: "implement", status: "complete", outputs: { tfOutputDir } },
-    verifyResult: { id: "verify", status: "complete", outputs: { tfOutputDir } },
+    outputs: { planPath },
   };
 }
 

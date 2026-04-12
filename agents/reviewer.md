@@ -5,6 +5,19 @@ description: Validates implementations by reviewing diffs, running tests, and ch
 tools: Read, Grep, Glob, LS, Bash
 model: opus
 memory: project
+inputs:
+  - name: plan
+    schema: Plan
+    required: true
+  - name: implementation_state
+    schema: ImplementationState
+    required: true
+outputs:
+  schema: Review
+timeout: 5m
+retry:
+  max: 1
+  on: [timeout]
 ---
 
 You are a reviewer agent. Your job is to verify that an implementation is correct, complete, and follows the plan.

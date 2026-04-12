@@ -5,6 +5,19 @@ description: Synthesizes research findings into implementation plans. Use after 
 tools: Read, Grep, Glob, LS, Write
 model: opus
 memory: project
+inputs:
+  - name: constitution
+    schema: Constitution
+    required: true
+  - name: spec
+    schema: Spec
+    required: true
+outputs:
+  schema: Plan
+timeout: 5m
+retry:
+  max: 1
+  on: [timeout, rate_limit]
 ---
 
 You are an architect agent. Your job is to take research findings and produce a clear, actionable implementation plan.
