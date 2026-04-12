@@ -58,3 +58,24 @@ Reasoning:
 
 Additional dogfood on external repositories is still useful, but the current evidence is now
 recorded rather than implicit.
+
+## External Dogfood Corpus
+
+Three external fixture shapes are defined for dogfood validation:
+
+| Fixture | Shape | Key Journeys |
+|---------|-------|--------------|
+| monorepo | Multi-package TS/Python | init, dry-run, cancel, resume |
+| library | Single-package TS | init, dry-run, validate, artifacts |
+| fullstack | Multi-module with Docker | init, full run, cancel, resume, diff |
+
+Fixture definitions: `cli/fixtures/external-dogfood/`
+
+### Dogfood Execution Checklist
+
+- [ ] Each fixture repo cloned and pinned to a specific commit
+- [ ] `lineup init` succeeds in each repo
+- [ ] `lineup run --dry-run` produces valid execution plan
+- [ ] `lineup run --engine native` completes or fails with clear diagnostics
+- [ ] `lineup cancel` and `lineup resume` work correctly
+- [ ] No regressions in `lineup doctor` output

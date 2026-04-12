@@ -49,6 +49,8 @@ CLI runtime:
 - `lineup tactic list [--json]`
 - `lineup approve <run-id> [--json]`
 - `lineup pending [--json]`
+- `lineup completion <bash|zsh|fish>`
+- `lineup dag [--workflow <path>] [--json]`
 
 ## Architecture
 

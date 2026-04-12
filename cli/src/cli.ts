@@ -6,6 +6,8 @@ import { Command } from "commander";
 
 import { runApproveCommand, type ApproveCommandOptions } from "./commands/approve";
 import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
+import { runCompletionCommand, type CompletionCommandOptions } from "./commands/completion";
+import { runDagCommand, type DagCommandOptions } from "./commands/dag";
 import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
@@ -68,6 +70,8 @@ export type CliHandlers = {
   workflowList: (options: WorkflowListOptions) => Promise<void>;
   tacticNew: (options: TacticNewOptions) => Promise<void>;
   tacticList: (options: TacticListOptions) => Promise<void>;
+  completion: (options: CompletionCommandOptions) => Promise<void>;
+  dag: (options: DagCommandOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -102,6 +106,8 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     workflowList: runWorkflowListCommand,
     tacticNew: runTacticNewCommand,
     tacticList: runTacticListCommand,
+    completion: runCompletionCommand,
+    dag: runDagCommand,
     ...handlers
   };
 
@@ -299,6 +305,18 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("List available tactics")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.tacticList);
+
+  program
+    .command("completion <shell>")
+    .description("Generate shell completion script (bash, zsh, fish)")
+    .action((shell: string) => commandHandlers.completion({ shell }));
+
+  program
+    .command("dag")
+    .description("Visualize the workflow DAG")
+    .option("--workflow <path>", "Path to workflow YAML")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.dag);
 
   return program;
 }

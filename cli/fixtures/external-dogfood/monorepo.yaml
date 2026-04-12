@@ -1,0 +1,19 @@
+apiVersion: lineup/v3
+kind: DogfoodFixture
+name: monorepo
+description: Multi-package monorepo with shared config
+repo_shape:
+  type: monorepo
+  languages: [typescript, python]
+  packages: 3+
+  has_ci: true
+expected_journeys:
+  - init
+  - run --dry-run
+  - cancel
+  - resume
+  - status --artifacts
+  - doctor
+notes:
+  - Tests workflow discovery across package boundaries
+  - Tests isolation with cross-package dependencies

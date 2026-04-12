@@ -1,0 +1,18 @@
+apiVersion: lineup/v3
+kind: DogfoodFixture
+name: library
+description: Single-package library with build and test
+repo_shape:
+  type: library
+  languages: [typescript]
+  packages: 1
+  has_ci: true
+expected_journeys:
+  - init
+  - run --dry-run
+  - validate
+  - artifacts show plan
+  - workflow lint
+notes:
+  - Tests simplest path through the pipeline
+  - Tests artifact commands on a clean repo

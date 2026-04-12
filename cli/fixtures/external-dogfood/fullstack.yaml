@@ -1,0 +1,20 @@
+apiVersion: lineup/v3
+kind: DogfoodFixture
+name: fullstack
+description: Full-stack app with frontend, backend, and database
+repo_shape:
+  type: fullstack
+  languages: [typescript, python, sql]
+  packages: 2
+  has_ci: true
+  has_docker: true
+expected_journeys:
+  - init
+  - run --dry-run
+  - run --engine native
+  - cancel
+  - resume
+  - artifacts diff plan
+notes:
+  - Tests complex multi-module execution
+  - Tests resume after cancel across module boundaries

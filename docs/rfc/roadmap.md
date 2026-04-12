@@ -62,21 +62,22 @@ These RFC deltas are now part of the tracked plan:
 | [V3-20](./tasks/v3-20-lineup-init.yaml) | Add lineup init for project bootstrap | `done` | `V3-17` | 8 | developer | 2026-04-12 |
 | [V3-21](./tasks/v3-21-workflow-tactic-authoring.yaml) | Add workflow and tactic authoring UX | `done` | `V3-20` | 8 | developer | 2026-04-12 |
 | [V3-22](./tasks/v3-22-approval-gating-ux.yaml) | Add pause/resume and approval/gating UX | `done` | `V3-19` | 8 | developer | 2026-04-12 |
-| [V3-23](./tasks/v3-23-external-dogfood-and-hardening.yaml) | Add external-repo dogfood corpus and release hardening | `todo` | `V3-17`, `V3-18`, `V3-19`, `V3-22` | 9 | reviewer | 2026-04-12 |
-| [V3-24](./tasks/v3-24-completion-notifications-polish.yaml) | Add shell completion, notifications, DAG viz, and polish | `todo` | `V3-20`, `V3-21` | 9 | developer | 2026-04-12 |
+| [V3-23](./tasks/v3-23-external-dogfood-and-hardening.yaml) | Add external-repo dogfood corpus and release hardening | `done` | `V3-17`, `V3-18`, `V3-19`, `V3-22` | 9 | reviewer | 2026-04-12 |
+| [V3-24](./tasks/v3-24-completion-notifications-polish.yaml) | Add shell completion, notifications, DAG viz, and polish | `done` | `V3-20`, `V3-21` | 9 | developer | 2026-04-12 |
 
 ## Current Handoff
 
-- Active task: post-v3 productization wave (V3-17 through V3-24)
+- Active task: roadmap complete through wave 9; all productization tasks done
 - Current state:
   - Waves 0-6 (V3-00 through V3-16) are complete; native engine is default
-  - `./dev check` passes with readiness metrics and cutover evidence recorded
-  - Wave 7 (V3-17, V3-18, V3-19) is ready to start — run inspection, artifact commands, execution controls
+  - Wave 7 (V3-17, V3-18, V3-19) complete: run inspection, artifact commands, execution controls
+  - Wave 8 (V3-20, V3-21, V3-22) complete: init, workflow/tactic authoring, approval UX
+  - Wave 9 (V3-23, V3-24) complete: external dogfood corpus, shell completion, DAG viz
+  - 207 tests pass across 40 test files
 - Ready-to-start tasks:
-  - `V3-17` Add run inspection commands
-  - `V3-18` Add artifact commands
-  - `V3-19` Expose execution controls
+  - none; the productization roadmap is complete
 - Immediate next step:
-  - begin wave 7 tasks in parallel (all depend only on completed V3-16)
+  - execute external dogfood checklist on real repos
+  - run `lineup init` and full journeys on monorepo, library, and fullstack fixtures
 - Known blockers:
-  - none; wave 7 is unblocked
+  - none
