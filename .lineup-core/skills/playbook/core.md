@@ -152,7 +152,7 @@ If a pattern is selected, pre-populate stages and let the user customize each.
 
 ### Per-stage collection
 
-For each stage, collect four pieces:
+For each stage, collect five pieces:
 
 1. **Direct stage or composed tactic?** — Ask first whether this stage runs directly
    (with `type`/`agent`) or inlines another tactic (with `tactic`). If composed

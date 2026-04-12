@@ -25,8 +25,8 @@ Dev script:
 
 CLI runtime:
 
-- `lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]`
-- `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]`
+- `lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
+- `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--json]`
 
