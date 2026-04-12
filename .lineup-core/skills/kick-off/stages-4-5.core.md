@@ -2,7 +2,17 @@
 
 > **Stage 4/7: Plan**
 
-Spawn one or more `architect` agents to create an implementation plan.
+Before spawning the architect, generate Task Foundry adapters for the current host via Bash:
+
+```
+lineup tf generate --host <detected-host> --output .lineup/.ephemeral/<runId>/
+```
+
+This produces adapter scripts, system prompts, and a TF config file in the ephemeral run
+directory. The `<runId>` is a short identifier for the current pipeline run (e.g., first 8
+characters of the pipeline session hash).
+
+Then spawn one or more `architect` agents to create an implementation plan.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent). The triage
 assessment's `complexity` and `independent_areas` fields drive how this stage runs.
 
@@ -17,6 +27,23 @@ Include the complexity classification in each architect's spawn prompt:
 - **Moderate/Complex** (`complexity: moderate` or `complex`): Instruct the architect to
   produce **2-3 approaches** with trade-offs (current behavior). The architect chooses
   2 or 3 based on how many meaningfully different strategies exist.
+
+### TaskManifest output format
+
+Instruct each architect to output their plan as a **TaskManifest YAML** with this structure:
+
+```yaml
+version: 1
+goal: "<one-line goal>"
+tasks:
+  - task_id: <short-kebab-id>
+    description: "<what this task does>"
+    depends_on: [<task_ids this depends on>]
+    read_files: [<files to read>]
+    write_files: [<files to create or modify>]
+    steps:
+      - <imperative step description>
+```
 
 ### Ollama-assisted planning
 
@@ -35,62 +62,68 @@ If the triage assessment identified 2+ `independent_areas`:
 1. Spawn one `architect` agent per independent area, in parallel.
 2. Each architect receives only the research findings relevant to its area, plus
    the full resolved requirements for cross-cutting context.
-3. Each architect produces a plan scoped to its area.
+3. Each architect produces a TaskManifest scoped to its area.
 4. After all architects complete, **merge their outputs yourself** (do not spawn
-   another agent). Produce a single master plan by:
-   - Concatenating `changes` lists with area prefixes
-   - Unifying `acceptance_criteria` from all sub-plans
-   - Building a combined `parallelization_strategy` where each area's batches are
-     independent of other areas' batches
-   - Merging `risks` and deduplicating
-5. **Check for file-level conflicts**: After merging, scan the combined `changes` list
-   for any file path that appears in two or more architects' outputs. If any overlap is
-   found, do not proceed to Approval automatically. Instead, present the conflicting
-   entries to the user:
+   another agent). Produce a single master TaskManifest by:
+   - Merging the `tasks` lists from all sub-manifests, preserving task IDs
+   - Updating `depends_on` references to remain consistent across the merged manifest
+   - Scanning `write_files` entries for file-level conflicts (any path that appears in
+     two or more tasks from different architects)
+5. **Check for file-level conflicts**: If any `write_files` overlap is found, do not
+   proceed to Approval automatically. Instead, present the conflicting entries to the user:
    "Warning: The following file(s) appear in plans from multiple architects: <file list>.
    Please decide how to resolve the overlap before the plan is finalized."
    Use **{{QUESTION_PRIMITIVE}}** to let the user choose: keep one architect's version,
-   merge both changes, or provide a custom resolution. Update the master plan accordingly
-   before presenting it for final approval.
+   merge both changes, or provide a custom resolution. Update the master TaskManifest
+   accordingly before presenting it for final approval.
 
 If only one area exists, spawn a single architect (current behavior).
 
 ### Approval
 
-- Present the (merged or single) plan to the user and **wait for explicit approval**
+- After the architect(s) complete, write the (merged or single) TaskManifest to
+  `.lineup/.ephemeral/<runId>/planner-output.yaml`.
+- Present the TaskManifest to the user and **wait for explicit approval**
   before proceeding.
-- After approval, apply **Snapshot Streaming** from `SKILL.md` — if the plan YAML
-  exceeds 500 bytes, write it to `.lineup/.ephemeral/plan-<hash>.yaml` and pass a
-  file reference to the developer and reviewer instead of embedding inline. The
-  acceptance criteria section (for the reviewer) can still be passed inline if it
-  is under 500 bytes.
-- **Output:** an approved implementation plan.
+- **Output:** an approved TaskManifest at `.lineup/.ephemeral/<runId>/planner-output.yaml`.
 
 ## Stage 5 -- Implement
 
 > **Stage 5/7: Implement**
 
-Spawn one or more `developer` agents to execute the approved plan.
-Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent).
+Invoke Task Foundry to execute the approved TaskManifest. Stage 6 (Verify) is bundled into
+this TF invocation — the validator role runs automatically after workers complete.
 
-- Follow the architect's **Parallelization Strategy** from the approved plan:
-  - Spawn developers according to the parallel batches identified in the plan
-  - Run batches concurrently when they have no dependencies
-  - Wait for a batch to complete before starting dependent batches
-  - If no parallelization strategy is provided, run developers sequentially in the plan's change order
-- **Batch failure handling**: After each batch completes, inspect the developer's output for
-  `issues_encountered` entries with `impact: significant`. If any are found:
-  - Do not start any new batches that depend on the failed batch.
-  - Independent batches launched in the same spawn call will have already completed —
-    collect their results normally.
-  - After all batches from the current spawn call have returned, stop the implementation phase.
-  - Report the failure and partial results to the user:
-    "Implementation stopped: batch <N> encountered a significant issue — <summary>.
-    The following batches were not started: <list>. Review before continuing."
-  - Wait for the user to decide whether to proceed to Verify with partial results,
-    retry the failed batch, or abort.
-- Each developer follows the plan -- no improvising beyond the approved scope.
-- **Output:** all code changes committed (or staged for user review).
+1. Write the user's original request to `.lineup/.ephemeral/<runId>/request.txt`.
+2. Regenerate the TF config with the **passthrough planner** so TF uses the approved manifest
+   instead of re-planning from scratch:
+
+   ```
+   lineup tf generate --host <detected-host> --output .lineup/.ephemeral/<runId>/ \
+     --manifest-path .lineup/.ephemeral/<runId>/planner-output.yaml
+   ```
+
+   This overwrites `tf-config.yaml` with a Phase 2 config where the planner adapter simply
+   reads and emits the approved manifest. Without this step, TF would invoke the real planner
+   and discard the user-approved plan.
+
+3. Run via Bash:
+
+   ```
+   task-foundry --config .lineup/.ephemeral/<runId>/tf-config.yaml --input-file .lineup/.ephemeral/<runId>/request.txt
+   ```
+
+   TF dispatches developer workers and runs the validator according to the adapter scripts.
+   It handles parallelism, retries, and hazard detection internally.
+
+4. Read `.runner-output/` for TF's execution results.
+5. On TF exit status:
+   - **Exit 0**: proceed to Stage 7 (Document).
+   - **Non-zero**: report the failure and TF's output to the user and stop the pipeline.
+
+**Note:** The orchestrator does not spawn individual developer or reviewer agents in this
+stage. TF manages all worker dispatch, parallelism, and retry logic via the generated
+adapter scripts.
 
 ---
 

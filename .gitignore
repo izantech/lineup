@@ -17,6 +17,12 @@ cli/dist/
 # Local working files
 .local/
 
+# Lineup runtime artifacts
+.lineup/.benchmark/
+.lineup/.ephemeral/
+.lineup/.cache/
+.runner-output/
+
 # Generated digests
 DIGEST.md
 

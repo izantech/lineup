@@ -151,7 +151,9 @@ function evaluateInner(expr: string, ctx: ExpressionContext): boolean {
 
   // Handle `not <expr>`
   if (/^not\s+/i.test(trimmed)) {
-    return !evaluateInner(trimmed.slice(4), ctx);
+    const notKeywordLength = 3;
+    const rest = trimmed.slice(notKeywordLength).trim();
+    return !evaluateInner(rest, ctx);
   }
 
   // Handle parentheses wrapping

@@ -13,6 +13,7 @@ export type TfGeneratorContext = {
   modelOverrides?: Partial<Record<TfRole, string>>;
   concurrency?: number;
   maxRetries?: number;
+  timeout?: number;
 };
 
 const DEFAULT_MODELS: Record<HostName, string> = {
@@ -37,8 +38,8 @@ function buildRoleSection(
   return `  program: ${program}\n  args: [${argsYaml}]\n  env:\n${envLines}`;
 }
 
-function buildRunnerSection(concurrency: number, maxRetries: number, projectRoot: string): string {
-  return `runner:
+function buildRunnerSection(concurrency: number, maxRetries: number, projectRoot: string, timeout?: number): string {
+  let result = `runner:
   output_dir: .runner-output
   max_retries: ${maxRetries}
   concurrency: ${concurrency}
@@ -49,10 +50,14 @@ function buildRunnerSection(concurrency: number, maxRetries: number, projectRoot
   manifest_max_tasks: 32
   excluded_paths: [.git, .runner-output, .lineup, node_modules, target]
   command_hooks: []`;
+  if (timeout) {
+    result += `\n  timeout_seconds: ${timeout}`;
+  }
+  return result;
 }
 
 export function generateTfConfig(ctx: TfGeneratorContext): string {
-  const { workflow, projectRoot, adaptersDir, promptsDir, host, modelOverrides, concurrency = 4, maxRetries = 2 } = ctx;
+  const { workflow, projectRoot, adaptersDir, promptsDir, host, modelOverrides, concurrency = 4, maxRetries = 2, timeout } = ctx;
 
   const plannerAdapter = resolve(adaptersDir, "planner.sh");
   const workerAdapter = resolve(adaptersDir, "worker.sh");
@@ -62,7 +67,7 @@ export function generateTfConfig(ctx: TfGeneratorContext): string {
   const workerPrompt = resolve(promptsDir, "worker-system.txt");
   const validatorPrompt = resolve(promptsDir, "validator-system.txt");
 
-  const runner = buildRunnerSection(concurrency, maxRetries, projectRoot);
+  const runner = buildRunnerSection(concurrency, maxRetries, projectRoot, timeout);
 
   const plannerSection = buildRoleSection("bash", [plannerAdapter], {
     MODEL: resolveModel(host, "planner", modelOverrides),
@@ -93,7 +98,7 @@ ${validatorSection}
 }
 
 export function generatePassthroughConfig(ctx: TfGeneratorContext, approvedManifestPath: string): string {
-  const { projectRoot, adaptersDir, promptsDir, host, modelOverrides, concurrency = 4, maxRetries = 2 } = ctx;
+  const { projectRoot, adaptersDir, promptsDir, host, modelOverrides, concurrency = 4, maxRetries = 2, timeout } = ctx;
 
   const passthroughAdapter = resolve(adaptersDir, "passthrough-planner.sh");
   const workerAdapter = resolve(adaptersDir, "worker.sh");
@@ -104,7 +109,7 @@ export function generatePassthroughConfig(ctx: TfGeneratorContext, approvedManif
 
   const absoluteManifestPath = resolve(approvedManifestPath);
 
-  const runner = buildRunnerSection(concurrency, maxRetries, projectRoot);
+  const runner = buildRunnerSection(concurrency, maxRetries, projectRoot, timeout);
 
   const plannerSection = buildRoleSection("bash", [passthroughAdapter], {
     APPROVED_MANIFEST_PATH: absoluteManifestPath

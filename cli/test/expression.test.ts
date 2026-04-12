@@ -83,6 +83,26 @@ describe("evaluateExpression", () => {
     ).toBe(false);
   });
 
+  it("evaluates not boolean operator (negates true to false)", () => {
+    expect(evaluateExpression("not {{ stages.triage.outputs.complexity }} == complex", ctx)).toBe(true);
+    expect(evaluateExpression("not {{ stages.triage.outputs.complexity }} == simple", ctx)).toBe(false);
+  });
+
+  it("evaluates not boolean operator with case-insensitive keyword", () => {
+    expect(evaluateExpression("NOT {{ stages.triage.outputs.complexity }} == complex", ctx)).toBe(true);
+    expect(evaluateExpression("Not {{ stages.triage.outputs.complexity }} == simple", ctx)).toBe(false);
+  });
+
+  it("evaluates not with parentheses", () => {
+    expect(evaluateExpression("not ({{ stages.triage.outputs.complexity }} == complex)", ctx)).toBe(true);
+    expect(evaluateExpression("not ({{ stages.triage.outputs.complexity }} == simple)", ctx)).toBe(false);
+  });
+
+  it("evaluates not with contains function", () => {
+    expect(evaluateExpression("not contains({{ stages.triage.outputs.tags }}, \"frontend\")", ctx)).toBe(true);
+    expect(evaluateExpression("not contains({{ stages.triage.outputs.tags }}, \"backend\")", ctx)).toBe(false);
+  });
+
   it("throws on unresolved stage reference", () => {
     expect(() => evaluateExpression("{{ stages.ghost.outputs.x }} == y", ctx)).toThrow(/Unresolved/);
   });

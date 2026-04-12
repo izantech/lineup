@@ -241,6 +241,37 @@ rules for `.lineup/.ephemeral/` usage.
 
 ---
 
+## Runtime Engine Integration
+
+The orchestrator is the **single user-facing entry point** for the Lineup pipeline. Users
+never run `lineup run` or `task-foundry` directly.
+
+Two mechanical commands are called by the orchestrator on the user's behalf:
+
+- **`lineup tf generate`** — called at the start of Stage 4 to generate TF adapter
+  scripts, system prompts, and TF config for the current host. Output lands in
+  `.lineup/.ephemeral/<runId>/`.
+- **`task-foundry`** — called during Stage 5 to execute the plan. TF dispatches developer
+  workers, runs the validator, and handles parallelism, retries, and hazard detection. All
+  implementation artifacts are written to TF's `.runner-output/` directory.
+
+### Stage ownership
+
+| Stage range | Owner | Notes |
+|-------------|-------|-------|
+| Stages 0–3 | Host-native (orchestrator + agents) | Triage, Clarify, Research, Gate |
+| Stages 4–6 | Task Foundry (via orchestrator invocation) | Adapter generation, Implement, Verify |
+| Stage 7 | Host-native (orchestrator + documenter) | Documentation |
+
+### Artifact locations
+
+- `.lineup/.ephemeral/<runId>/` — TF adapters, prompts, TF config, and the approved
+  TaskManifest (`planner-output.yaml`)
+- `.runner-output/` — TF-managed directory containing all implementation artifacts and
+  validator output; persists independently from `.lineup/.ephemeral/`
+
+---
+
 ## Pipeline Tiers
 
 Not every task needs the full pipeline. Use your judgment:

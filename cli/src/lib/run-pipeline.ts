@@ -7,7 +7,7 @@ import type { HostName } from "./constants.js";
 import { parseWorkflowYaml } from "./validation.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
-import { generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
+import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
 import { generateTfAdapters, type AdapterGenerationContext } from "./tf-adapters.js";
 
 export type PipelineResult = {
@@ -49,86 +49,123 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
   mkdirSync(artifactDir, { recursive: true });
   mkdirSync(cacheDir, { recursive: true });
 
-  // 5. Resolve execution order
-  const waves = resolveExecutionOrder(workflow);
-  const stageResults = new Map<string, StageResult>();
-  const expressionCtx: ExpressionContext = { stages: {}, variables: {} };
+  let status: "success" | "failed" | "aborted" = "success";
 
-  // 6. Dry-run: just print the plan
-  if (options.dryRun) {
-    printExecutionPlan(waves, workflow);
-    return { runId, status: "success", stageResults };
-  }
+  try {
+    // 5. Generate-only: produce TF artifacts and return immediately
+    if (options.generateOnly) {
+      const host = detectHost();
+      const adaptersDir = resolve(artifactDir, "adapters");
+      const adaptersCtx: AdapterGenerationContext = {
+        host,
+        adaptersSourceDir: resolve(projectRoot, ".lineup-core", "adapters"),
+        promptsSourceDir: resolve(projectRoot, ".lineup-core", "prompts"),
+        outputDir: adaptersDir,
+        agentsDir: resolve(projectRoot, "agents"),
+        modelMap: { scope_selector: "", planner: "claude-sonnet-4-6", worker: "claude-sonnet-4-6", validator: "claude-sonnet-4-6" },
+      };
+      generateTfAdapters(adaptersCtx);
+      const tfCtx: TfGeneratorContext = {
+        workflow,
+        projectRoot,
+        runId,
+        adaptersDir,
+        promptsDir: adaptersDir,
+        host,
+        timeout: options.timeout,
+      };
+      const configYaml = generateTfConfig(tfCtx);
+      const configPath = resolve(artifactDir, "tf-config.yaml");
+      writeFileSync(configPath, configYaml, "utf-8");
+      return { runId, status: "success", stageResults: new Map<string, StageResult>(), tfOutputDir: artifactDir };
+    }
 
-  // 7. Detect host (check which CLI is available)
-  const host = detectHost();
+    // 6. Resolve execution order
+    const waves = resolveExecutionOrder(workflow);
+    const stageResults = new Map<string, StageResult>();
+    const expressionCtx: ExpressionContext = { stages: {}, variables: {} };
 
-  // 8. Execute stages in wave order
-  const preStages = new Set(["triage", "clarify", "research", "gate"]);
-  const tfStages = new Set(["plan", "plan-approval", "implement", "verify"]);
-  const postStages = new Set(["document"]);
+    // 7. Dry-run: just print the plan
+    if (options.dryRun) {
+      printExecutionPlan(waves, workflow);
+      return { runId, status: "success", stageResults };
+    }
 
-  for (const wave of waves) {
-    for (const stageId of wave) {
-      const stage = workflow.stages.find((s) => s.id === stageId)!;
+    // 8. Detect host (check which CLI is available)
+    const host = detectHost();
 
-      // Evaluate condition/skip_if
-      if (stage.condition && !evaluateExpression(stage.condition, expressionCtx)) {
-        stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
-        expressionCtx.stages[stageId] = { outputs: {} };
-        continue;
-      }
-      if (stage.skip_if && evaluateExpression(stage.skip_if, expressionCtx)) {
-        stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
-        expressionCtx.stages[stageId] = { outputs: {} };
-        continue;
-      }
+    // 9. Execute stages in wave order
+    const preStages = new Set(["triage", "clarify", "research", "gate"]);
+    const tfStages = new Set(["plan", "plan-approval", "implement", "verify"]);
+    const postStages = new Set(["document"]);
 
-      if (preStages.has(stageId)) {
-        // Pre-pipeline: output protocol messages for host orchestrator
-        const result = executePreStage(stage, expressionCtx, projectRoot);
-        stageResults.set(stageId, result);
-        expressionCtx.stages[stageId] = { outputs: result.outputs };
+    for (const wave of waves) {
+      for (const stageId of wave) {
+        const stage = workflow.stages.find((s) => s.id === stageId)!;
 
-      } else if (stageId === "plan") {
-        // Phase 1: invoke planner adapter directly
-        const planResult = await executePlannerPhase(
-          stage, workflow, expressionCtx, host, projectRoot, artifactDir
-        );
-        stageResults.set(stageId, planResult);
-        expressionCtx.stages[stageId] = { outputs: planResult.outputs };
-
-      } else if (stageId === "plan-approval") {
-        // Output approval protocol message — host handles user interaction
-        console.log("LINEUP:approval:plan");
-        const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
-        stageResults.set(stageId, approvalResult);
-        expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
-
-      } else if (stageId === "implement" || stageId === "verify") {
-        // Phase 2: invoke TF with passthrough planner for workers + validator
-        if (stageId === "implement") {
-          const tfResult = await executeTfPhase(
-            workflow, expressionCtx, host, projectRoot, artifactDir
-          );
-          stageResults.set("implement", tfResult.implementResult);
-          stageResults.set("verify", tfResult.verifyResult);
-          expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
-          expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
+        // Evaluate condition/skip_if
+        if (stage.condition && !evaluateExpression(stage.condition, expressionCtx)) {
+          stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
+          expressionCtx.stages[stageId] = { outputs: {} };
+          continue;
         }
-        // verify is handled together with implement in TF invocation
+        if (stage.skip_if && evaluateExpression(stage.skip_if, expressionCtx)) {
+          stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
+          expressionCtx.stages[stageId] = { outputs: {} };
+          continue;
+        }
 
-      } else if (postStages.has(stageId)) {
-        const result = executePostStage(stage, expressionCtx, projectRoot);
-        stageResults.set(stageId, result);
+        if (preStages.has(stageId)) {
+          // Pre-pipeline: output protocol messages for host orchestrator
+          const result = executePreStage(stage, expressionCtx, projectRoot);
+          stageResults.set(stageId, result);
+          expressionCtx.stages[stageId] = { outputs: result.outputs };
+
+        } else if (stageId === "plan") {
+          // Phase 1: invoke planner adapter directly
+          const planResult = await executePlannerPhase(
+            stage, workflow, expressionCtx, host, projectRoot, artifactDir
+          );
+          stageResults.set(stageId, planResult);
+          expressionCtx.stages[stageId] = { outputs: planResult.outputs };
+
+        } else if (stageId === "plan-approval") {
+          // Output approval protocol message — host handles user interaction
+          console.log("LINEUP:approval:plan");
+          const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
+          stageResults.set(stageId, approvalResult);
+          expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
+
+        } else if (stageId === "implement" || stageId === "verify") {
+          // Phase 2: invoke TF with passthrough planner for workers + validator
+          if (stageId === "implement") {
+            const tfResult = await executeTfPhase(
+              workflow, expressionCtx, host, projectRoot, artifactDir, options.timeout
+            );
+            stageResults.set("implement", tfResult.implementResult);
+            stageResults.set("verify", tfResult.verifyResult);
+            expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
+            expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
+          }
+          // verify is handled together with implement in TF invocation
+
+        } else if (postStages.has(stageId)) {
+          const result = executePostStage(stage, expressionCtx, projectRoot);
+          stageResults.set(stageId, result);
+        }
       }
     }
+
+    // 10. Cleanup on success
+    cleanup(artifactDir, cacheDir, true);
+  } catch (error) {
+    status = "failed";
+    // Cleanup on error (keep cache for debugging)
+    cleanup(artifactDir, cacheDir, false);
+    throw error;
   }
 
-  // 9. Cleanup
-  cleanup(artifactDir, cacheDir, true);
-
-  return { runId, status: "success", stageResults };
+  return { runId, status, stageResults };
 }
 
 // --- Internal functions ---
@@ -222,7 +259,8 @@ async function executeTfPhase(
   ctx: ExpressionContext,
   host: HostName,
   projectRoot: string,
-  artifactDir: string
+  artifactDir: string,
+  timeout?: number
 ): Promise<{ implementResult: StageResult; verifyResult: StageResult }> {
   const manifestPath = ctx.stages["plan"]?.outputs?.manifestPath as string;
   if (!manifestPath) {
@@ -237,6 +275,7 @@ async function executeTfPhase(
     adaptersDir: resolve(artifactDir, "adapters"),
     promptsDir: resolve(artifactDir, "adapters"),
     host,
+    timeout,
   };
   const configYaml = generatePassthroughConfig(tfCtx, manifestPath);
   const configPath = resolve(artifactDir, "tf-config.yaml");
@@ -250,6 +289,9 @@ async function executeTfPhase(
   console.log("LINEUP:tf:invoke");
   console.log(`LINEUP:tf:config path=${configPath}`);
   console.log(`LINEUP:tf:command task-foundry --config ${configPath} --input-file ${inputPath}`);
+  if (timeout) {
+    console.log(`LINEUP:tf:timeout ${timeout}`);
+  }
 
   // TF output directory
   const tfOutputDir = resolve(projectRoot, ".runner-output");

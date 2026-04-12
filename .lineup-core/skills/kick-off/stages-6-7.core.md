@@ -2,20 +2,23 @@
 
 > **Stage 6/7: Verify**
 
-Spawn a `reviewer` agent to validate the implementation.
-Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent).
+Verification is handled by Task Foundry's validator role during Stage 5. The orchestrator
+does not spawn a standalone reviewer agent.
 
-- Run tests, review the diff against the plan, check for regressions.
-- Flag any issues found -- do not silently pass a broken implementation.
-- Apply **Snapshot Streaming** from `SKILL.md` — if the implementation report exceeds
-  500 bytes, the developer should have already written it to
-  `.lineup/.ephemeral/snapshot-5-6-<hash>.yaml`. Pass a file reference to the
-  reviewer along with the inline acceptance criteria from the plan.
-- **Artifact cleanup**: After the reviewer completes, remove Stage 6-specific
-  artifacts from `.lineup/.ephemeral/` only. Do not delete the entire directory —
-  the documenter (Stage 7) and Teams-mode spawns may still need files from earlier
-  stages. Full ephemeral cleanup happens in Pipeline Cleanup.
-- **Output:** verification report presented to the user.
+After TF completes, read the validation result from
+`.runner-output/<attempt>/validator-output.json`:
+
+- If `status` is `"OK"`: proceed to Stage 7 (Document).
+- If `status` is `"FAIL"`: report the validator's `reason` to the user and ask whether
+  to retry (re-run TF from Stage 5) or abort. Use **{{QUESTION_PRIMITIVE}}** for this
+  decision.
+
+**Artifact cleanup**: After confirming the validation result, Stage 6-specific artifacts
+in `.lineup/.ephemeral/` may be cleaned up. Do not delete `.runner-output/` — TF manages
+this directory independently and the documenter (Stage 7) may read from it. Full ephemeral
+cleanup of `.lineup/.ephemeral/` happens in Pipeline Cleanup.
+
+**Output:** validation status reported to the user.
 
 ## Stage 7 -- Document (Optional)
 
@@ -88,14 +91,19 @@ reduces token cost.
 
 Transient files are cleaned up in two places:
 
-1. **Stage 6 (Verify)**: After the reviewer completes, remove Stage 6-specific
-   artifacts only (e.g., `review-<hash>.yaml`). Do not delete the entire
-   `.lineup/.ephemeral/` directory — the documenter (Stage 7) and Teams-mode
-   spawns may still need files from earlier stages.
+1. **Stage 6 (Verify)**: After TF completes and the validation result is confirmed,
+   remove Stage 6-specific artifacts from `.lineup/.ephemeral/` only. Do not delete
+   the entire `.lineup/.ephemeral/` directory — the documenter (Stage 7) and Teams-mode
+   spawns may still need files from earlier stages. Do not delete `.runner-output/` —
+   TF manages this directory independently and Stage 7 may read from it.
 2. **Pipeline Cleanup**: Delete all `.yaml` files in `.lineup/.ephemeral/`.
    On successful pipeline completion, also delete `.lineup/.cache/*.yaml`.
    On error or abort, preserve `.lineup/.cache/` to support `--from-stage` restarts.
    Never delete files outside these managed directories.
 
-Never delete transient files before the reviewer finishes. Downstream agents
+The `.runner-output/` directory is managed by Task Foundry and persists independently
+from `.lineup/.ephemeral/`. It is not cleaned up by the orchestrator during Pipeline
+Cleanup — TF controls its lifecycle.
+
+Never delete transient files before validation is confirmed. Downstream agents
 may still need to read them.

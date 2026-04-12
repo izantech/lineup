@@ -113,6 +113,87 @@ LINEUP:pipeline:dry-run
 
 ---
 
+## Orchestrator Integration
+
+The orchestrator is the single entry point. Users run `/lineup:kick-off <task>` — they never invoke `lineup run` or `task-foundry` directly. The kick-off skill drives the entire pipeline and calls `lineup run` via Bash tool calls at the appropriate stages.
+
+### Flow
+
+```
+/lineup:kick-off <task>
+│
+├─ Stages 0-3: Host-native
+│   Orchestrator spawns agents + asks questions directly
+│
+├─ Stage 4: Plan
+│   1. Bash: lineup tf generate --host claude --output .lineup/.ephemeral/<runId>/
+│   2. Orchestrator spawns architect → outputs TaskManifest YAML
+│   3. Manifest written to .lineup/.ephemeral/<runId>/planner-output.yaml
+│   4. User approval (AskUserQuestion)
+│
+├─ Stages 5-6: Task Foundry
+│   1. Bash: task-foundry --config <generated-config> --input-file <request>
+│   2. TF dispatches workers + validator via adapter scripts
+│   3. Results in .runner-output/
+│
+└─ Stage 7: Host-native
+    Orchestrator spawns documenter if requested
+```
+
+### `lineup tf generate` Command
+
+```
+lineup tf generate [options]
+```
+
+Generates TF adapter scripts, system prompt files, and a TF config YAML into a specified output directory. Run before invoking `task-foundry` directly (e.g. in Stage 4 of the kick-off flow).
+
+#### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| `--host <name>` | auto-detected | Host CLI to generate adapters for (`claude`, `codex`, `opencode`). |
+| `--output <path>` | `.lineup/.ephemeral/tf/` | Directory to write all generated files into. |
+| `--workflow <path>` | auto-detected | Workflow YAML to read stage/agent definitions from. |
+| `--manifest-path <path>` | — | If provided, generates a passthrough config referencing an already-approved manifest (Phase 2). Omit for Phase 1 (standard) config. |
+
+#### Output
+
+The command writes to `<output>/adapters/` and `<output>/tf-config.yaml`, then prints a JSON object to stdout:
+
+```json
+{
+  "configPath": "/path/to/.lineup/.ephemeral/<runId>/tf-config.yaml",
+  "adapters": {
+    "planner": { "adapterPath": "...", "promptPath": "..." },
+    "worker":  { "adapterPath": "...", "promptPath": "..." },
+    "validator": { "adapterPath": "...", "promptPath": "..." }
+  }
+}
+```
+
+#### Example (kick-off Stage 4)
+
+```bash
+# Generate adapters + Phase 1 config
+lineup tf generate --host claude --output .lineup/.ephemeral/run-abc123/
+
+# Generate passthrough config after plan approval (Phase 2)
+lineup tf generate --host claude \
+  --output .lineup/.ephemeral/run-abc123/ \
+  --manifest-path .lineup/.ephemeral/run-abc123/planner-output.yaml
+```
+
+### Artifact Locations
+
+| Location | Contents | Lifecycle |
+|---|---|---|
+| `.lineup/.ephemeral/<runId>/` | Adapters, prompts, config, manifest | Cleaned after pipeline |
+| `.runner-output/` | TF worker output, validator results | Persisted for debugging |
+| `.lineup/.cache/` | Stage output cache | Cleaned on success |
+
+---
+
 ## Workflow YAML Format
 
 Workflows are defined in `apiVersion: lineup/v1` YAML files. The schema is at `cli/schemas/yaml/workflow.schema.json`.
@@ -490,3 +571,88 @@ To use a different workflow:
 ```bash
 lineup run --workflow path/to/my-workflow.yaml
 ```
+
+---
+
+## Ollama Integration
+
+Lineup uses a local Ollama model for lightweight text-processing tasks during the pipeline. This is **not** the model that writes code — it handles mechanical subtasks that don't require strong reasoning, freeing the primary model (Claude API or a coding-focused local model) for the work that matters.
+
+### What the Ollama model does
+
+| Task | Who uses it | Example |
+|---|---|---|
+| Snapshot compression | Orchestrator | Compress a 3KB research YAML to structured bullets between stages |
+| Large file summarization | Researcher agent | Summarize a 500-line file before reporting findings |
+| WebFetch post-processing | Researcher agent | Extract key facts from a >2KB documentation page |
+| Prose expansion | Architect agent | Expand terse bullet notes into acceptance criteria prose |
+| Web search routing | Researcher agent | Search + summarize via `ollama_web_search` + `ollama_web_fetch` |
+
+### What it does NOT do
+
+- Code generation or analysis (use the primary model)
+- Architectural decisions or trade-off evaluation
+- Any task where accuracy is critical
+- Tool calling or agentic coding
+
+### Model selection criteria
+
+The Ollama integration model should optimize for:
+
+| Requirement | Priority | Why |
+|---|---|---|
+| **Inference speed** | Critical | On the critical path — snapshot compression runs between every stage transition |
+| **Instruction following** | High | Must reliably produce structured output (compress to bullets, extract facts) |
+| **Small footprint** | High | Must coexist in memory alongside the primary model and the host process |
+| **Context window** | Low | Inputs are capped at ~2KB (snapshot threshold) or ~200 lines |
+| **Coding ability** | None | Explicitly excluded from code tasks |
+| **Tool calling** | None | Called via MCP tools (`ollama_generate`), not as an agent |
+
+### Recommended models
+
+| Model | Params | Architecture | Size | Context | Best for |
+|---|---|---|---|---|---|
+| **qwen3.5:9b** | 9B | MoE | 7GB | 256K | Default recommendation. Fast, strong instruction following, tiny footprint. |
+| **qwen3.5:4b** | 4B | MoE | 3.4GB | 256K | Constrained hardware (<16GB free). Faster but less reliable on complex summaries. |
+| **qwen3.5:27b** | 27B | MoE | 17GB | 256K | High accuracy needs. Overkill for most pipelines but better summaries. |
+
+Avoid dense models (non-MoE) for this role — MoE models activate only a fraction of parameters per token, giving much better speed-per-quality than dense models of similar total size.
+
+### Configuration
+
+```yaml
+# ~/.claude/lineup/ollama.yaml
+enabled: true
+model: qwen3.5:9b
+scope: research
+```
+
+The `scope` field controls which agents get Ollama tools appended to their spawn prompts:
+- `research` — researchers and architects only (default)
+- `all` — all agents (not recommended; coding agents should use the primary model)
+
+### Hardware sizing
+
+The Ollama model runs alongside the primary coding model. Plan memory accordingly:
+
+| Setup | Primary model | Ollama model | Total VRAM/RAM |
+|---|---|---|---|
+| API-only (Claude plan) | None (API) | qwen3.5:9b (7GB) | ~10GB |
+| Local coding (M3 Ultra 96GB) | qwen3-coder-next:q4_K_M (52GB) | qwen3.5:9b (7GB) | ~62GB |
+| Local coding (32GB machine) | qwen3-coder:30b (19GB) | qwen3.5:4b (3.4GB) | ~25GB |
+| Lightweight (16GB machine) | qwen3-coder:30b (19GB) | qwen3.5:4b (3.4GB) | ~25GB (swap likely) |
+
+### Verify Ollama is working
+
+```bash
+# Check model is installed
+ollama list | grep qwen3.5
+
+# Verify MCP server is registered
+claude mcp list | grep ollama
+
+# If missing, register:
+claude mcp add ollama -- npx -y ollama-mcp
+```
+
+`lineup status` reports Ollama availability when the MCP server is configured. During pipeline initialization, the orchestrator calls `mcp__ollama__ollama_list` to verify the model is actually available before setting `OLLAMA_AVAILABLE = true`.

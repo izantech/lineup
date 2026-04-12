@@ -7,10 +7,12 @@ import { Command } from "commander";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runRunCommand, type RunCommandOptions } from "./commands/run";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
+import { runTfGenerateCommand } from "./commands/tf";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
 import { runUpdateCommand, type UpdateCommandOptions } from "./commands/update";
 import { CliError, asErrorMessage } from "./lib/errors";
 import { packageRoot } from "./lib/paths";
+import type { TfGenerateOptions } from "./lib/types";
 
 export type CliHandlers = {
   install: (options: InstallCommandOptions) => Promise<void>;
@@ -18,6 +20,7 @@ export type CliHandlers = {
   uninstall: (options: UninstallCommandOptions) => Promise<void>;
   status: (options: StatusCommandOptions) => Promise<void>;
   run: (options: RunCommandOptions) => Promise<void>;
+  tf: (options: TfGenerateOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -34,6 +37,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     uninstall: runUninstallCommand,
     status: runStatusCommand,
     run: runRunCommand,
+    tf: runTfGenerateCommand,
     ...handlers
   };
 
@@ -87,7 +91,18 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
     .option("--json", "Output state as JSON", false)
+    .option("--generate-only", "Generate TF artifacts without executing stages", false)
+    .option("--timeout <seconds>", "Kill TF after N seconds", parseInt)
     .action(commandHandlers.run);
+
+  const tf = program.command("tf").description("Task Foundry integration commands");
+  tf.command("generate")
+    .description("Generate TF adapters and config for orchestrator-driven execution")
+    .option("--host <host>", "Target host (claude|codex|opencode)")
+    .option("--output <dir>", "Output directory", undefined)
+    .option("--workflow <path>", "Path to workflow YAML", undefined)
+    .option("--manifest-path <path>", "Path to approved task manifest", undefined)
+    .action(commandHandlers.tf);
 
   return program;
 }

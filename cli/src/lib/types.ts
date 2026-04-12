@@ -158,4 +158,13 @@ export type RunOptions = {
   dryRun?: boolean;
   forceRerun?: boolean;
   json?: boolean;
+  generateOnly?: boolean;
+  timeout?: number;
+};
+
+export type TfGenerateOptions = {
+  host?: string;
+  output?: string;
+  workflow?: string;
+  manifestPath?: string;
 };
