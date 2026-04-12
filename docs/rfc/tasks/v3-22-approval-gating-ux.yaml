@@ -1,0 +1,37 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-22
+title: Add pause/resume and approval/gating UX
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-19
+parallel_wave: 8
+suggested_agent: developer
+rfc_sections:
+  - Architecture
+  - Production Readiness Additions
+read_scope:
+  - cli/src/lib/state.ts
+  - cli/src/lib/run-pipeline.ts
+  - cli/src/commands/run.ts
+write_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/
+  - cli/src/lib/state.ts
+deliverables:
+  - Add lineup approve <run-id> command marking a pending plan as approved
+  - Add lineup pending command listing runs awaiting approval
+  - Add retry-failed-wave semantics to lineup resume
+  - Add --skip-task <id> flag to lineup resume for bypassing blocked tasks
+  - Record approval state and approver metadata in pipeline state
+acceptance_criteria:
+  - lineup approve transitions a blocked run to ready-to-continue
+  - lineup pending lists all runs with status blocked awaiting approval
+  - Retry resumes from the exact failed wave without re-executing succeeded tasks
+  - Skip marks the task as skipped and continues the wave
+  - Approval metadata is persisted in state.json
+notes:
+  determinism_rules:
+    - Approval state transitions are explicit and auditable
+    - Skipped tasks are recorded in state, not silently omitted

@@ -243,20 +243,24 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
 
         } else if (stageId === "plan-approval") {
-          // Output approval protocol message — host handles user interaction
-          emitProtocol(
-            createLineupRequest({
-              method: "gate/request",
-              id: protocolRequestId++,
-              params: {
-                runId,
-                stageId,
-                question: "Approve the generated plan?",
-                choices: ["approve", "reject"],
-                defaultChoice: "approve"
-              }
-            })
-          );
+          // When --approve-plan is set, skip the interactive gate and auto-approve.
+          // The current implementation always auto-approves; the flag signals
+          // explicit non-interactive intent from the caller.
+          if (!options.approvePlan) {
+            emitProtocol(
+              createLineupRequest({
+                method: "gate/request",
+                id: protocolRequestId++,
+                params: {
+                  runId,
+                  stageId,
+                  question: "Approve the generated plan?",
+                  choices: ["approve", "reject"],
+                  defaultChoice: "approve"
+                }
+              })
+            );
+          }
           const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
           stageResults.set(stageId, approvalResult);
           expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };

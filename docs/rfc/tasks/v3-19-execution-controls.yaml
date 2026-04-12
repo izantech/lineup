@@ -1,0 +1,39 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-19
+title: Expose execution controls (--max-parallel, --isolation, --resume, --cancel, --approve-plan)
+status: done
+last_updated: 2026-04-12
+depends_on:
+  - V3-16
+parallel_wave: 7
+suggested_agent: developer
+rfc_sections:
+  - Final Decisions
+  - Architecture
+read_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/run.ts
+  - cli/src/lib/run-pipeline.ts
+  - cli/src/lib/isolation.ts
+  - cli/src/lib/state.ts
+write_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/run.ts
+  - cli/src/commands/
+deliverables:
+  - Add --max-parallel flag to lineup run controlling concurrent task execution
+  - Add --isolation flag to lineup run selecting index, full, or sparse tier
+  - Add lineup resume <run-id> command continuing an interrupted or failed run
+  - Add lineup cancel <run-id> command cleanly stopping a running pipeline
+  - Add --approve-plan flag to lineup run for non-interactive plan approval
+acceptance_criteria:
+  - --max-parallel limits concurrent wave execution to the specified count
+  - --isolation selects the correct isolation tier and rejects sparse when feature-gated
+  - lineup resume validates state freshness via git tree hash before continuing
+  - lineup cancel triggers clean shutdown, releases locks, and records canceled status
+  - --approve-plan skips the interactive approval gate for CI/scripted use
+notes:
+  determinism_rules:
+    - Resume must reject stale state when the repo tree hash has changed
+    - Cancel must be idempotent for already-completed or already-canceled runs

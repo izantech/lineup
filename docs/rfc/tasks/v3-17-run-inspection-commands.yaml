@@ -1,0 +1,38 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-17
+title: Add run inspection commands (runs, show, logs)
+status: done
+last_updated: 2026-04-12
+depends_on:
+  - V3-16
+parallel_wave: 7
+suggested_agent: developer
+rfc_sections:
+  - Production Readiness Additions
+  - Architecture
+read_scope:
+  - cli/src/lib/state.ts
+  - cli/src/lib/run-pipeline.ts
+  - cli/src/lib/artifact-store.ts
+  - cli/src/lib/paths.ts
+  - cli/src/commands/
+write_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/
+deliverables:
+  - Add lineup runs command listing past runs with status, duration, workflow, and host
+  - Add lineup show <run-id> command displaying stage outputs, artifact hashes, and final state
+  - Add lineup logs <run-id> command streaming protocol logs and debug bundles for a run
+  - Support --json output for all three commands
+  - Support filtering by status and date range on lineup runs
+acceptance_criteria:
+  - lineup runs lists all runs under .lineup/.runs/ with correct status and metadata
+  - lineup show displays per-stage artifact summaries and timing
+  - lineup logs streams NDJSON protocol messages and debug bundle contents
+  - JSON output validates against a stable schema
+  - Commands degrade gracefully for runs with missing or corrupt state
+notes:
+  determinism_rules:
+    - Run listing reads state.json files directly, no derived index
+    - Output ordering is deterministic (by start time descending)

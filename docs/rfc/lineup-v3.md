@@ -397,6 +397,14 @@ This RFC is split into the tracked tasks under [docs/rfc/tasks/](/Users/izan/Dev
 | `V3-14` | Build differential regression harness and task corpus | `V3-10`, `V3-12` | 5 |
 | `V3-15` | Add operational hardening and v3 clean-break invalidation | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 |
 | `V3-16` | Dogfood, readiness metrics, and native-default cutover | `V3-13`, `V3-14`, `V3-15` | 6 |
+| `V3-17` | Add run inspection commands (runs, show, logs) | `V3-16` | 7 |
+| `V3-18` | Add artifact commands (validate, artifacts show/path/diff) | `V3-16` | 7 |
+| `V3-19` | Expose execution controls (--max-parallel, --isolation, --resume, --cancel, --approve-plan) | `V3-16` | 7 |
+| `V3-20` | Add lineup init for project bootstrap | `V3-17` | 8 |
+| `V3-21` | Add workflow and tactic authoring UX | `V3-20` | 8 |
+| `V3-22` | Add pause/resume and approval/gating UX | `V3-19` | 8 |
+| `V3-23` | Add external-repo dogfood corpus and release hardening | `V3-17`, `V3-18`, `V3-19`, `V3-22` | 9 |
+| `V3-24` | Add shell completion, notifications, DAG viz, and polish | `V3-20`, `V3-21` | 9 |
 
 ## Acceptance Criteria
 

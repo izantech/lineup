@@ -1,0 +1,35 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-21
+title: Add workflow and tactic authoring UX
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-20
+parallel_wave: 8
+suggested_agent: developer
+rfc_sections:
+  - Workflow contracts
+  - Artifact and Contract Rules
+read_scope:
+  - cli/src/lib/workflow.ts
+  - cli/src/lib/validation.ts
+  - cli/schemas/
+  - .lineup-core/workflows/
+write_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/
+deliverables:
+  - Add lineup workflow lint validating workflow YAML against v3 schema with actionable errors
+  - Add lineup tactic new <name> scaffolding a new tactic file with documentation
+  - Add lineup workflow list showing available workflows and tactics with status
+  - Provide schema-aware error messages with line numbers and fix suggestions
+acceptance_criteria:
+  - lineup workflow lint catches all schema violations and reports locations
+  - lineup tactic new creates a valid tactic file with variable stubs
+  - Error messages reference the specific schema constraint that failed
+  - All authoring commands work without an active run
+notes:
+  determinism_rules:
+    - Lint output is deterministic for the same input file
+    - Scaffolded files use stable templates

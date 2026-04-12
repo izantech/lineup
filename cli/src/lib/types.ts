@@ -268,6 +268,9 @@ export type RunOptions = {
   json?: boolean;
   generateOnly?: boolean;
   timeout?: number;
+  maxParallel?: number;
+  isolation?: IsolationMode;
+  approvePlan?: boolean;
 };
 
 export type TfGenerateOptions = {

@@ -1,0 +1,35 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-23
+title: Add external-repo dogfood corpus and release hardening
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-17
+  - V3-18
+  - V3-19
+  - V3-22
+parallel_wave: 9
+suggested_agent: reviewer
+rfc_sections:
+  - Production Readiness Additions
+  - Dogfood and cutover rules
+read_scope:
+  - docs/rfc/lineup-v3-readiness.md
+  - cli/test/differential-regression.test.ts
+  - cli/fixtures/differential/
+write_scope:
+  - docs/rfc/
+  - cli/fixtures/
+deliverables:
+  - Define and document 3+ external fixture repos with different shapes (monorepo, library, fullstack)
+  - Run native engine end-to-end on each external repo and record results
+  - Add external-repo results to readiness metrics
+  - Document failure modes and fixes discovered during external dogfood
+acceptance_criteria:
+  - At least 3 external repos pass the core user journeys (init, run, cancel, resume, cleanup)
+  - Readiness doc includes external-repo evidence
+  - Any regressions found are fixed or tracked as known issues
+notes:
+  determinism_rules:
+    - External repos are pinned to specific commits for reproducibility

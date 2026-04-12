@@ -1,0 +1,33 @@
+apiVersion: lineup/v3
+kind: RfcTask
+id: V3-20
+title: Add lineup init for project bootstrap
+status: todo
+last_updated: 2026-04-12
+depends_on:
+  - V3-17
+parallel_wave: 8
+suggested_agent: developer
+rfc_sections:
+  - Architecture
+read_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/install.ts
+  - .lineup-core/workflows/
+write_scope:
+  - cli/src/cli.ts
+  - cli/src/commands/
+deliverables:
+  - Add lineup init command creating .lineup/ directory structure
+  - Scaffold default workflow file at .lineup-core/workflows/full-pipeline.yaml if missing
+  - Create .lineup/tactics/ directory with an example tactic
+  - Initialize .lineup/.runs/ and .lineup/.cache/ directories
+  - Support --workflow and --tactic flags for customized init
+acceptance_criteria:
+  - lineup init creates a valid project structure from scratch
+  - Running lineup init in an already-initialized project is safe (no data loss)
+  - Generated workflow and tactic files validate against v3 schemas
+  - Init output summarizes what was created
+notes:
+  determinism_rules:
+    - Init is idempotent; existing files are never overwritten

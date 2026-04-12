@@ -31,8 +31,17 @@ CLI runtime:
 - `lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
-- `lineup status [--host claude|codex|opencode|all] [--json]`
-- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--json]`
+- `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
+- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--engine auto|native|tf] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--approve-plan] [--json]`
+- `lineup runs [--status <status>] [--json]`
+- `lineup show <run-id> [--json]`
+- `lineup logs <run-id> [--json]`
+- `lineup resume <run-id> [--json]`
+- `lineup cancel <run-id> [--json]`
+- `lineup validate <file> [--kind <kind>] [--json]`
+- `lineup artifacts show <kind> [--run <id>] [--json]`
+- `lineup artifacts path <kind> [--run <id>]`
+- `lineup artifacts diff <kind> [--from <run-id>] [--to <run-id>] [--json]`
 
 ## Architecture
 

@@ -31,6 +31,9 @@ These RFC deltas are now part of the tracked plan:
 | 4 | `V3-12` | Integration, docs, tests, command surface |
 | 5 | `V3-13`, `V3-14`, `V3-15` | Production-readiness controls, regression harness, operational hardening |
 | 6 | `V3-16` | Dogfood evidence and native-default cutover |
+| 7 | `V3-17`, `V3-18`, `V3-19` | Run inspection, artifact commands, execution controls |
+| 8 | `V3-20`, `V3-21`, `V3-22` | Project init, workflow authoring, approval UX |
+| 9 | `V3-23`, `V3-24` | External dogfood, shell completion, polish |
 
 ## Task Index
 
@@ -53,23 +56,27 @@ These RFC deltas are now part of the tracked plan:
 | [V3-14](./tasks/v3-14-differential-regression-harness.yaml) | Build differential regression harness and task corpus | `done` | `V3-10`, `V3-12` | 5 | reviewer | 2026-04-12 |
 | [V3-15](./tasks/v3-15-operational-hardening-and-migrations.yaml) | Add operational hardening and v3 clean-break invalidation | `done` | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
 | [V3-16](./tasks/v3-16-dogfood-metrics-and-cutover.yaml) | Dogfood, readiness metrics, and native-default cutover | `done` | `V3-13`, `V3-14`, `V3-15` | 6 | reviewer | 2026-04-12 |
+| [V3-17](./tasks/v3-17-run-inspection-commands.yaml) | Add run inspection commands (runs, show, logs) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
+| [V3-18](./tasks/v3-18-artifact-commands.yaml) | Add artifact commands (validate, artifacts show/path/diff) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
+| [V3-19](./tasks/v3-19-execution-controls.yaml) | Expose execution controls (--max-parallel, --isolation, --resume, --cancel, --approve-plan) | `done` | `V3-16` | 7 | developer | 2026-04-12 |
+| [V3-20](./tasks/v3-20-lineup-init.yaml) | Add lineup init for project bootstrap | `todo` | `V3-17` | 8 | developer | 2026-04-12 |
+| [V3-21](./tasks/v3-21-workflow-tactic-authoring.yaml) | Add workflow and tactic authoring UX | `todo` | `V3-20` | 8 | developer | 2026-04-12 |
+| [V3-22](./tasks/v3-22-approval-gating-ux.yaml) | Add pause/resume and approval/gating UX | `todo` | `V3-19` | 8 | developer | 2026-04-12 |
+| [V3-23](./tasks/v3-23-external-dogfood-and-hardening.yaml) | Add external-repo dogfood corpus and release hardening | `todo` | `V3-17`, `V3-18`, `V3-19`, `V3-22` | 9 | reviewer | 2026-04-12 |
+| [V3-24](./tasks/v3-24-completion-notifications-polish.yaml) | Add shell completion, notifications, DAG viz, and polish | `todo` | `V3-20`, `V3-21` | 9 | developer | 2026-04-12 |
 
 ## Current Handoff
 
-- Active task: roadmap complete; next work is follow-on refinement, not required RFC scope
+- Active task: post-v3 productization wave (V3-17 through V3-24)
 - Current state:
-  - `V3-00` complete
-  - `V3-01` complete
-  - `V3-02`, `V3-04`, `V3-05`, `V3-06`, and `V3-09` are complete
-  - `V3-03`, `V3-07`, and `V3-08` are complete
-  - `V3-10` and `V3-11` are complete
-  - `V3-12` is complete
-  - `V3-13`, `V3-14`, and `V3-15` are complete
-  - `V3-16` is complete
-  - `./dev check` passes with the readiness metrics and cutover evidence recorded
-- Ready-to-start tasks after wave 6:
-  - none; the RFC roadmap is complete
+  - Waves 0-6 (V3-00 through V3-16) are complete; native engine is default
+  - `./dev check` passes with readiness metrics and cutover evidence recorded
+  - Wave 7 (V3-17, V3-18, V3-19) is ready to start — run inspection, artifact commands, execution controls
+- Ready-to-start tasks:
+  - `V3-17` Add run inspection commands
+  - `V3-18` Add artifact commands
+  - `V3-19` Expose execution controls
 - Immediate next step:
-  - use the recorded readiness path for follow-on refinements or external-repo dogfood as needed
+  - begin wave 7 tasks in parallel (all depend only on completed V3-16)
 - Known blockers:
-  - no remaining blockers in the tracked RFC scope
+  - none; wave 7 is unblocked
