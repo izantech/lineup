@@ -182,7 +182,7 @@ snapshots:
 
 cache:
   dir: .lineup/.cache/
-  key: "{{ task_prompt }}+{{ stages.triage.outputs_hash }}"
+  key: "{{ variables.task_prompt }}+{{ stages.triage.outputs_hash }}"
   format: yaml
 
 lifecycle:

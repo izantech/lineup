@@ -1,13 +1,35 @@
+import { createHash } from "node:crypto";
+
 export type ExpressionContext = {
   stages: Record<string, { outputs: Record<string, unknown> }>;
   variables: Record<string, string>;
 };
 
-const TEMPLATE_RE = /\{\{\s*(stages\.[^\s|}]+(?:\.[^\s|}]+)*)\s*(?:\|\s*(\w+))?\s*\}\}/g;
+const TEMPLATE_RE = /\{\{\s*((?:stages|variables)\.[^\s|}]+(?:\.[^\s|}]+)*)\s*(?:\|\s*(\w+))?\s*\}\}/g;
 
 function resolveRef(ref: string, ctx: ExpressionContext): unknown {
-  // ref format: stages.<id>.outputs.<field>
   const parts = ref.trim().split(".");
+
+  // variables.<name>
+  if (parts[0] === "variables") {
+    const name = parts.slice(1).join(".");
+    if (!(name in ctx.variables)) {
+      throw new Error(`Unresolved template reference: variable '${name}' not found in context`);
+    }
+    return ctx.variables[name];
+  }
+
+  // stages.<id>.outputs_hash — virtual property (SHA-256 of stage outputs)
+  if (parts.length === 3 && parts[0] === "stages" && parts[2] === "outputs_hash") {
+    const stage = ctx.stages[parts[1]];
+    if (!stage) {
+      throw new Error(`Unresolved template reference: stage '${parts[1]}' not found in context`);
+    }
+    const content = JSON.stringify(stage.outputs, Object.keys(stage.outputs).sort());
+    return createHash("sha256").update(content).digest("hex").slice(0, 12);
+  }
+
+  // stages.<id>.outputs.<field>
   if (parts.length < 4 || parts[0] !== "stages" || parts[2] !== "outputs") {
     throw new Error(`Malformed template reference: {{ ${ref} }}`);
   }
@@ -264,4 +286,19 @@ function evaluateInner(expr: string, ctx: ExpressionContext): boolean {
  */
 export function evaluateExpression(expr: string, ctx: ExpressionContext): boolean {
   return evaluateInner(expr.trim(), ctx);
+}
+
+/**
+ * Safe variant that returns `defaultValue` when a template reference is unresolved.
+ * Use for condition/skip_if where agent-stage outputs may not be in the engine context.
+ */
+export function evaluateExpressionSafe(expr: string, ctx: ExpressionContext, defaultValue: boolean): boolean {
+  try {
+    return evaluateExpression(expr, ctx);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Unresolved template reference")) {
+      return defaultValue;
+    }
+    throw e;
+  }
 }

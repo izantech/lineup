@@ -5,12 +5,26 @@ Each gate has a typed `gateType` field:
 
 | gateType | Stage | Purpose |
 |----------|-------|---------|
+| `classify` | Triage | LLM-driven complexity classification and area identification |
 | `clarify` | Clarify | Structured questions about the request |
 | `clarification` | Gate | Research-driven ambiguity resolution |
 | `approval` | Plan-approval | Plan approve/reject |
 | `cache` | Any cached stage | Use cached results or re-run |
 | `verify-decision` | Verify | Retry failed tasks, accept with warnings, or abort |
 | `custom` | Tactic-defined | Custom gate from tactic `gate: approval` |
+
+## Classify Gate
+
+The triage stage collects deterministic project stats (file count, changed files, diff stats,
+changed file paths) then emits a `classify` gate. The `context` field carries the stats as
+structured text. The orchestrator LLM should:
+
+1. Read the `context` (project stats and changed file paths)
+2. Select `choice` from `["simple", "moderate", "complex"]`
+3. Put a JSON object in `reason` with: `affected_areas`, `search_targets`, `independent_areas`
+
+If the orchestrator cannot provide structured JSON in `reason`, the engine falls back to
+deriving areas from the changed file paths.
 
 The skill reads `gate/request` from stdout, asks the user, then calls
 `lineup gate respond <run-id> <request-id> --choice <value>`. The CLI

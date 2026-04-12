@@ -48,6 +48,7 @@ If the user provides a reason or elaboration, add `--reason "<text>"`.
 
 | gateType | When | Interaction |
 |----------|------|-------------|
+| `classify` | Triage (Stage 0) | Read `params.context` (project stats, changed file paths). Select complexity from choices (`simple`/`moderate`/`complex`). Put a JSON object in the `--reason` flag with `affected_areas`, `search_targets`, `independent_areas`. |
 | `clarify` | Before research | Structured questions about the request. Show 3-5 options + free text. Batch multiple questions if the request has several ambiguities. |
 | `clarification` | After research | Research-driven ambiguity resolution. Show 2-4 resolution options based on findings. Skip if no ambiguities. |
 | `approval` | After plan generation | Present the plan summary. User must explicitly approve or reject. On reject, the pipeline terminates — re-run with revised requirements. |

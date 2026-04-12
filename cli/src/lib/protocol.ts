@@ -8,6 +8,7 @@ export type JsonRpcResponseId = JsonRpcId | null;
 export type JsonRpcParams = Record<string, unknown> | readonly unknown[];
 
 export type LineupGateType =
+  | "classify"
   | "clarify"
   | "clarification"
   | "approval"

@@ -36,7 +36,7 @@ import {
 import { parseWorkflowYaml, parseRestrictedYaml, validateTacticYaml, validateAgentOutputYaml, type AgentOutputKind } from "./validation.js";
 import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
-import { evaluateExpression, type ExpressionContext } from "./expression.js";
+import { evaluateExpressionSafe, type ExpressionContext } from "./expression.js";
 import { runVerificationHooks, type VerificationResult } from "./verification.js";
 
 
@@ -160,7 +160,10 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
     // 5. Resolve execution order
     const waves = resolveExecutionOrder(workflow);
-    const expressionCtx: ExpressionContext = { stages: {}, variables: {} };
+    const expressionCtx: ExpressionContext = {
+      stages: {},
+      variables: { task_prompt: options.prompt ?? "" }
+    };
 
     // 7. Dry-run: just print the plan
     if (options.dryRun) {
@@ -178,14 +181,14 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
         pipelineState = savePipelineState(markPipelineCurrentStage(pipelineState, stageId), projectRoot);
 
         // Evaluate condition/skip_if
-        if (stage.condition && !evaluateExpression(stage.condition, expressionCtx)) {
+        if (stage.condition && !evaluateExpressionSafe(stage.condition, expressionCtx, true)) {
           emitStatus(stageId, `Skipped stage '${stageId}' because condition evaluated to false.`, true);
           stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
           expressionCtx.stages[stageId] = { outputs: {} };
           pipelineState = savePipelineState(appendPipelineCompletedStage(pipelineState, stageId), projectRoot);
           continue;
         }
-        if (stage.skip_if && evaluateExpression(stage.skip_if, expressionCtx)) {
+        if (stage.skip_if && evaluateExpressionSafe(stage.skip_if, expressionCtx, false)) {
           emitStatus(stageId, `Skipped stage '${stageId}' because skip_if evaluated to true.`, true);
           stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
           expressionCtx.stages[stageId] = { outputs: {} };
@@ -620,7 +623,7 @@ function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): vo
   }
 }
 
-function executePreStage(
+async function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
@@ -631,22 +634,49 @@ function executePreStage(
   gateTimeoutMs?: number,
   validateOutputs = true,
   interactive?: boolean
-): StageResult | Promise<StageResult> {
+): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    return emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    if (result.status !== "complete") return result;
+    return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    return emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    if (result.status !== "complete") return result;
+    return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "triage" || stage.type === "builtin") {
-    emitStatus(stage.id, `Executing builtin stage '${stage.id}'.`);
-    const triageResult = executeTriageBuiltin(projectRoot);
-    emitStatus(stage.id, `Triage complete: ${triageResult.fileCount} files, ${triageResult.changedFiles} changed.`, true);
-    return { id: stage.id, status: "complete", outputs: triageResult };
+    emitStatus(stage.id, `Collecting project stats.`);
+    const stats = executeTriageBuiltin(projectRoot);
+    emitStatus(stage.id, `Stats collected: ${stats.fileCount} files, ${stats.changedFiles} changed.`);
+
+    // If the workflow declares outputs for triage, run the classify gate
+    // to get LLM-driven classification. Otherwise, return stats only.
+    const hasOutputSchema = stage.outputs && Object.keys(stage.outputs).length > 0;
+    if (hasOutputSchema) {
+      const contextPayload = formatTriageContext(stats);
+      const classifyResult = await emitGateAndWait(
+        stage, "classify",
+        "Classify this task's complexity and identify affected areas based on the project stats below.",
+        ["simple", "moderate", "complex"],
+        "moderate", runId, projectRoot, nextRequestId,
+        emitProtocol, emitStatus, true, gateTimeoutMs, interactive,
+        contextPayload
+      );
+
+      if (classifyResult.status !== "complete") return classifyResult;
+
+      const classification = parseClassifyResponse(classifyResult.outputs, stats);
+      emitStatus(stage.id, `Triage complete: ${classification.complexity}, ${classification.affected_areas.length} areas.`, true);
+      return { id: stage.id, status: "complete", outputs: classification };
+    }
+
+    emitStatus(stage.id, `Triage complete: ${stats.fileCount} files, ${stats.changedFiles} changed.`, true);
+    return { id: stage.id, status: "complete", outputs: stats };
   }
 
   if (stage.type === "agent" && stage.agent) {
@@ -674,7 +704,27 @@ function executePreStage(
   return { id: stage.id, status: "complete", outputs: {} };
 }
 
-function executeTriageBuiltin(projectRoot: string): { fileCount: number; changedFiles: number; insertions: number; deletions: number; diffSummary: string } {
+type TriageStats = {
+  fileCount: number;
+  changedFiles: number;
+  insertions: number;
+  deletions: number;
+  diffSummary: string;
+  changedPaths: string[];
+};
+
+type TriageOutputs = {
+  complexity: "simple" | "moderate" | "complex";
+  affected_areas: Array<{ name: string; coupled: boolean }>;
+  search_targets: Array<{ area: string; targets: string[] }>;
+  independent_areas: string[][];
+  fileCount: number;
+  changedFiles: number;
+  insertions: number;
+  deletions: number;
+};
+
+function executeTriageBuiltin(projectRoot: string): TriageStats {
   let diffSummary = "";
   let changedFiles = 0;
   let insertions = 0;
@@ -691,6 +741,14 @@ function executeTriageBuiltin(projectRoot: string): { fileCount: number; changed
     diffSummary = "";
   }
 
+  let changedPaths: string[] = [];
+  try {
+    const nameOnly = execSync("git diff --name-only HEAD", { cwd: projectRoot, timeout: 30000 }).toString().trim();
+    changedPaths = nameOnly ? nameOnly.split("\n").filter(Boolean) : [];
+  } catch {
+    changedPaths = [];
+  }
+
   let fileCount = 0;
   try {
     const countOutput = execSync(
@@ -702,7 +760,83 @@ function executeTriageBuiltin(projectRoot: string): { fileCount: number; changed
     fileCount = 0;
   }
 
-  return { fileCount, changedFiles, insertions, deletions, diffSummary };
+  return { fileCount, changedFiles, insertions, deletions, diffSummary, changedPaths };
+}
+
+function formatTriageContext(stats: TriageStats): string {
+  const lines: string[] = [
+    `Project: ${stats.fileCount} files total`,
+    `Changed: ${stats.changedFiles} files, +${stats.insertions}/-${stats.deletions}`,
+  ];
+  if (stats.changedPaths.length > 0) {
+    lines.push("", "Changed files:");
+    for (const p of stats.changedPaths.slice(0, 50)) {
+      lines.push(`  ${p}`);
+    }
+    if (stats.changedPaths.length > 50) {
+      lines.push(`  ... and ${stats.changedPaths.length - 50} more`);
+    }
+  }
+  lines.push(
+    "",
+    "Respond with:",
+    '- choice: "simple", "moderate", or "complex"',
+    "- reason: JSON object with affected_areas, search_targets, independent_areas",
+    "",
+    "affected_areas: [{name: string, coupled: boolean}]",
+    "search_targets: [{area: string, targets: string[]}]",
+    "independent_areas: string[][] (groups of uncoupled areas)"
+  );
+  return lines.join("\n");
+}
+
+function parseClassifyResponse(
+  gateOutputs: Record<string, unknown>,
+  stats: TriageStats
+): TriageOutputs {
+  const choice = String(gateOutputs.choice ?? "moderate");
+  const complexity = (["simple", "moderate", "complex"].includes(choice) ? choice : "moderate") as TriageOutputs["complexity"];
+
+  let affected_areas: TriageOutputs["affected_areas"] = [];
+  let search_targets: TriageOutputs["search_targets"] = [];
+  let independent_areas: TriageOutputs["independent_areas"] = [];
+
+  const reason = String(gateOutputs.reason ?? "");
+  if (reason) {
+    try {
+      const parsed = JSON.parse(reason);
+      if (Array.isArray(parsed.affected_areas)) affected_areas = parsed.affected_areas;
+      if (Array.isArray(parsed.search_targets)) search_targets = parsed.search_targets;
+      if (Array.isArray(parsed.independent_areas)) independent_areas = parsed.independent_areas;
+    } catch {
+      // Fall back to deriving areas from changed paths
+      affected_areas = deriveAreasFromPaths(stats.changedPaths);
+      search_targets = affected_areas.map(a => ({ area: a.name, targets: stats.changedPaths.filter(p => p.startsWith(a.name)) }));
+      independent_areas = affected_areas.filter(a => !a.coupled).map(a => [a.name]);
+    }
+  }
+
+  return {
+    complexity,
+    affected_areas,
+    search_targets,
+    independent_areas,
+    fileCount: stats.fileCount,
+    changedFiles: stats.changedFiles,
+    insertions: stats.insertions,
+    deletions: stats.deletions,
+  };
+}
+
+function deriveAreasFromPaths(paths: string[]): Array<{ name: string; coupled: boolean }> {
+  const dirs = new Map<string, number>();
+  for (const p of paths) {
+    const parts = p.split("/");
+    const dir = parts.length > 1 ? parts[0] : ".";
+    dirs.set(dir, (dirs.get(dir) ?? 0) + 1);
+  }
+  const topLevel = [...dirs.keys()];
+  return topLevel.map(name => ({ name, coupled: topLevel.length > 1 }));
 }
 
 async function emitGateAndWait(
@@ -718,7 +852,8 @@ async function emitGateAndWait(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   allowFreeText: boolean,
   gateTimeoutMs?: number,
-  interactive?: boolean
+  interactive?: boolean,
+  context?: string
 ): Promise<StageResult> {
   const reqId = nextRequestId();
   const pendingGate: PendingGate = {
@@ -741,7 +876,7 @@ async function emitGateAndWait(
       createLineupRequest({
         method: "gate/request",
         id: reqId,
-        params: { runId, stageId: stage.id, gateType, question, choices, defaultChoice, allowFreeText }
+        params: { runId, stageId: stage.id, gateType, question, choices, defaultChoice, allowFreeText, ...(context ? { context } : {}) }
       })
     );
 

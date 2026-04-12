@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateExpression } from "../src/lib/expression.js";
+import { evaluateExpression, evaluateExpressionSafe } from "../src/lib/expression.js";
 import type { ExpressionContext } from "../src/lib/expression.js";
 
 const ctx: ExpressionContext = {
@@ -128,6 +128,58 @@ describe("evaluateExpression", () => {
 
   it("throws on unknown filter", () => {
     expect(() => evaluateExpression("{{ stages.triage.outputs.complexity | upper }} == SIMPLE", ctx)).toThrow(
+      /Unknown filter/
+    );
+  });
+});
+
+describe("outputs_hash virtual property", () => {
+  it("resolves outputs_hash to a 12-char hex string", () => {
+    expect(evaluateExpression("{{ stages.triage.outputs_hash }} != empty", ctx)).toBe(true);
+  });
+
+  it("produces consistent hashes for same outputs", () => {
+    const expr = "{{ stages.triage.outputs_hash }} == {{ stages.triage.outputs_hash }}";
+    // Both refs resolve to the same value, so the comparison is string equality
+    expect(evaluateExpression(expr, ctx)).toBe(true);
+  });
+
+  it("throws on outputs_hash for missing stage", () => {
+    expect(() => evaluateExpression("{{ stages.ghost.outputs_hash }} == x", ctx)).toThrow(/Unresolved/);
+  });
+});
+
+describe("variables resolution", () => {
+  const ctxWithVars: ExpressionContext = {
+    ...ctx,
+    variables: { task_prompt: "fix the auth bug" }
+  };
+
+  it("resolves a variable reference", () => {
+    expect(evaluateExpression('{{ variables.task_prompt }} != ""', ctxWithVars)).toBe(true);
+  });
+
+  it("throws on missing variable", () => {
+    expect(() => evaluateExpression("{{ variables.missing }} == x", ctx)).toThrow(/Unresolved/);
+  });
+});
+
+describe("evaluateExpressionSafe", () => {
+  it("returns default on unresolved field reference", () => {
+    expect(evaluateExpressionSafe("{{ stages.triage.outputs.nonexistent }} == x", ctx, true)).toBe(true);
+    expect(evaluateExpressionSafe("{{ stages.triage.outputs.nonexistent }} == x", ctx, false)).toBe(false);
+  });
+
+  it("returns default on unresolved stage reference", () => {
+    expect(evaluateExpressionSafe("{{ stages.ghost.outputs.x }} == y", ctx, false)).toBe(false);
+  });
+
+  it("evaluates normally when refs resolve", () => {
+    expect(evaluateExpressionSafe("{{ stages.triage.outputs.complexity }} == simple", ctx, false)).toBe(true);
+  });
+
+  it("still throws on non-reference errors", () => {
+    expect(() => evaluateExpressionSafe("{{ stages.triage.outputs.complexity | upper }} == SIMPLE", ctx, false)).toThrow(
       /Unknown filter/
     );
   });

@@ -269,4 +269,5 @@ export type RunOptions = {
   gateTimeout?: number;
   interactive?: boolean;
   validateOutputs?: boolean;
+  prompt?: string;
 };
