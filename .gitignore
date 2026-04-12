@@ -1,10 +1,11 @@
+# Dependencies
+node_modules/
+
 # Docs site
-docs/node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
-# CLI package
-cli/node_modules/
+# CLI build output
 cli/dist/
 
 # Generated host outputs (CLI artifacts)
@@ -17,14 +18,21 @@ cli/dist/
 # Local working files
 .local/
 
-# Lineup runtime artifacts
-.lineup/.benchmark/
-.lineup/.ephemeral/
-.lineup/.cache/
+# Lineup runtime artifacts (root and nested)
+**/.lineup/.runs/
+**/.lineup/.artifacts/
+**/.lineup/.benchmark/
+**/.lineup/.ephemeral/
+**/.lineup/.cache/
+**/.lineup/runtime.lock
 .runner-output/
+
+# Task Foundry artifacts
+TASK_MANIFEST.yaml
 
 # Generated digests
 DIGEST.md
 
 # OS
 .DS_Store
+Thumbs.db
