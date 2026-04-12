@@ -58,17 +58,18 @@ CLI runtime:
 Lineup avoids prompt drift by keeping one canonical source and generating host artifacts at install time.
 
 ```
-.lineup-core/skills/**        → Canonical workflow templates (source of truth)
-  kick-off/core.md            → Orchestrator core: triage, agent spawning, context flow, rules
-  kick-off/init.core.md       → Initialization: overrides, memory migration, tactics, teams
-  kick-off/stages-1-3.core.md → Stages 1-3 (Clarify, Research, Gate) + effort mapping
-  kick-off/stages-4-5.core.md → Stages 4-5 (Plan, Implement) + stage result caching
-  kick-off/stages-6-7.core.md → Stages 6-7 (Verify, Document) + cleanup + ephemeral lifecycle
+.lineup-core/skills/**        → Canonical skill templates (source of truth)
+  kick-off/core.md            → Lean CLI wrapper: launch pipeline, handle gates, present results
+  kick-off/init.core.md       → Pre-flight: override detection, tactic selection, health check
+  configure/core.md           → Agent config customization (models, tools, memory, Ollama)
+  digest/core.md              → Codebase onboarding digest generator
+  playbook/core.md            → Tactic CRUD manager
+  explain/core.md             → Explain alias (delegates to CLI tactic)
 .lineup-core/hosts/*.json     → Host adapter maps (claude, codex, opencode)
 agents/*.md                   → Shared agent definitions
 tactics/*.yaml                → Built-in tactics
 templates/*.yaml              → YAML format references
-cli/                          → Lineup CLI package (install/update/uninstall/status)
+cli/                          → Lineup CLI package (pipeline engine, install/update/uninstall)
 ```
 
 Generated host outputs are **not committed** to git:
@@ -83,7 +84,11 @@ Generated host outputs are **not committed** to git:
 Key internals:
 
 - `cli/src/cli.ts` — Commander command registration and dispatch
-- `cli/src/commands/*.ts` — install/update/uninstall/status handlers
+- `cli/src/commands/*.ts` — install/update/uninstall/status/gate handlers
+- `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
+- `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
+- `cli/src/lib/gate-store.ts` — Gate request/response file persistence
+- `cli/src/lib/tactic-convert.ts` — Tactic-to-Workflow auto-converter
 - `cli/src/lib/release.ts` — GitHub release resolution, cache, checksum verification
 - `cli/src/lib/generate.ts` — template rendering using host adapters
 - `cli/src/lib/host-claude.ts` — Claude lifecycle and migration handling
@@ -101,16 +106,18 @@ Stage 0 (Triage) produces a lightweight assessment that drives downstream behavi
 - **Effort-based model selection**: Triage complexity drives model assignment per agent role (haiku/sonnet/opus). User overrides act as a floor — they can upgrade but not downgrade below the effort-assigned level.
 - **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages. Snapshots exceeding ~2 KB are compressed to key findings with file path references.
 
-### Staged Prompt Loading
+### Lean Skill Architecture
 
-The kick-off orchestrator prompt is split into on-demand files to reduce upfront token cost:
+Skills are thin CLI wrappers (~12 KB total, down from ~100 KB). The kick-off skill:
 
-- `core.md` (SKILL.md) loads at startup: context flow, agent spawning, triage, pipeline tiers, rules
-- `stages-1-3.core.md` (STAGES-1-3.md) loads when entering Stage 1
-- `stages-4-5.core.md` (STAGES-4-5.md) loads when entering Stage 4
-- `stages-6-7.core.md` (STAGES-6-7.md) loads when entering Stage 6
+1. Runs `lineup run --json` (or `lineup run --tactic <name> --json`)
+2. Reads NDJSON protocol messages from stdout
+3. Handles `gate/request` messages by asking the user and calling `lineup gate respond`
+4. Presents `pipeline/complete` results
 
-Each stage file is self-contained — the orchestrator reads it before executing that stage group.
+All pipeline orchestration (agent spawning, DAG scheduling, state, artifacts) lives in the CLI.
+Stages 1-3 (clarify, research, gate) emit `gate/request` with typed `gateType` fields.
+The skill maps each gate type to the appropriate user interaction pattern.
 
 ### Stage Result Caching
 
@@ -169,47 +176,37 @@ appendix file containing all Ollama-specific instructions. The orchestrator appe
 these to the spawn prompt only when `OLLAMA_AVAILABLE = true`, saving ~3.6 KB per
 agent spawn when Ollama is disabled.
 
-### Lazy Agent Loading
+### Gate Protocol
 
-The orchestrator only reads agent definition files for roles the current pipeline
-tier will actually spawn:
+The CLI emits `gate/request` messages via NDJSON when user interaction is needed.
+Each gate has a typed `gateType` field:
 
-| Tier | Agents loaded |
-|------|---------------|
-| Full | researcher, architect, developer, reviewer, documenter |
-| Full (no doc) | researcher, architect, developer, reviewer |
-| Lightweight | architect, developer, reviewer |
-| Direct | none |
-| Tactic | only agents in the tactic's stages |
+| gateType | Stage | Purpose |
+|----------|-------|---------|
+| `clarify` | Clarify | Structured questions about the request |
+| `clarification` | Gate | Research-driven ambiguity resolution |
+| `approval` | Plan-approval | Plan approve/reject |
+| `cache` | Any cached stage | Use cached results or re-run |
+| `verify-decision` | Verify | Retry or accept verification results |
+| `custom` | Tactic-defined | Custom gate from tactic `gate: approval` |
 
-Agent files are read at the latest responsible moment (when spawning that role),
-not upfront. In Teams mode, the Team Preamble only writes instruction bodies for
-the needed roles.
+The skill reads `gate/request` from stdout, asks the user, then calls
+`lineup gate respond <run-id> <request-id> --choice <value>`. The CLI
+writes pending gate files to `.lineup/runs/<id>/gates/` and blocks until
+a response file appears (atomic write via temp+rename).
 
-### Claude Code Teams Mode
+### Tactic Auto-Conversion
 
-When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and `TeamCreate` is available,
-the kick-off pipeline runs in **teams mode**, subject to a terminal width check:
+Existing tactics (simple `name/stages/verification` format) are automatically
+converted to `Workflow` format when `lineup run --tactic <name>` is invoked:
 
-- **Terminal width gate**: At pipeline start, `tput cols` is run to detect width.
-  If the terminal is narrower than 80 columns, Teams mode is disabled and agents
-  spawn as standard subagents instead. If `tput` fails, a warning is logged and
-  the pipeline continues with Teams mode enabled.
+- Linear stages → DAG with sequential dependencies
+- `optional: true` → `optional` flag on workflow stage
+- `gate: approval` → inserted approval stage
+- `verification` → appended verify stage with reviewer agent
+- `variables` → workflow variables
 
-- A session-scoped team named `lineup-<session_id>` is created once during initialization
-  (the 6-character `session_id` is generated randomly to isolate concurrent runs).
-- All agent spawns use the Agent tool with `team_name="lineup-<session_id>"`,
-  `name="<role>-<session_id>"`, and `model=<frontmatter model>`.
-- A **Team Preamble** step writes all agent instruction bodies to
-  `.lineup/.ephemeral/agent-instructions.md` (one `## <role>` section each) after
-  team creation. Spawn prompts reference this file instead of embedding the full
-  body inline, reducing per-spawn token cost.
-- Teammates are visible as tmux panes named after their role.
-- Teammates cannot spawn sub-teammates (nesting is blocked by the platform).
-- Tool restrictions from agent frontmatter are advisory only in team mode (known platform limitation).
-
-If `TeamCreate` is not available (e.g., Codex CLI, standard Claude Code without the
-experiment flag), the pipeline falls back to the standard subagent path transparently.
+Use `lineup tactic convert <name>` to preview the conversion.
 
 ### Agent Configuration Overrides
 

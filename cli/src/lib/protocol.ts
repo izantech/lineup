@@ -7,6 +7,14 @@ export type JsonRpcId = string | number;
 export type JsonRpcResponseId = JsonRpcId | null;
 export type JsonRpcParams = Record<string, unknown> | readonly unknown[];
 
+export type LineupGateType =
+  | "clarify"
+  | "clarification"
+  | "approval"
+  | "cache"
+  | "verify-decision"
+  | "custom";
+
 export type JsonRpcRequest<
   TMethod extends string = string,
   TParams extends JsonRpcParams | undefined = JsonRpcParams | undefined
@@ -60,7 +68,7 @@ export const JSON_RPC_ERROR = {
   requestTimeout: -32801,
 } as const;
 
-export type LineupRequestMethod = "agent/spawn" | "gate/request" | "pipeline/cancel";
+export type LineupRequestMethod = "agent/spawn" | "gate/request" | "gate/respond" | "pipeline/cancel";
 export type LineupNotificationMethod = "agent/output" | "agent/done" | "agent/cancel" | "pipeline/complete";
 export type LineupMethod = LineupRequestMethod | LineupNotificationMethod;
 
@@ -100,15 +108,29 @@ export type LineupAgentDoneParams = {
 export type LineupGateRequestParams = {
   runId: string;
   stageId: string;
+  gateType: LineupGateType;
   question: string;
   choices: readonly string[];
   defaultChoice?: string;
+  context?: string;
+  allowFreeText?: boolean;
 };
 
 export type LineupGateRequestResult = {
   approved: boolean;
   choice?: string;
   reason?: string;
+};
+
+export type LineupGateRespondParams = {
+  runId: string;
+  requestId: JsonRpcId;
+  choice: string;
+  reason?: string;
+};
+
+export type LineupGateRespondResult = {
+  accepted: true;
 };
 
 export type LineupAgentCancelParams = {
@@ -138,12 +160,14 @@ export type LineupPipelineCompleteParams = {
 export interface LineupRequestParamsByMethod {
   "agent/spawn": LineupAgentSpawnParams;
   "gate/request": LineupGateRequestParams;
+  "gate/respond": LineupGateRespondParams;
   "pipeline/cancel": LineupPipelineCancelParams;
 }
 
 export interface LineupRequestResultByMethod {
   "agent/spawn": LineupAgentSpawnResult;
   "gate/request": LineupGateRequestResult;
+  "gate/respond": LineupGateRespondResult;
   "pipeline/cancel": LineupPipelineCancelResult;
 }
 
@@ -354,7 +378,7 @@ export function isJsonRpcErrorResponse(value: unknown): value is JsonRpcErrorRes
 }
 
 export function isLineupMethod(value: string): value is LineupMethod {
-  return value === "agent/spawn" || value === "gate/request" || value === "pipeline/cancel" || value === "agent/output" || value === "agent/done" || value === "agent/cancel" || value === "pipeline/complete";
+  return value === "agent/spawn" || value === "gate/request" || value === "gate/respond" || value === "pipeline/cancel" || value === "agent/output" || value === "agent/done" || value === "agent/cancel" || value === "pipeline/complete";
 }
 
 export function toProtocolLogRecord(message: LineupProtocolMessage): ProtocolLogRecord {

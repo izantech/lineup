@@ -1,9 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { stringify as stringifyYaml } from "yaml";
 
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
-import { parseRestrictedYaml } from "../lib/validation.js";
+import { tacticToWorkflow, type TacticDefinition } from "../lib/tactic-convert.js";
+import { parseRestrictedYaml, validateTacticYaml } from "../lib/validation.js";
 
 export type TacticNewOptions = {
   name: string;
@@ -118,5 +120,35 @@ export async function runTacticListCommand(options: TacticListOptions): Promise<
 
   for (const entry of entries) {
     printTableLine(`${entry.name}  ${entry.description}  ${entry.stages} stages`);
+  }
+}
+
+export type TacticConvertOptions = {
+  name: string;
+  json?: boolean;
+};
+
+function resolveTacticFile(name: string): string {
+  const candidates = [
+    path.resolve(".lineup", "tactics", `${name}.yaml`),
+    path.resolve("tactics", `${name}.yaml`),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  throw new CliError(`Tactic '${name}' not found. Searched: ${candidates.join(", ")}`, { code: "cli_error" });
+}
+
+export async function runTacticConvertCommand(options: TacticConvertOptions): Promise<void> {
+  const tacticPath = resolveTacticFile(options.name);
+  const raw = readFileSync(tacticPath, "utf8");
+  validateTacticYaml(raw, tacticPath);
+  const tacticDef = parseRestrictedYaml(raw, tacticPath) as TacticDefinition;
+  const workflow = tacticToWorkflow(tacticDef);
+
+  if (options.json) {
+    printJson(workflow);
+  } else {
+    printTableLine(stringifyYaml(workflow, { lineWidth: 120 }));
   }
 }

@@ -149,7 +149,7 @@ describe("differential regression harness", () => {
     process.chdir(projectRoot);
     try {
       const nativeResult = await runPipeline(
-        { workflow: workflowPath, engine: "native" },
+        { workflow: workflowPath, engine: "native", approvePlan: true },
         { runId: "diffnative", native: { planContent, driver: nativeDriver } }
       );
 
@@ -161,7 +161,7 @@ describe("differential regression harness", () => {
       expect(nativeTasksArtifact.tasks).toEqual(goldenTasksArtifact.tasks);
 
       const tfResult = await runPipeline(
-        { workflow: workflowPath, engine: "tf" },
+        { workflow: workflowPath, engine: "tf", approvePlan: true },
         { runId: "difftf", native: { planContent } }
       );
 

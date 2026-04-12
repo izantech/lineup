@@ -248,7 +248,8 @@ stages:
     try {
       const result = await runPipeline(
         {
-          workflow: workflowPath
+          workflow: workflowPath,
+          approvePlan: true
         },
         {
           runId: "native1",
@@ -318,7 +319,7 @@ stages:
     try {
       await expect(
         runPipeline(
-          { workflow: workflowPath, engine: "native" },
+          { workflow: workflowPath, engine: "native", approvePlan: true },
           {
             runId: "failrun",
             native: {

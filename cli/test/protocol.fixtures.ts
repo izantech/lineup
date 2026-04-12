@@ -67,6 +67,7 @@ export const protocolFixtures = {
       params: {
         runId: "run-001",
         stageId: "approval",
+        gateType: "approval",
         question: "Approve the plan?",
         choices: ["approve", "revise"],
         defaultChoice: "approve",

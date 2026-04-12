@@ -8,6 +8,7 @@ import { runApproveCommand, type ApproveCommandOptions } from "./commands/approv
 import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
 import { runCompletionCommand, type CompletionCommandOptions } from "./commands/completion";
 import { runDagCommand, type DagCommandOptions } from "./commands/dag";
+import { runGateRespondCommand, type GateRespondOptions } from "./commands/gate";
 import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
@@ -21,8 +22,10 @@ import { runDoctorCommand, type DoctorCommandOptions } from "./commands/doctor";
 import {
   runTacticNewCommand,
   runTacticListCommand,
+  runTacticConvertCommand,
   type TacticNewOptions,
-  type TacticListOptions
+  type TacticListOptions,
+  type TacticConvertOptions
 } from "./commands/tactic";
 import { runTfGenerateCommand } from "./commands/tf";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
@@ -70,6 +73,8 @@ export type CliHandlers = {
   workflowList: (options: WorkflowListOptions) => Promise<void>;
   tacticNew: (options: TacticNewOptions) => Promise<void>;
   tacticList: (options: TacticListOptions) => Promise<void>;
+  tacticConvert: (options: TacticConvertOptions) => Promise<void>;
+  gateRespond: (options: GateRespondOptions) => Promise<void>;
   completion: (options: CompletionCommandOptions) => Promise<void>;
   dag: (options: DagCommandOptions) => Promise<void>;
 };
@@ -106,6 +111,8 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     workflowList: runWorkflowListCommand,
     tacticNew: runTacticNewCommand,
     tacticList: runTacticListCommand,
+    tacticConvert: runTacticConvertCommand,
+    gateRespond: runGateRespondCommand,
     completion: runCompletionCommand,
     dag: runDagCommand,
     ...handlers
@@ -305,6 +312,26 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("List available tactics")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.tacticList);
+
+  tactic
+    .command("convert <name>")
+    .description("Convert a tactic to workflow YAML (or JSON with --json)")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((name: string, opts: { json?: boolean }) =>
+      commandHandlers.tacticConvert({ name, ...opts })
+    );
+
+  const gate = program.command("gate").description("Pipeline gate interaction commands");
+
+  gate
+    .command("respond <run-id> <request-id>")
+    .description("Respond to a pending pipeline gate")
+    .requiredOption("--choice <value>", "Response choice")
+    .option("--reason <text>", "Optional reason for the choice")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((runId: string, requestId: string, opts: { choice: string; reason?: string; json?: boolean }) =>
+      commandHandlers.gateRespond({ runId, requestId, ...opts })
+    );
 
   program
     .command("completion <shell>")

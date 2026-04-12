@@ -3,12 +3,13 @@ name: {{SKILL_NAME_EXPLAIN}}
 description: Get a clear explanation of any project component, pattern, or decision
 ---
 
-This skill is an alias for running the built-in `explain` tactic.
+This skill runs the built-in `explain` tactic via the CLI.
 
-Run the kick-off pipeline with the `explain` tactic:
+Run: `lineup run --tactic explain --json`
 
-1. Invoke `{{CMD_KICKOFF}} explain` with the user's question as the task description.
-2. The kick-off skill will resolve the built-in `explain` tactic from the {{HOST_TERM_PLUGIN_POSSESSIVE}}
-   `tactics/` directory and execute its stages (research + explain).
+Handle any `gate/request` messages from the NDJSON output by presenting them
+to the user via **{{QUESTION_PRIMITIVE}}** and responding with
+`lineup gate respond <run-id> <request-id> --choice <value>`.
 
-**Do not** implement the stages yourself -- delegate entirely to the kick-off skill.
+If the CLI is not available or the tactic is not found, fall back to invoking
+`{{CMD_KICKOFF}} explain` with the user's question.

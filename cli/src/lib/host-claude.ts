@@ -63,6 +63,7 @@ const JSON_RPC_METHOD_MAP: Record<LineupMethod, string> = {
   "agent/done": "complete",
   "agent/cancel": "cancel",
   "gate/request": "question",
+  "gate/respond": "respond",
   "pipeline/cancel": "cancel",
   "pipeline/complete": "complete"
 };

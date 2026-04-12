@@ -14,8 +14,10 @@ import {
   createLineupNotification,
   createLineupRequest,
   encodeNdjsonMessage,
+  type LineupGateType,
   type LineupProtocolMessage
 } from "./protocol.js";
+import { writePendingGate, waitForGateResponse, type PendingGate } from "./gate-store.js";
 import {
   lineupArtifactStoreDir,
   lineupRunArtifactsDir,
@@ -32,7 +34,8 @@ import {
   savePipelineState,
   updatePipelineArtifactHashes
 } from "./state.js";
-import { parseWorkflowYaml } from "./validation.js";
+import { parseWorkflowYaml, parseRestrictedYaml, validateTacticYaml } from "./validation.js";
+import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
 import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
@@ -65,9 +68,21 @@ export type RunPipelineHooks = {
  */
 export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
   // 1. Load workflow
-  const workflowPath = options.workflow ?? findDefaultWorkflow();
-  const raw = readFileSync(workflowPath, "utf-8");
-  const workflow = parseWorkflowYaml(raw, workflowPath);
+  let workflow: WorkflowDefinition;
+  let workflowPath: string;
+
+  if (options.tactic) {
+    const tacticPath = resolveTacticPath(options.tactic);
+    const tacticRaw = readFileSync(tacticPath, "utf-8");
+    validateTacticYaml(tacticRaw, tacticPath);
+    const tacticDef = parseRestrictedYaml(tacticRaw, tacticPath) as TacticDefinition;
+    workflow = tacticToWorkflow(tacticDef);
+    workflowPath = tacticPath;
+  } else {
+    workflowPath = options.workflow ?? findDefaultWorkflow();
+    const raw = readFileSync(workflowPath, "utf-8");
+    workflow = parseWorkflowYaml(raw, workflowPath);
+  }
 
   // 2. Validate DAG
   validateWorkflowDag(workflow);
@@ -222,7 +237,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = executePreStage(stage, expressionCtx, projectRoot, emitStatus);
+          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus);
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
 
@@ -243,27 +258,58 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
 
         } else if (stageId === "plan-approval") {
-          // When --approve-plan is set, skip the interactive gate and auto-approve.
-          // The current implementation always auto-approves; the flag signals
-          // explicit non-interactive intent from the caller.
-          if (!options.approvePlan) {
+          if (options.approvePlan) {
+            // Auto-approve when --approve-plan is set
+            const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
+            stageResults.set(stageId, approvalResult);
+            expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
+          } else {
+            const reqId = protocolRequestId++;
+            const pendingGate: PendingGate = {
+              requestId: reqId,
+              gateType: "approval",
+              question: "Approve the generated plan?",
+              choices: ["approve", "reject"],
+              defaultChoice: "approve",
+              createdAt: new Date().toISOString()
+            };
+            writePendingGate(runId, pendingGate, projectRoot);
+
             emitProtocol(
               createLineupRequest({
                 method: "gate/request",
-                id: protocolRequestId++,
+                id: reqId,
                 params: {
                   runId,
                   stageId,
+                  gateType: "approval",
                   question: "Approve the generated plan?",
                   choices: ["approve", "reject"],
                   defaultChoice: "approve"
                 }
               })
             );
+
+            // Block until skill responds via `lineup gate respond`
+            const gateResponse = await waitForGateResponse(runId, reqId, projectRoot);
+            const approved = gateResponse.choice === "approve";
+
+            if (!approved) {
+              const approvalResult: StageResult = { id: stageId, status: "failed", outputs: { approved: false, reason: gateResponse.reason } };
+              stageResults.set(stageId, approvalResult);
+              expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
+              throw new Error(`Plan rejected: ${gateResponse.reason ?? "no reason given"}`);
+            }
+
+            pipelineState = savePipelineState(
+              { ...pipelineState, status: "running", approval: { approved_at: new Date().toISOString(), approved_by: "skill" } },
+              projectRoot
+            );
+
+            const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
+            stageResults.set(stageId, approvalResult);
+            expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
           }
-          const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
-          stageResults.set(stageId, approvalResult);
-          expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
 
         } else if (stageId === "implement" || stageId === "verify") {
           // Implement and verify run through the selected v3 engine.
@@ -422,6 +468,17 @@ function findDefaultWorkflow(): string {
   throw new Error("No workflow file found. Specify one with --workflow <path>.");
 }
 
+function resolveTacticPath(name: string): string {
+  const candidates = [
+    resolve(".lineup", "tactics", `${name}.yaml`),
+    resolve("tactics", `${name}.yaml`),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  throw new Error(`Tactic '${name}' not found. Searched: ${candidates.join(", ")}`);
+}
+
 function detectHost(): HostName {
   // Check for host CLIs in order of preference
   try { execSync("which claude", { stdio: "ignore" }); return "claude"; } catch {}
@@ -517,9 +574,22 @@ function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
+  runId: string,
+  nextRequestId: () => number,
+  emitProtocol: (message: LineupProtocolMessage) => void,
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void
-): StageResult {
+): StageResult | Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
+
+  if (stage.id === "clarify") {
+    return emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true);
+  }
+
+  if (stage.id === "gate") {
+    return emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true);
+  }
+
+  // triage, research: non-interactive
   if (stage.type === "builtin") {
     emitStatus(stage.id, `Executing builtin stage '${stage.id}'.`);
   } else if (stage.type === "reasoning") {
@@ -529,6 +599,49 @@ function executePreStage(
   }
   emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
   return { id: stage.id, status: "complete", outputs: {} };
+}
+
+async function emitGateAndWait(
+  stage: WorkflowStage,
+  gateType: LineupGateType,
+  question: string,
+  choices: string[],
+  defaultChoice: string,
+  runId: string,
+  projectRoot: string,
+  nextRequestId: () => number,
+  emitProtocol: (message: LineupProtocolMessage) => void,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
+  allowFreeText: boolean
+): Promise<StageResult> {
+  const reqId = nextRequestId();
+  const pendingGate: PendingGate = {
+    requestId: reqId,
+    gateType,
+    question,
+    choices,
+    defaultChoice,
+    allowFreeText,
+    createdAt: new Date().toISOString()
+  };
+  writePendingGate(runId, pendingGate, projectRoot);
+
+  emitProtocol(
+    createLineupRequest({
+      method: "gate/request",
+      id: reqId,
+      params: { runId, stageId: stage.id, gateType, question, choices, defaultChoice, allowFreeText }
+    })
+  );
+
+  const gateResponse = await waitForGateResponse(runId, reqId, projectRoot);
+  emitStatus(stage.id, `Gate '${gateType}' resolved: ${gateResponse.choice}.`, true);
+
+  return {
+    id: stage.id,
+    status: "complete",
+    outputs: { choice: gateResponse.choice, reason: gateResponse.reason }
+  };
 }
 
 async function executePlannerPhase(
