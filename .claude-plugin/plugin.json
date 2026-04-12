@@ -1,7 +1,7 @@
 {
   "name": "lineup",
   "description": "Structured multi-agent workflow: Triage, Clarify, Research, Plan, Implement, Verify, Document",
-  "version": "2.1.1",
+  "version": "3.0.0-SNAPSHOT",
   "author": { "name": "izantech" },
   "repository": "https://github.com/izantech/lineup"
 }

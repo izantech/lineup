@@ -1,6 +1,6 @@
 {
   "name": "@izantech/lineup-cli",
-  "version": "2.2.0",
+  "version": "3.0.0-SNAPSHOT",
   "private": false,
   "description": "Lineup multi-host installer and manager for Claude Code and Codex",
   "license": "MIT",

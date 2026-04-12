@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
@@ -14,8 +14,7 @@ import {
 } from "./host-claude";
 import { installCodex, statusCodex, uninstallCodex } from "./host-codex";
 import { installOpencode, statusOpencode, uninstallOpencode } from "./host-opencode";
-import { codexHostRoot, lineupStateFile, opencodeHostRoot, purgeTargets } from "./paths";
-import { generateTfAdapters } from "./tf-adapters.js";
+import { agentOverridesDir, codexHostRoot, lineupStateFile, opencodeHostRoot, purgeTargets } from "./paths";
 import { isInteractive, promptMigrationConfirm, promptUninstallPlan } from "./prompts";
 import { resolveLocalRelease, resolveRelease } from "./release";
 import { loadState, saveState, updateHostState } from "./state";
@@ -104,6 +103,25 @@ const defaultDeps: OperationsDeps = {
   },
   asErrorMessage
 };
+
+function stampOverrideVersions(host: HostName, version: string): void {
+  const dir = agentOverridesDir(host);
+  if (!existsSync(dir)) return;
+
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith(".yaml")) continue;
+    const filePath = join(dir, file);
+    try {
+      const content = readFileSync(filePath, "utf8");
+      const updated = content.match(/^plugin_version:\s*.+$/m)
+        ? content.replace(/^plugin_version:\s*.+$/m, `plugin_version: "${version}"`)
+        : `plugin_version: "${version}"\n${content}`;
+      writeFileSync(filePath, updated, "utf8");
+    } catch {
+      // Override file unreadable — skip silently
+    }
+  }
+}
 
 function summarizeFailures(failures: Array<{ host: HostName; error: string }>, action: string): never {
   const lines = [
@@ -260,26 +278,9 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
       }
     }
 
-    const tfHost = input.hosts[0];
-    try {
-      const tfOutputDir = join(process.cwd(), ".lineup", ".tf-adapters");
-      const defaultModel = ({ claude: "claude-sonnet-4-6", codex: "codex-mini-latest", opencode: "anthropic/claude-sonnet-4-6" } as Record<HostName, string>)[tfHost] ?? "claude-sonnet-4-6";
-      generateTfAdapters({
-        host: tfHost,
-        adaptersSourceDir: join(release.sourceRoot, ".lineup-core", "adapters"),
-        promptsSourceDir: join(release.sourceRoot, ".lineup-core", "prompts"),
-        outputDir: tfOutputDir,
-        agentsDir: join(release.sourceRoot, "agents"),
-        modelMap: {
-          scope_selector: defaultModel,
-          planner: defaultModel,
-          worker: defaultModel,
-          validator: defaultModel
-        }
-      });
-      console.log("Generated TF adapter scripts in .lineup/.tf-adapters/");
-    } catch {
-      console.warn("Warning: could not generate TF adapter scripts (templates may not be available).");
+
+    for (const r of results) {
+      if (r.ok) stampOverrideVersions(r.host, release.tag);
     }
 
     deps.saveState(state);

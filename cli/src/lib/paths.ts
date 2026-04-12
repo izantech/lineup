@@ -128,3 +128,14 @@ export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex" | "opencode
 
   return targets;
 }
+
+export function agentOverridesDir(host: "claude" | "codex" | "opencode", homeDir = os.homedir()): string {
+  switch (host) {
+    case "claude":
+      return path.join(homeDir, ".claude", "lineup", "agents");
+    case "codex":
+      return path.join(homeDir, ".codex", "lineup", "agents");
+    case "opencode":
+      return path.join(homeDir, ".config", "opencode", "lineup", "agents");
+  }
+}
