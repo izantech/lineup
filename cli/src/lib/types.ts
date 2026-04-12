@@ -247,7 +247,7 @@ export type TfRole = "scope_selector" | "planner" | "worker" | "validator";
 export type IsolationMode = "index" | "full" | "sparse";
 export type EngineMode = "auto" | "native" | "tf";
 
-export type PipelineRunStatus = "success" | "failed" | "aborted";
+export type PipelineRunStatus = "success" | "failed" | "aborted" | "blocked";
 
 export type PipelineState = {
   apiVersion: Extract<LineupApiVersion, "lineup/v3">;
@@ -271,6 +271,9 @@ export type RunOptions = {
   maxParallel?: number;
   isolation?: IsolationMode;
   approvePlan?: boolean;
+  gateTimeout?: number;
+  interactive?: boolean;
+  validateOutputs?: boolean;
 };
 
 export type TfGenerateOptions = {

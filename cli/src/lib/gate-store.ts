@@ -67,11 +67,26 @@ export function writeGateResponse(runId: string, response: GateResponse, project
   renameSync(tmpPath, filePath);
 }
 
+export class GateTimeoutError extends Error {
+  runId: string;
+  requestId: JsonRpcId;
+  gateType: string;
+
+  constructor(runId: string, requestId: JsonRpcId, gateType: string, timeoutMs: number) {
+    super(`Gate response timeout after ${timeoutMs}ms for request ${requestId} in run ${runId}.`);
+    this.name = "GateTimeoutError";
+    this.runId = runId;
+    this.requestId = requestId;
+    this.gateType = gateType;
+  }
+}
+
 export async function waitForGateResponse(
   runId: string,
   requestId: JsonRpcId,
   projectRoot: string,
-  timeoutMs = 600000
+  timeoutMs = 600000,
+  gateType = "unknown"
 ): Promise<GateResponse> {
   const startTime = Date.now();
   const pollIntervalMs = 200;
@@ -84,5 +99,5 @@ export async function waitForGateResponse(
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
-  throw new Error(`Gate response timeout after ${timeoutMs}ms for request ${requestId} in run ${runId}.`);
+  throw new GateTimeoutError(runId, requestId, gateType, timeoutMs);
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 
 import type { ArtifactStore, StoredArtifactRecord } from "./artifact-store.js";
+import type { VerificationResult } from "./verification.js";
 import { CliError } from "./errors.js";
 import { createNativeIsolationWorkspace, type NativeIsolationMode } from "./isolation.js";
 import {
@@ -86,6 +87,7 @@ export type NativeReviewExecutionInput = {
   implementationState: ImplementationState;
   approvedPlan: ApprovedPlan;
   tasksArtifact: CompiledTasksArtifact;
+  verificationResults?: VerificationResult[];
 };
 
 export type NativeReviewExecutionResult = {
@@ -113,6 +115,8 @@ export type NativeExecutorOptions = {
   verifyStage: WorkflowStage;
   driver?: NativeExecutionDriver;
   isolationMode?: NativeIsolationMode;
+  verificationResults?: VerificationResult[];
+  taskFilter?: string[];
 };
 
 export type PreparedExecutionArtifacts = {
@@ -136,6 +140,7 @@ export type NativeExecutorResult = {
     status: "complete";
     outputs: Record<string, unknown>;
   };
+  failedTaskIds: string[];
 };
 
 function buildRequestDir(artifactDir: string): string {
@@ -235,25 +240,36 @@ function buildReviewerPrompt(input: {
   approvedPlan: ApprovedPlan;
   implementationState: ImplementationState;
   tasksArtifact: CompiledTasksArtifact;
+  verificationResults?: VerificationResult[];
 }): string {
+  const extraInstructions = [
+    "Native Lineup v3 review contract:",
+    "- Review the completed implementation against the approved plan.",
+    "- Validate acceptance criteria and note concrete issues only.",
+    "- Return a lineup/v3 Review YAML document.",
+    "",
+    "Approved plan summary:",
+    input.approvedPlan.summary,
+    "",
+    "Compiled tasks:",
+    JSON.stringify(input.tasksArtifact.tasks, null, 2),
+    "",
+    "Implementation state:",
+    JSON.stringify(input.implementationState, null, 2)
+  ];
+
+  if (input.verificationResults && input.verificationResults.length > 0) {
+    extraInstructions.push(
+      "",
+      "Verification hook results:",
+      JSON.stringify(input.verificationResults, null, 2)
+    );
+  }
+
   return buildAgentSystemPrompt({
     agentFilePath: path.join(input.projectRoot, "agents", "reviewer.md"),
     promptTemplate: "{{AGENT_BODY}}",
-    extraInstructions: [
-      "Native Lineup v3 review contract:",
-      "- Review the completed implementation against the approved plan.",
-      "- Validate acceptance criteria and note concrete issues only.",
-      "- Return a lineup/v3 Review YAML document.",
-      "",
-      "Approved plan summary:",
-      input.approvedPlan.summary,
-      "",
-      "Compiled tasks:",
-      JSON.stringify(input.tasksArtifact.tasks, null, 2),
-      "",
-      "Implementation state:",
-      JSON.stringify(input.implementationState, null, 2)
-    ].join("\n")
+    extraInstructions: extraInstructions.join("\n")
   }).prompt;
 }
 
@@ -367,6 +383,16 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       options.emitStatus("implement", `Executing native wave ${wave} (${waveTasks.map((task) => task.id).join(", ")}).`);
 
       for (const task of waveTasks) {
+        if (options.taskFilter && !options.taskFilter.includes(task.id)) {
+          implementationState.task_results.push({
+            task_id: task.id,
+            attempts: 0,
+            summary: "skipped (not in retry filter)",
+            write_scope: task.write_scope ?? [],
+            read_scope: task.read_scope ?? []
+          });
+          continue;
+        }
         try {
           const retryResult = await retryOperation(
             {
@@ -453,7 +479,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       projectRoot: options.projectRoot,
       approvedPlan,
       implementationState,
-      tasksArtifact
+      tasksArtifact,
+      verificationResults: options.verificationResults
     });
 
     options.emitProtocol(
@@ -490,7 +517,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
         prompt: reviewPrompt,
         implementationState,
         approvedPlan,
-        tasksArtifact
+        tasksArtifact,
+        verificationResults: options.verificationResults
       });
     } catch (error) {
       writeExecutorFailureSnapshot(options.artifactDir, {
@@ -517,6 +545,14 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
     );
     options.emitStatus("verify", "Native review completed.", true);
 
+    const reviewIssueFiles = new Set(
+      ((parsedReview.issues ?? []) as Array<{ file: string }>).map((issue) => issue.file)
+    );
+    const failedTaskIds = tasksArtifact.tasks
+      .filter((task) => (task.write_scope ?? []).some((f) => reviewIssueFiles.has(f)))
+      .map((task) => task.id);
+    const effectiveFailedTaskIds = failedTaskIds.length > 0 ? failedTaskIds : tasksArtifact.tasks.map((task) => task.id);
+
     return {
       planRecord,
       tasksRecord,
@@ -530,7 +566,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
         id: "verify",
         status: "complete",
         outputs: parsedReview
-      }
+      },
+      failedTaskIds: effectiveFailedTaskIds
     };
   } finally {
     await workspace.cleanup();

@@ -5,6 +5,7 @@ type PlanChange = {
   file: string;
   change: string;
   rationale: string;
+  reads?: string[];
 };
 
 type PlanDependency = {
@@ -133,6 +134,18 @@ function pathSegmentsOverlap(left: string, right: string): boolean {
   );
 }
 
+function isCrossCuttingChange(allChanges: PlanChange[], change: PlanChange): boolean {
+  const ext = path.posix.extname(change.file);
+  if (!ext) return false;
+  const dir = path.posix.dirname(change.file);
+  const count = allChanges.filter((c) => {
+    if (path.posix.extname(c.file) !== ext) return false;
+    const otherDir = path.posix.dirname(c.file);
+    return pathSegmentsOverlap(dir, otherDir);
+  }).length;
+  return count > 3;
+}
+
 function scopesOverlap(left: readonly string[], right: readonly string[]): boolean {
   for (const candidate of left) {
     for (const existing of right) {
@@ -170,6 +183,10 @@ function compileNodes(plan: ApprovedPlan): CompiledNode[] {
     return file;
   });
 
+  const normalizedReads = plan.changes.map((change, index) =>
+    (change.reads ?? []).map((r) => normalizeRepoRelativePath(r, `changes[${index + 1}].reads`))
+  );
+
   const dependencyEdges = new Map<number, Set<number>>();
   const dependsOn = new Map<number, string[]>();
   for (let index = 1; index <= changeCount; index++) {
@@ -194,6 +211,15 @@ function compileNodes(plan: ApprovedPlan): CompiledNode[] {
     dependencyEdges.get(fromIndex)!.add(toIndex);
   }
 
+  for (let i = 1; i <= changeCount; i++) {
+    for (let j = 1; j <= changeCount; j++) {
+      if (i === j) continue;
+      if (scopesOverlap([normalizedFiles[i - 1]], normalizedReads[j - 1])) {
+        dependencyEdges.get(j)!.add(i);
+      }
+    }
+  }
+
   for (let index = 1; index <= changeCount; index++) {
     const deps = [...(dependencyEdges.get(index) ?? new Set<number>())]
       .sort((left, right) => left - right)
@@ -205,10 +231,13 @@ function compileNodes(plan: ApprovedPlan): CompiledNode[] {
     const index = zeroBasedIndex + 1;
     const id = `CHANGE-${String(index).padStart(3, "0")}`;
     const writeScope = [normalizedFiles[zeroBasedIndex]];
-    const readScope = [...new Set(dependsOn.get(index)!.flatMap((dependencyId) => {
-      const dependencyIndex = Number.parseInt(dependencyId.split("-").pop() ?? "", 10);
-      return normalizedFiles[dependencyIndex - 1] ? [normalizedFiles[dependencyIndex - 1]] : [];
-    }))];
+    const readScope = [...new Set([
+      ...normalizedReads[zeroBasedIndex],
+      ...dependsOn.get(index)!.flatMap((dependencyId) => {
+        const dependencyIndex = Number.parseInt(dependencyId.split("-").pop() ?? "", 10);
+        return normalizedFiles[dependencyIndex - 1] ? [normalizedFiles[dependencyIndex - 1]] : [];
+      }),
+    ])];
     const task: CompiledTask = {
       id,
       title: change.change.trim(),

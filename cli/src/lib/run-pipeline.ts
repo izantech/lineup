@@ -17,7 +17,8 @@ import {
   type LineupGateType,
   type LineupProtocolMessage
 } from "./protocol.js";
-import { writePendingGate, waitForGateResponse, type PendingGate } from "./gate-store.js";
+import { writePendingGate, waitForGateResponse, GateTimeoutError, type PendingGate } from "./gate-store.js";
+import { handleInteractiveGate } from "./interactive-gate.js";
 import {
   lineupArtifactStoreDir,
   lineupRunArtifactsDir,
@@ -34,23 +35,24 @@ import {
   savePipelineState,
   updatePipelineArtifactHashes
 } from "./state.js";
-import { parseWorkflowYaml, parseRestrictedYaml, validateTacticYaml } from "./validation.js";
+import { parseWorkflowYaml, parseRestrictedYaml, validateTacticYaml, validateAgentOutputYaml, type AgentOutputKind } from "./validation.js";
 import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
+import { runVerificationHooks, type VerificationResult } from "./verification.js";
 import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
 import { generateTfAdapters, type AdapterGenerationContext } from "./tf-adapters.js";
 
 export type PipelineResult = {
   runId: string;
-  status: "success" | "failed" | "aborted";
+  status: "success" | "failed" | "aborted" | "blocked";
   stageResults: Map<string, StageResult>;
   outputDir?: string;
 };
 
 type StageResult = {
   id: string;
-  status: "complete" | "skipped" | "failed";
+  status: "complete" | "skipped" | "failed" | "blocked";
   outputs: Record<string, unknown>;
   duration?: number;
 };
@@ -237,9 +239,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus);
+          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, options.interactive);
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
+          if (result.status === "blocked") {
+            pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
+            return { runId, status: "blocked", stageResults };
+          }
 
         } else if (stageId === "plan") {
           // Phase 1: invoke planner adapter directly
@@ -273,25 +279,40 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               defaultChoice: "approve",
               createdAt: new Date().toISOString()
             };
-            writePendingGate(runId, pendingGate, projectRoot);
+            let gateResponse;
+            if (options.interactive) {
+              gateResponse = await handleInteractiveGate(pendingGate);
+            } else {
+              writePendingGate(runId, pendingGate, projectRoot);
 
-            emitProtocol(
-              createLineupRequest({
-                method: "gate/request",
-                id: reqId,
-                params: {
-                  runId,
-                  stageId,
-                  gateType: "approval",
-                  question: "Approve the generated plan?",
-                  choices: ["approve", "reject"],
-                  defaultChoice: "approve"
+              emitProtocol(
+                createLineupRequest({
+                  method: "gate/request",
+                  id: reqId,
+                  params: {
+                    runId,
+                    stageId,
+                    gateType: "approval",
+                    question: "Approve the generated plan?",
+                    choices: ["approve", "reject"],
+                    defaultChoice: "approve"
+                  }
+                })
+              );
+
+              // Block until skill responds via `lineup gate respond`
+              try {
+                gateResponse = await waitForGateResponse(runId, reqId, projectRoot, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, "approval");
+              } catch (err) {
+                if (err instanceof GateTimeoutError) {
+                  const blockedResult: StageResult = { id: stageId, status: "blocked", outputs: {} };
+                  stageResults.set(stageId, blockedResult);
+                  pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
+                  return { runId, status: "blocked", stageResults };
                 }
-              })
-            );
-
-            // Block until skill responds via `lineup gate respond`
-            const gateResponse = await waitForGateResponse(runId, reqId, projectRoot);
+                throw err;
+              }
+            }
             const approved = gateResponse.choice === "approve";
 
             if (!approved) {
@@ -350,6 +371,21 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
               expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
             } else {
+              emitStatus("verify", "Running verification hooks...");
+              let verificationResults: VerificationResult[] = [];
+              try {
+                verificationResults = await runVerificationHooks(projectRoot);
+                const passed = verificationResults.filter((r) => r.exitCode === 0).length;
+                const failed = verificationResults.filter((r) => r.exitCode !== 0).length;
+                if (verificationResults.length > 0) {
+                  emitStatus("verify", `Verification: ${passed}/${verificationResults.length} passed${failed > 0 ? `, ${failed} failed` : ""}.`);
+                } else {
+                  emitStatus("verify", "Verification: no hooks detected.");
+                }
+              } catch {
+                emitStatus("verify", "Verification hooks failed to run.");
+              }
+
               const nativeResult = await executeNativeExecutor({
                 runId,
                 projectRoot,
@@ -363,28 +399,127 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 emitStatus,
                 implementStage,
                 verifyStage,
-                driver: hooks.native?.driver
+                driver: hooks.native?.driver,
+                verificationResults
               });
 
-              pipelineState = savePipelineState(
-                updatePipelineArtifactHashes(pipelineState, {
-                  plan: nativeResult.planRecord.sha256,
-                  tasks: nativeResult.tasksRecord.sha256,
-                  review: nativeResult.reviewRecord.sha256
-                }),
-                projectRoot
-              );
+              const reviewStatus = nativeResult.verifyResult.outputs.status as string | undefined;
+              if (reviewStatus === "FAIL" || reviewStatus === "PASS_WITH_WARNINGS") {
+                const reviewSummary = (nativeResult.verifyResult.outputs.summary as string | undefined) ?? "Verification failed.";
+                const reqId = protocolRequestId++;
+                const pendingGate: PendingGate = {
+                  requestId: reqId,
+                  gateType: "verify-decision",
+                  question: reviewSummary,
+                  choices: ["retry", "accept", "abort"],
+                  defaultChoice: "retry",
+                  createdAt: new Date().toISOString()
+                };
 
-              stageResults.set("implement", nativeResult.implementResult);
-              stageResults.set("verify", nativeResult.verifyResult);
-              expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
-              expressionCtx.stages["verify"] = { outputs: nativeResult.verifyResult.outputs };
+                let gateResponse;
+                if (options.interactive) {
+                  gateResponse = await handleInteractiveGate(pendingGate);
+                } else {
+                  writePendingGate(runId, pendingGate, projectRoot);
+                  emitProtocol(
+                    createLineupRequest({
+                      method: "gate/request",
+                      id: reqId,
+                      params: {
+                        runId,
+                        stageId: "verify",
+                        gateType: "verify-decision",
+                        question: reviewSummary,
+                        choices: ["retry", "accept", "abort"],
+                        defaultChoice: "retry"
+                      }
+                    })
+                  );
+                  try {
+                    gateResponse = await waitForGateResponse(runId, reqId, projectRoot, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, "verify-decision");
+                  } catch (err) {
+                    if (err instanceof GateTimeoutError) {
+                      stageResults.set("implement", nativeResult.implementResult);
+                      stageResults.set("verify", { id: "verify", status: "blocked", outputs: {} });
+                      pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
+                      return { runId, status: "blocked", stageResults };
+                    }
+                    throw err;
+                  }
+                }
+
+                if (gateResponse.choice === "retry") {
+                  const retryResult = await executeNativeExecutor({
+                    runId,
+                    projectRoot,
+                    runRoot,
+                    artifactDir,
+                    gitTreeSha,
+                    planPath,
+                    artifactStore,
+                    nextProtocolRequestId: () => protocolRequestId++,
+                    emitProtocol,
+                    emitStatus,
+                    implementStage,
+                    verifyStage,
+                    driver: hooks.native?.driver,
+                    verificationResults,
+                    taskFilter: nativeResult.failedTaskIds
+                  });
+                  pipelineState = savePipelineState(
+                    updatePipelineArtifactHashes(pipelineState, {
+                      plan: retryResult.planRecord.sha256,
+                      tasks: retryResult.tasksRecord.sha256,
+                      review: retryResult.reviewRecord.sha256
+                    }),
+                    projectRoot
+                  );
+                  stageResults.set("implement", retryResult.implementResult);
+                  stageResults.set("verify", retryResult.verifyResult);
+                  expressionCtx.stages["implement"] = { outputs: retryResult.implementResult.outputs };
+                  expressionCtx.stages["verify"] = { outputs: retryResult.verifyResult.outputs };
+                } else if (gateResponse.choice === "accept") {
+                  pipelineState = savePipelineState(
+                    updatePipelineArtifactHashes(pipelineState, {
+                      plan: nativeResult.planRecord.sha256,
+                      tasks: nativeResult.tasksRecord.sha256,
+                      review: nativeResult.reviewRecord.sha256
+                    }),
+                    projectRoot
+                  );
+                  stageResults.set("implement", nativeResult.implementResult);
+                  stageResults.set("verify", {
+                    ...nativeResult.verifyResult,
+                    outputs: { ...nativeResult.verifyResult.outputs, warnings: true }
+                  });
+                  expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
+                  expressionCtx.stages["verify"] = { outputs: { ...nativeResult.verifyResult.outputs, warnings: true } };
+                } else {
+                  stageResults.set("implement", nativeResult.implementResult);
+                  stageResults.set("verify", { id: "verify", status: "failed", outputs: nativeResult.verifyResult.outputs });
+                  pipelineState = savePipelineState({ ...pipelineState, status: "failed" }, projectRoot);
+                  throw new Error(`Verification aborted: ${reviewSummary}`);
+                }
+              } else {
+                pipelineState = savePipelineState(
+                  updatePipelineArtifactHashes(pipelineState, {
+                    plan: nativeResult.planRecord.sha256,
+                    tasks: nativeResult.tasksRecord.sha256,
+                    review: nativeResult.reviewRecord.sha256
+                  }),
+                  projectRoot
+                );
+                stageResults.set("implement", nativeResult.implementResult);
+                stageResults.set("verify", nativeResult.verifyResult);
+                expressionCtx.stages["implement"] = { outputs: nativeResult.implementResult.outputs };
+                expressionCtx.stages["verify"] = { outputs: nativeResult.verifyResult.outputs };
+              }
             }
           }
           // verify is handled together with implement in the selected engine
 
         } else if (postStages.has(stageId)) {
-          const result = executePostStage(stage, expressionCtx, projectRoot, emitStatus);
+          const result = executePostStage(stage, expressionCtx, projectRoot, emitStatus, options.validateOutputs !== false);
           stageResults.set(stageId, result);
         }
 
@@ -577,28 +712,82 @@ function executePreStage(
   runId: string,
   nextRequestId: () => number,
   emitProtocol: (message: LineupProtocolMessage) => void,
-  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
+  gateTimeoutMs?: number,
+  validateOutputs = true,
+  interactive?: boolean
 ): StageResult | Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    return emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true);
+    return emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
   }
 
   if (stage.id === "gate") {
-    return emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true);
+    return emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
   }
 
-  // triage, research: non-interactive
-  if (stage.type === "builtin") {
+  if (stage.id === "triage" || stage.type === "builtin") {
     emitStatus(stage.id, `Executing builtin stage '${stage.id}'.`);
-  } else if (stage.type === "reasoning") {
+    const triageResult = executeTriageBuiltin(projectRoot);
+    emitStatus(stage.id, `Triage complete: ${triageResult.fileCount} files, ${triageResult.changedFiles} changed.`, true);
+    return { id: stage.id, status: "complete", outputs: triageResult };
+  }
+
+  if (stage.type === "agent" && stage.agent) {
+    emitStatus(stage.id, `Spawning ${stage.agent} for stage '${stage.id}'.`);
+    const reqId = nextRequestId();
+    emitProtocol(
+      createLineupRequest({
+        method: "agent/spawn",
+        id: reqId,
+        params: { runId, stageId: stage.id, agent: stage.agent, prompt: "" }
+      })
+    );
+    emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
+    const result: StageResult = { id: stage.id, status: "complete", outputs: { agentRequestId: reqId } };
+    if (typeof result.outputs["output_yaml"] === "string") {
+      validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, result.outputs["output_yaml"] as string, emitStatus, validateOutputs);
+    }
+    return result;
+  }
+
+  if (stage.type === "reasoning") {
     emitStatus(stage.id, `Executing reasoning stage '${stage.id}'.`);
-  } else if (stage.type === "agent") {
-    emitStatus(stage.id, `Spawning ${stage.agent ?? "unknown"} for stage '${stage.id}'.`);
   }
   emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
   return { id: stage.id, status: "complete", outputs: {} };
+}
+
+function executeTriageBuiltin(projectRoot: string): { fileCount: number; changedFiles: number; insertions: number; deletions: number; diffSummary: string } {
+  let diffSummary = "";
+  let changedFiles = 0;
+  let insertions = 0;
+  let deletions = 0;
+  try {
+    diffSummary = execSync("git diff --stat HEAD", { cwd: projectRoot, timeout: 30000 }).toString().trim();
+    const changedMatch = diffSummary.match(/(\d+) file/);
+    const insertMatch = diffSummary.match(/(\d+) insertion/);
+    const deleteMatch = diffSummary.match(/(\d+) deletion/);
+    changedFiles = changedMatch ? parseInt(changedMatch[1], 10) : 0;
+    insertions = insertMatch ? parseInt(insertMatch[1], 10) : 0;
+    deletions = deleteMatch ? parseInt(deleteMatch[1], 10) : 0;
+  } catch {
+    diffSummary = "";
+  }
+
+  let fileCount = 0;
+  try {
+    const countOutput = execSync(
+      'find . -type f -not -path "./.git/*" -not -path "./node_modules/*" | wc -l',
+      { cwd: projectRoot, timeout: 30000 }
+    ).toString().trim();
+    fileCount = parseInt(countOutput, 10) || 0;
+  } catch {
+    fileCount = 0;
+  }
+
+  return { fileCount, changedFiles, insertions, deletions, diffSummary };
 }
 
 async function emitGateAndWait(
@@ -612,7 +801,9 @@ async function emitGateAndWait(
   nextRequestId: () => number,
   emitProtocol: (message: LineupProtocolMessage) => void,
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
-  allowFreeText: boolean
+  allowFreeText: boolean,
+  gateTimeoutMs?: number,
+  interactive?: boolean
 ): Promise<StageResult> {
   const reqId = nextRequestId();
   const pendingGate: PendingGate = {
@@ -624,17 +815,30 @@ async function emitGateAndWait(
     allowFreeText,
     createdAt: new Date().toISOString()
   };
-  writePendingGate(runId, pendingGate, projectRoot);
 
-  emitProtocol(
-    createLineupRequest({
-      method: "gate/request",
-      id: reqId,
-      params: { runId, stageId: stage.id, gateType, question, choices, defaultChoice, allowFreeText }
-    })
-  );
+  let gateResponse;
+  if (interactive) {
+    gateResponse = await handleInteractiveGate(pendingGate);
+  } else {
+    writePendingGate(runId, pendingGate, projectRoot);
 
-  const gateResponse = await waitForGateResponse(runId, reqId, projectRoot);
+    emitProtocol(
+      createLineupRequest({
+        method: "gate/request",
+        id: reqId,
+        params: { runId, stageId: stage.id, gateType, question, choices, defaultChoice, allowFreeText }
+      })
+    );
+
+    try {
+      gateResponse = await waitForGateResponse(runId, reqId, projectRoot, gateTimeoutMs, gateType);
+    } catch (err) {
+      if (err instanceof GateTimeoutError) {
+        return { id: stage.id, status: "blocked", outputs: {} };
+      }
+      throw err;
+    }
+  }
   emitStatus(stage.id, `Gate '${gateType}' resolved: ${gateResponse.choice}.`, true);
 
   return {
@@ -765,14 +969,35 @@ function executePostStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
-  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
+  validateOutputs = true
 ): StageResult {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
   if (stage.type === "agent") {
     emitStatus(stage.id, `Spawning ${stage.agent ?? "unknown"} for stage '${stage.id}'.`);
   }
   emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
-  return { id: stage.id, status: "complete", outputs: {} };
+  const result: StageResult = { id: stage.id, status: "complete", outputs: {} };
+  if (stage.type === "agent" && stage.agent && typeof result.outputs["output_yaml"] === "string") {
+    validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, result.outputs["output_yaml"] as string, emitStatus, validateOutputs);
+  }
+  return result;
+}
+
+export function validateAndWarnAgentOutput(
+  stageId: string,
+  kind: AgentOutputKind,
+  content: string,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
+  validateOutputs = true
+): void {
+  if (!validateOutputs) return;
+  try {
+    validateAgentOutputYaml(kind, content, `stage:${stageId}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitStatus(stageId, `[stage/warning] Agent output validation failed: ${message}`);
+  }
 }
 
 function cleanup(artifactDir: string, cacheDir: string, success: boolean): void {

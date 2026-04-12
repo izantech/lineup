@@ -12,6 +12,7 @@ import { runGateRespondCommand, type GateRespondOptions } from "./commands/gate"
 import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
+import { runReplayCommand, type ReplayCommandOptions } from "./commands/replay";
 import { runPendingCommand, type PendingCommandOptions } from "./commands/pending";
 import { runResumeCommand, type ResumeCommandOptions } from "./commands/resume";
 import { runRunCommand, type RunCommandOptions } from "./commands/run";
@@ -61,6 +62,7 @@ export type CliHandlers = {
   runs: (options: RunsCommandOptions) => Promise<void>;
   show: (options: ShowCommandOptions) => Promise<void>;
   logs: (options: LogsCommandOptions) => Promise<void>;
+  replay: (options: ReplayCommandOptions) => Promise<void>;
   tf: (options: TfGenerateOptions) => Promise<void>;
   validate: (options: ValidateCommandOptions) => Promise<void>;
   artifactsShow: (options: ArtifactsShowOptions) => Promise<void>;
@@ -99,6 +101,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     runs: runRunsCommand,
     show: runShowCommand,
     logs: runLogsCommand,
+    replay: runReplayCommand,
     tf: runTfGenerateCommand,
     validate: runValidateCommand,
     artifactsShow: runArtifactsShowCommand,
@@ -187,7 +190,9 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
     .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds; on timeout saves state as blocked", parseInt)
     .option("--approve-plan", "Skip interactive plan approval gate", false)
+    .option("-i, --interactive", "Handle gates via stdin prompts")
     .action(commandHandlers.run);
 
   program
@@ -201,13 +206,20 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .command("show <run-id>")
     .description("Show details for a pipeline run")
     .option("--json", "Emit machine-readable JSON output")
-    .action((runId: string, opts: { json?: boolean }) => commandHandlers.show({ runId, ...opts }));
+    .option("-w, --watch", "Poll and refresh progress every 2 seconds")
+    .action((runId: string, opts: { json?: boolean; watch?: boolean }) => commandHandlers.show({ runId, ...opts }));
 
   program
     .command("logs <run-id>")
     .description("Show protocol logs for a pipeline run")
     .option("--json", "Emit machine-readable JSON output")
     .action((runId: string, opts: { json?: boolean }) => commandHandlers.logs({ runId, ...opts }));
+
+  program
+    .command("replay <run-id>")
+    .description("Replay a pipeline run as a human-readable narrative")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((runId: string, opts: { json?: boolean }) => commandHandlers.replay({ runId, ...opts }));
 
   program
     .command("resume <run-id>")

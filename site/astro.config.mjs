@@ -13,6 +13,7 @@ export default defineConfig({
 				{ label: 'Getting Started', slug: 'getting-started' },
 				{ label: 'How It Works', slug: 'how-it-works' },
 				{ label: 'Examples', slug: 'examples' },
+				{ label: 'Migrating from V2', slug: 'migration' },
 			],
 		}),
 	],

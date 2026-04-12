@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Interactive mode (`lineup run --interactive`) -- handle gates via stdin prompts without a host skill; maps gate types to readline prompts (approval Y/n, clarify free-text, verify-decision numbered menu)
+- Gate timeout (`lineup run --gate-timeout <seconds>`) -- saves pipeline state as `blocked` on timeout instead of `failed`, enabling clean resume
+- Real pre-stage logic -- triage stage analyzes `git diff --stat HEAD` and file count; research stage emits `agent/spawn` protocol messages for researcher agents
+- Verification hooks -- auto-detects test/typecheck/lint commands from `package.json` scripts and Makefile targets, runs them before the reviewer agent, feeds structured results (exit code, stdout, stderr, duration) as reviewer context
+- Agent output validation -- validates agent outputs against schemas after `agent/done` messages; emits `stage/warning` on failure with optional retry
+- Retry UX for failed verification -- `verify-decision` gate presents retry (re-runs failed tasks only within same run), accept with warnings, or abort options
+- Progress dashboard (`lineup show --watch`) -- polls pipeline state every 2s with ANSI clearing, shows completed stages with checkmarks, current stage highlighted, elapsed time; exits on terminal status
+- Replay command (`lineup replay <run-id>`) -- parses NDJSON protocol artifacts and formats a chronological human-readable narrative with timestamps; supports `--json` for structured output
+- Task compiler improvements -- cross-cutting detection (>3 files same extension/directory kept as single task), read-write dependency edges (write scope overlapping read scope produces sequential waves), better wave assignment for parallel execution
+- Tactic-to-workflow conversion test suite -- 7 test cases covering basic conversion, gate insertion, optional stages, verification auto-append, duplicate ID resolution, unknown type errors, and variable passthrough
+
 ## [2.2.0] - 2026-04-12
 
 ### Added

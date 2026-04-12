@@ -31,10 +31,11 @@ CLI runtime:
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
-- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--engine auto|native|tf] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--approve-plan] [--json]`
+- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--engine auto|native|tf] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--approve-plan] [--gate-timeout <seconds>] [-i|--interactive] [--json]`
 - `lineup runs [--status <status>] [--json]`
-- `lineup show <run-id> [--json]`
+- `lineup show <run-id> [-w|--watch] [--json]`
 - `lineup logs <run-id> [--json]`
+- `lineup replay <run-id> [--json]`
 - `lineup resume <run-id> [--json]`
 - `lineup cancel <run-id> [--json]`
 - `lineup validate <file> [--kind <kind>] [--json]`
@@ -87,13 +88,17 @@ Key internals:
 - `cli/src/commands/*.ts` — install/update/uninstall/status/gate handlers
 - `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
-- `cli/src/lib/gate-store.ts` — Gate request/response file persistence
+- `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`
+- `cli/src/lib/interactive-gate.ts` — Interactive stdin gate handler for `--interactive` mode
+- `cli/src/lib/verification.ts` — Auto-detect and run project test/typecheck/lint hooks
 - `cli/src/lib/tactic-convert.ts` — Tactic-to-Workflow auto-converter
 - `cli/src/lib/release.ts` — GitHub release resolution, cache, checksum verification
 - `cli/src/lib/generate.ts` — template rendering using host adapters
 - `cli/src/lib/host-claude.ts` — Claude lifecycle and migration handling
 - `cli/src/lib/host-codex.ts` — Codex global skill sync/uninstall/status
-- `cli/src/lib/validation.ts` — AJV + YAML parsing + schema checks
+- `cli/src/lib/validation.ts` — AJV + YAML parsing + schema checks + agent output validation
+- `cli/src/lib/dag.ts` — Task compilation, cross-cutting detection, read-write dependency analysis
+- `cli/src/commands/replay.ts` — Pipeline run narrative replay
 - `cli/schemas/**` — JSON/YAML schemas
 
 ### Triage-Driven Pipeline Optimizations
@@ -105,6 +110,17 @@ Stage 0 (Triage) produces a lightweight assessment that drives downstream behavi
 - **Parallel architects**: When 2+ independent areas are detected, separate architect agents spawn in parallel. The orchestrator merges their outputs into a single master plan.
 - **Effort-based model selection**: Triage complexity drives model assignment per agent role (haiku/sonnet/opus). User overrides act as a floor — they can upgrade but not downgrade below the effort-assigned level.
 - **Output compression**: `how_it_works` capped at ~500 words, empty YAML sections omitted, structured lists preferred over prose between stages. Snapshots exceeding ~2 KB are compressed to key findings with file path references.
+- **Triage analysis**: The triage stage runs `git diff --stat HEAD` and counts project files to produce a structured assessment (file count, changed files, insertions, deletions). This data feeds into research scoping and model selection.
+- **Verification hooks**: Before the reviewer agent runs, the pipeline auto-detects test/typecheck/lint commands from `package.json` scripts and Makefile targets, executes them (120s timeout each), and feeds structured results (exit code, stdout, stderr, duration) to the reviewer as additional context.
+- **Agent output validation**: After each `agent/done` message, agent outputs are validated against schemas in `cli/schemas/yaml/agent-output/`. On validation failure, a `stage/warning` is emitted and the agent is optionally retried if stage retry settings allow.
+
+### Task Compilation
+
+The plan-to-task compiler in `dag.ts` converts architect plans into executable task DAGs:
+
+- **Cross-cutting detection**: Changes touching >3 files with the same extension in the same directory tree are kept as a single task instead of being split per-file
+- **Read-write dependency edges**: If change A writes to a file that change B reads from, B depends on A (sequential waves). Write-write overlaps go to the same wave (serial).
+- **Wave assignment**: Independent changes with no overlap run in the same wave (parallel). Read-write overlaps produce sequential waves.
 
 ### Lean Skill Architecture
 
@@ -187,13 +203,24 @@ Each gate has a typed `gateType` field:
 | `clarification` | Gate | Research-driven ambiguity resolution |
 | `approval` | Plan-approval | Plan approve/reject |
 | `cache` | Any cached stage | Use cached results or re-run |
-| `verify-decision` | Verify | Retry or accept verification results |
+| `verify-decision` | Verify | Retry failed tasks, accept with warnings, or abort |
 | `custom` | Tactic-defined | Custom gate from tactic `gate: approval` |
 
 The skill reads `gate/request` from stdout, asks the user, then calls
 `lineup gate respond <run-id> <request-id> --choice <value>`. The CLI
 writes pending gate files to `.lineup/runs/<id>/gates/` and blocks until
 a response file appears (atomic write via temp+rename).
+
+**Interactive mode** (`--interactive`): Gates are handled via stdin prompts instead of
+file-based polling, making Lineup usable without a host skill. Each gate type maps to
+a readline prompt (approval → Y/n, clarify → free text, verify-decision → numbered menu).
+
+**Gate timeout** (`--gate-timeout <seconds>`): On timeout, the pipeline saves state as
+`blocked` (not `failed`) and exits cleanly. Blocked runs can be resumed with `lineup resume`.
+
+**Retry UX**: When verification fails (`FAIL` or `PASS_WITH_WARNINGS`), a `verify-decision`
+gate presents three options: retry (re-runs only failed tasks within the same run), accept
+with warnings (pipeline continues), or abort (marks failed).
 
 ### Tactic Auto-Conversion
 
