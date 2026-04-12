@@ -54,6 +54,7 @@ export type ArtifactKind =
   | "tasks"
   | "review"
   | "config"
+  | "protocol"
   | "pipeline-state";
 
 export type ArtifactFormat = "yaml" | "json" | "markdown";

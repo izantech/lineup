@@ -34,6 +34,30 @@ export function projectRoot(cwd = process.cwd()): string {
   return cwd;
 }
 
+export function lineupProjectRoot(cwd = process.cwd()): string {
+  return path.join(projectRoot(cwd), ".lineup");
+}
+
+export function lineupRunsDir(cwd = process.cwd()): string {
+  return path.join(lineupProjectRoot(cwd), ".runs");
+}
+
+export function lineupRunDir(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunsDir(cwd), runId);
+}
+
+export function lineupRunArtifactsDir(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunDir(runId, cwd), "artifacts");
+}
+
+export function lineupRunStateFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunDir(runId, cwd), "pipeline-state.json");
+}
+
+export function lineupArtifactStoreDir(cwd = process.cwd()): string {
+  return path.join(lineupProjectRoot(cwd), ".artifacts");
+}
+
 export function lineupHome(homeDir = os.homedir()): string {
   return path.join(homeDir, ".lineup");
 }

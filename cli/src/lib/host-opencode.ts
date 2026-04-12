@@ -3,8 +3,9 @@ import path from "node:path";
 
 import { OPENCODE_REQUIRED_FILES, OPENCODE_SKILL_DIRS } from "./constants";
 import { CliError } from "./errors";
-import { generateHostFiles, writeGeneratedFiles } from "./generate";
+import { generateHostFiles, loadHostAdapter, writeGeneratedFiles } from "./generate";
 import { opencodeGlobalSkillsDir, opencodeHostRoot } from "./paths";
+import type { LineupMethod } from "./protocol";
 import type { StatusHost } from "./types";
 
 export function ensureOpencodeGenerated(sourceRoot: string, homeDir: string): string {
@@ -60,6 +61,49 @@ function replaceDirectoryAtomic(sourceDir: string, targetDir: string): void {
 
     throw error;
   }
+}
+
+const JSON_RPC_METHOD_MAP: Record<LineupMethod, string> = {
+  "agent/spawn": "spawn",
+  "agent/output": "stream",
+  "agent/done": "complete",
+  "agent/cancel": "cancel",
+  "gate/request": "question",
+  "pipeline/cancel": "cancel",
+  "pipeline/complete": "complete"
+};
+
+export type OpencodeProtocolBridge = {
+  host: "opencode";
+  transport: "json-rpc-2.0";
+  framing: "ndjson";
+  questionPrimitive: string;
+  commands: {
+    kickoff: string;
+    configure: string;
+    explain: string;
+    playbook: string;
+    digest: string;
+  };
+  methodMap: Record<LineupMethod, string>;
+};
+
+export function describeOpencodeProtocolBridge(sourceRoot: string): OpencodeProtocolBridge {
+  const adapter = loadHostAdapter(sourceRoot, "opencode");
+  return {
+    host: "opencode",
+    transport: "json-rpc-2.0",
+    framing: "ndjson",
+    questionPrimitive: adapter.vars.QUESTION_PRIMITIVE,
+    commands: {
+      kickoff: adapter.vars.CMD_KICKOFF,
+      configure: adapter.vars.CMD_CONFIGURE,
+      explain: adapter.vars.CMD_EXPLAIN,
+      playbook: adapter.vars.CMD_PLAYBOOK,
+      digest: adapter.vars.CMD_DIGEST
+    },
+    methodMap: JSON_RPC_METHOD_MAP
+  };
 }
 
 export function installOpencode(sourceRoot: string, homeDir: string): { skills_dir: string; files_verified: number } {

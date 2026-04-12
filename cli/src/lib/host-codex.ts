@@ -3,8 +3,9 @@ import path from "node:path";
 
 import { CODEX_REQUIRED_FILES, CODEX_SKILL_DIRS } from "./constants";
 import { CliError } from "./errors";
-import { generateHostFiles, writeGeneratedFiles } from "./generate";
+import { generateHostFiles, loadHostAdapter, writeGeneratedFiles } from "./generate";
 import { codexGlobalSkillsDir, codexRepoLocalSkillsDir } from "./paths";
+import type { LineupMethod } from "./protocol";
 import type { StatusHost } from "./types";
 
 export function ensureCodexGenerated(sourceRoot: string, outputRoot: string): string {
@@ -59,6 +60,49 @@ function replaceDirectoryAtomic(sourceDir: string, targetDir: string): void {
 
     throw error;
   }
+}
+
+const JSON_RPC_METHOD_MAP: Record<LineupMethod, string> = {
+  "agent/spawn": "spawn",
+  "agent/output": "stream",
+  "agent/done": "complete",
+  "agent/cancel": "cancel",
+  "gate/request": "question",
+  "pipeline/cancel": "cancel",
+  "pipeline/complete": "complete"
+};
+
+export type CodexProtocolBridge = {
+  host: "codex";
+  transport: "json-rpc-2.0";
+  framing: "ndjson";
+  questionPrimitive: string;
+  commands: {
+    kickoff: string;
+    configure: string;
+    explain: string;
+    playbook: string;
+    digest: string;
+  };
+  methodMap: Record<LineupMethod, string>;
+};
+
+export function describeCodexProtocolBridge(sourceRoot: string): CodexProtocolBridge {
+  const adapter = loadHostAdapter(sourceRoot, "codex");
+  return {
+    host: "codex",
+    transport: "json-rpc-2.0",
+    framing: "ndjson",
+    questionPrimitive: adapter.vars.QUESTION_PRIMITIVE,
+    commands: {
+      kickoff: adapter.vars.CMD_KICKOFF,
+      configure: adapter.vars.CMD_CONFIGURE,
+      explain: adapter.vars.CMD_EXPLAIN,
+      playbook: adapter.vars.CMD_PLAYBOOK,
+      digest: adapter.vars.CMD_DIGEST
+    },
+    methodMap: JSON_RPC_METHOD_MAP
+  };
 }
 
 export function installCodex({

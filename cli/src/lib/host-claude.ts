@@ -8,8 +8,9 @@ import {
   LINEUP_PLUGIN_NAME
 } from "./constants";
 import { CliError } from "./errors";
-import { generateHostFiles, prepareClaudePluginSkeleton, writeGeneratedFiles } from "./generate";
+import { generateHostFiles, loadHostAdapter, prepareClaudePluginSkeleton, writeGeneratedFiles } from "./generate";
 import { claudeManagedPluginDir, claudeMarketplaceRoot } from "./paths";
+import type { LineupMethod } from "./protocol";
 import { assertSuccess, runCommand } from "./process";
 import type { StatusHost } from "./types";
 
@@ -54,6 +55,49 @@ function writeMarketplace(root: string, pluginSource: string, version: string): 
   const filePath = path.join(dotClaude, "marketplace.json");
   writeFileSync(filePath, `${JSON.stringify(marketplace, null, 2)}\n`, "utf8");
   return root;
+}
+
+const JSON_RPC_METHOD_MAP: Record<LineupMethod, string> = {
+  "agent/spawn": "spawn",
+  "agent/output": "stream",
+  "agent/done": "complete",
+  "agent/cancel": "cancel",
+  "gate/request": "question",
+  "pipeline/cancel": "cancel",
+  "pipeline/complete": "complete"
+};
+
+export type ClaudeProtocolBridge = {
+  host: "claude";
+  transport: "json-rpc-2.0";
+  framing: "ndjson";
+  questionPrimitive: string;
+  commands: {
+    kickoff: string;
+    configure: string;
+    explain: string;
+    playbook: string;
+    digest: string;
+  };
+  methodMap: Record<LineupMethod, string>;
+};
+
+export function describeClaudeProtocolBridge(sourceRoot: string): ClaudeProtocolBridge {
+  const adapter = loadHostAdapter(sourceRoot, "claude");
+  return {
+    host: "claude",
+    transport: "json-rpc-2.0",
+    framing: "ndjson",
+    questionPrimitive: adapter.vars.QUESTION_PRIMITIVE,
+    commands: {
+      kickoff: adapter.vars.CMD_KICKOFF,
+      configure: adapter.vars.CMD_CONFIGURE,
+      explain: adapter.vars.CMD_EXPLAIN,
+      playbook: adapter.vars.CMD_PLAYBOOK,
+      digest: adapter.vars.CMD_DIGEST
+    },
+    methodMap: JSON_RPC_METHOD_MAP
+  };
 }
 
 export function prepareClaudePluginFromSource(sourceRoot: string, version: string): string {

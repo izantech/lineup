@@ -4,6 +4,21 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import type { HostName } from "./constants.js";
+import { createArtifactStore } from "./artifact-store.js";
+import {
+  createLineupNotification,
+  createLineupRequest,
+  encodeNdjsonMessage,
+  type LineupProtocolMessage
+} from "./protocol.js";
+import { lineupArtifactStoreDir, lineupRunArtifactsDir, lineupRunDir } from "./paths.js";
+import {
+  appendPipelineCompletedStage,
+  defaultPipelineState,
+  markPipelineCurrentStage,
+  savePipelineState,
+  updatePipelineArtifactHashes
+} from "./state.js";
 import { parseWorkflowYaml } from "./validation.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
@@ -44,10 +59,59 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
 
   // 4. Setup directories
   const projectRoot = resolve(".");
-  const artifactDir = resolve(projectRoot, ".lineup", ".ephemeral", runId);
+  const runRoot = lineupRunDir(runId, projectRoot);
+  const artifactDir = lineupRunArtifactsDir(runId, projectRoot);
   const cacheDir = resolve(projectRoot, ".lineup", ".cache");
+  const artifactStore = createArtifactStore(lineupArtifactStoreDir(projectRoot));
+  const protocolMessages: LineupProtocolMessage[] = [];
+  let protocolSequence = 0;
+  let protocolRequestId = 1;
   mkdirSync(artifactDir, { recursive: true });
   mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(runRoot, { recursive: true });
+
+  const gitTreeSha = resolveGitTreeSha(projectRoot);
+  let pipelineState = savePipelineState(
+    defaultPipelineState({
+      runId,
+      workflow: workflowPath,
+      gitTreeSha,
+      status: "running"
+    }),
+    projectRoot
+  );
+
+  const emitProtocol = (message: LineupProtocolMessage): void => {
+    protocolMessages.push(message);
+    process.stdout.write(`${encodeNdjsonMessage(message)}\n`);
+  };
+
+  const emitStatus = (stageId: string, chunk: string, final = false): void => {
+    protocolSequence += 1;
+    emitProtocol(
+      createLineupNotification({
+        method: "agent/output",
+        params: {
+          runId,
+          stageId,
+          channel: "status",
+          sequence: protocolSequence,
+          chunk,
+          ...(final ? { final: true } : {})
+        }
+      })
+    );
+  };
+
+  const persistProtocolArtifact = (): void => {
+    const protocolRecord = artifactStore.persistJson("protocol", protocolMessages);
+    pipelineState = savePipelineState(
+      updatePipelineArtifactHashes(pipelineState, {
+        protocol: protocolRecord.sha256
+      }),
+      projectRoot
+    );
+  };
 
   let status: "success" | "failed" | "aborted" = "success";
   const stageResults = new Map<string, StageResult>();
@@ -78,6 +142,14 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
       const configYaml = generateTfConfig(tfCtx);
       const configPath = resolve(artifactDir, "tf-config.yaml");
       writeFileSync(configPath, configYaml, "utf-8");
+      const configRecord = artifactStore.persistText("config", configYaml, "yaml");
+      pipelineState = savePipelineState(
+        updatePipelineArtifactHashes(pipelineState, {
+          config: configRecord.sha256
+        }),
+        projectRoot
+      );
+      persistProtocolArtifact();
       return { runId, status: "success", stageResults: new Map<string, StageResult>(), tfOutputDir: artifactDir };
     }
 
@@ -102,36 +174,62 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
     for (const wave of waves) {
       for (const stageId of wave) {
         const stage = workflow.stages.find((s) => s.id === stageId)!;
+        pipelineState = savePipelineState(markPipelineCurrentStage(pipelineState, stageId), projectRoot);
 
         // Evaluate condition/skip_if
         if (stage.condition && !evaluateExpression(stage.condition, expressionCtx)) {
+          emitStatus(stageId, `Skipped stage '${stageId}' because condition evaluated to false.`, true);
           stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
           expressionCtx.stages[stageId] = { outputs: {} };
+          pipelineState = savePipelineState(appendPipelineCompletedStage(pipelineState, stageId), projectRoot);
           continue;
         }
         if (stage.skip_if && evaluateExpression(stage.skip_if, expressionCtx)) {
+          emitStatus(stageId, `Skipped stage '${stageId}' because skip_if evaluated to true.`, true);
           stageResults.set(stageId, { id: stageId, status: "skipped", outputs: {} });
           expressionCtx.stages[stageId] = { outputs: {} };
+          pipelineState = savePipelineState(appendPipelineCompletedStage(pipelineState, stageId), projectRoot);
           continue;
         }
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = executePreStage(stage, expressionCtx, projectRoot);
+          const result = executePreStage(stage, expressionCtx, projectRoot, emitStatus);
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
 
         } else if (stageId === "plan") {
           // Phase 1: invoke planner adapter directly
           const planResult = await executePlannerPhase(
-            stage, workflow, expressionCtx, host, projectRoot, artifactDir
+            stage,
+            workflow,
+            expressionCtx,
+            host,
+            projectRoot,
+            artifactDir,
+            runId,
+            () => protocolRequestId++,
+            emitProtocol,
+            emitStatus
           );
           stageResults.set(stageId, planResult);
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
 
         } else if (stageId === "plan-approval") {
           // Output approval protocol message — host handles user interaction
-          console.log("LINEUP:approval:plan");
+          emitProtocol(
+            createLineupRequest({
+              method: "gate/request",
+              id: protocolRequestId++,
+              params: {
+                runId,
+                stageId,
+                question: "Approve the generated plan?",
+                choices: ["approve", "reject"],
+                defaultChoice: "approve"
+              }
+            })
+          );
           const approvalResult: StageResult = { id: stageId, status: "complete", outputs: { approved: true } };
           stageResults.set(stageId, approvalResult);
           expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
@@ -140,7 +238,13 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
           // Phase 2: invoke TF with passthrough planner for workers + validator
           if (stageId === "implement") {
             const tfResult = await executeTfPhase(
-              workflow, expressionCtx, host, projectRoot, artifactDir, options.timeout
+              workflow,
+              expressionCtx,
+              host,
+              projectRoot,
+              artifactDir,
+              options.timeout,
+              emitStatus
             );
             stageResults.set("implement", tfResult.implementResult);
             stageResults.set("verify", tfResult.verifyResult);
@@ -150,16 +254,56 @@ export async function runPipeline(options: RunOptions): Promise<PipelineResult> 
           // verify is handled together with implement in TF invocation
 
         } else if (postStages.has(stageId)) {
-          const result = executePostStage(stage, expressionCtx, projectRoot);
+          const result = executePostStage(stage, expressionCtx, projectRoot, emitStatus);
           stageResults.set(stageId, result);
         }
+
+        pipelineState = savePipelineState(appendPipelineCompletedStage(pipelineState, stageId), projectRoot);
       }
     }
 
+    emitProtocol(
+      createLineupNotification({
+        method: "pipeline/complete",
+        params: {
+          runId,
+          status,
+          completedAt: new Date().toISOString(),
+          summary: "Pipeline completed successfully."
+        }
+      })
+    );
+    persistProtocolArtifact();
+    pipelineState = savePipelineState(
+      {
+        ...markPipelineCurrentStage(pipelineState, null),
+        status: "succeeded"
+      },
+      projectRoot
+    );
     // 10. Cleanup on success
     cleanup(artifactDir, cacheDir, true);
   } catch (error) {
     status = "failed";
+    emitProtocol(
+      createLineupNotification({
+        method: "pipeline/complete",
+        params: {
+          runId,
+          status,
+          completedAt: new Date().toISOString(),
+          summary: error instanceof Error ? error.message : String(error)
+        }
+      })
+    );
+    persistProtocolArtifact();
+    pipelineState = savePipelineState(
+      {
+        ...markPipelineCurrentStage(pipelineState, null),
+        status: "failed"
+      },
+      projectRoot
+    );
     // Cleanup on error (keep cache for debugging)
     cleanup(artifactDir, cacheDir, false);
     throw error;
@@ -189,6 +333,19 @@ function detectHost(): HostName {
   throw new Error("No supported host CLI found (claude, codex, or opencode).");
 }
 
+function resolveGitTreeSha(projectRoot: string): string | undefined {
+  try {
+    return execSync("git rev-parse HEAD^{tree}", {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "ignore"]
+    })
+      .toString()
+      .trim();
+  } catch {
+    return undefined;
+  }
+}
+
 function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): void {
   console.log("LINEUP:pipeline:dry-run");
   for (let i = 0; i < waves.length; i++) {
@@ -203,18 +360,18 @@ function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): vo
 function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
-  projectRoot: string
+  projectRoot: string,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
 ): StageResult {
-  // Output protocol message for the host orchestrator to handle
-  console.log(`LINEUP:stage:start id=${stage.id} type=${stage.type}`);
+  emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
   if (stage.type === "builtin") {
-    console.log(`LINEUP:stage:builtin id=${stage.id}`);
+    emitStatus(stage.id, `Executing builtin stage '${stage.id}'.`);
   } else if (stage.type === "reasoning") {
-    console.log(`LINEUP:stage:reasoning id=${stage.id}`);
+    emitStatus(stage.id, `Executing reasoning stage '${stage.id}'.`);
   } else if (stage.type === "agent") {
-    console.log(`LINEUP:stage:spawn agent=${stage.agent} id=${stage.id}`);
+    emitStatus(stage.id, `Spawning ${stage.agent ?? "unknown"} for stage '${stage.id}'.`);
   }
-  console.log(`LINEUP:stage:complete id=${stage.id}`);
+  emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
   return { id: stage.id, status: "complete", outputs: {} };
 }
 
@@ -224,7 +381,11 @@ async function executePlannerPhase(
   ctx: ExpressionContext,
   host: HostName,
   projectRoot: string,
-  artifactDir: string
+  artifactDir: string,
+  runId: string,
+  nextRequestId: () => number,
+  emitProtocol: (message: LineupProtocolMessage) => void,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
 ): Promise<StageResult> {
   // Generate adapters
   const adaptersCtx: AdapterGenerationContext = {
@@ -237,15 +398,25 @@ async function executePlannerPhase(
   };
   const adapterPaths = generateTfAdapters(adaptersCtx);
 
-  // Invoke planner adapter directly (Phase 1)
-  console.log("LINEUP:stage:start id=plan type=agent agent=architect");
-  console.log(`LINEUP:planner:invoke adapter=${adapterPaths.planner.adapterPath}`);
+  emitProtocol(
+    createLineupRequest({
+      method: "agent/spawn",
+      id: nextRequestId(),
+      params: {
+        runId,
+        stageId: stage.id,
+        agent: stage.agent ?? "architect",
+        prompt: `Invoke planner adapter at ${adapterPaths.planner.adapterPath}`,
+        timeoutMs: 300000,
+        retryAttempt: 0
+      }
+    })
+  );
 
   // The host orchestrator reads this and invokes the planner
   // The planner output (TaskManifest YAML) is written to artifactDir
   const manifestPath = resolve(artifactDir, "planner-output.yaml");
-  console.log(`LINEUP:planner:output path=${manifestPath}`);
-  console.log("LINEUP:stage:complete id=plan");
+  emitStatus(stage.id, `Planner output will be written to ${manifestPath}.`, true);
 
   return {
     id: stage.id,
@@ -260,7 +431,8 @@ async function executeTfPhase(
   host: HostName,
   projectRoot: string,
   artifactDir: string,
-  timeout?: number
+  timeout?: number,
+  emitStatus?: (stageId: string, chunk: string, final?: boolean) => void
 ): Promise<{ implementResult: StageResult; verifyResult: StageResult }> {
   const manifestPath = ctx.stages["plan"]?.outputs?.manifestPath as string;
   if (!manifestPath) {
@@ -285,17 +457,15 @@ async function executeTfPhase(
   const inputPath = resolve(artifactDir, "request.txt");
   // Input will be populated by the host orchestrator
 
-  // Invoke TF
-  console.log("LINEUP:tf:invoke");
-  console.log(`LINEUP:tf:config path=${configPath}`);
-  console.log(`LINEUP:tf:command task-foundry --config ${configPath} --input-file ${inputPath}`);
+  emitStatus?.("implement", `Invoking Task Foundry bridge with config ${configPath}.`);
   if (timeout) {
-    console.log(`LINEUP:tf:timeout ${timeout}`);
+    emitStatus?.("implement", `Task Foundry timeout configured for ${timeout}ms.`);
   }
 
   // TF output directory
   const tfOutputDir = resolve(projectRoot, ".runner-output");
-  console.log(`LINEUP:tf:output dir=${tfOutputDir}`);
+  emitStatus?.("implement", `Task Foundry output directory is ${tfOutputDir}.`, true);
+  emitStatus?.("verify", `Verification will read Task Foundry output from ${tfOutputDir}.`, true);
 
   return {
     implementResult: { id: "implement", status: "complete", outputs: { tfOutputDir } },
@@ -306,28 +476,22 @@ async function executeTfPhase(
 function executePostStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
-  projectRoot: string
+  projectRoot: string,
+  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
 ): StageResult {
-  console.log(`LINEUP:stage:start id=${stage.id} type=${stage.type}`);
+  emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
   if (stage.type === "agent") {
-    console.log(`LINEUP:stage:spawn agent=${stage.agent} id=${stage.id}`);
+    emitStatus(stage.id, `Spawning ${stage.agent ?? "unknown"} for stage '${stage.id}'.`);
   }
-  console.log(`LINEUP:stage:complete id=${stage.id}`);
+  emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
   return { id: stage.id, status: "complete", outputs: {} };
 }
 
 function cleanup(artifactDir: string, cacheDir: string, success: boolean): void {
-  // Always clean ephemeral artifacts
-  try {
-    rmSync(artifactDir, { recursive: true, force: true });
-  } catch {}
-
   // Clean cache only on success
   if (success && existsSync(cacheDir)) {
     try {
       rmSync(cacheDir, { recursive: true, force: true });
     } catch {}
   }
-
-  console.log("LINEUP:pipeline:complete");
 }
