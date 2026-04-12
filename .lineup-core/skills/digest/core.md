@@ -60,9 +60,10 @@ Check whether Ollama is available for use by researcher agents.
       model list, set `OLLAMA_AVAILABLE = true` and store `OLLAMA_MODEL` from the
       `model` field in the YAML.
 
-   b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
-      "Warning: Ollama is enabled in config but the MCP server is not available.
-      Run `claude mcp add ollama -- npx -y ollama-mcp` to set it up."
+    b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
+       "Warning: Ollama is enabled in config but the MCP server is not available.
+       Register the Ollama MCP server using your host's configuration method
+       (e.g., for Claude: `claude mcp add ollama -- npx -y ollama-mcp`)."
 
 Store in working context:
 - `OLLAMA_AVAILABLE` — boolean, whether Ollama is ready for use
@@ -117,8 +118,9 @@ When `OLLAMA_AVAILABLE = true`, augment each researcher spawn as follows:
 ### Research output
 
 Each researcher should return a structured summary (bullet lists with file paths).
-Cap each researcher's output at ~1500 words. If a researcher's output exceeds this,
-compress to key findings with file path references before passing to Phase 2.
+Cap each researcher's output at ~1500 words. If a researcher's output exceeds ~2 KB,
+write it to `.lineup/.ephemeral/research-<area>.yaml` and pass a file reference to
+Phase 2 instead of embedding inline.
 
 ---
 
@@ -171,8 +173,7 @@ Followed by the document title and content organized per the architect's outline
 
 ## Completion
 
-After the documenter finishes, report the result:
+After the documenter finishes, clean up any files written to `.lineup/.ephemeral/`
+during this pipeline run, then report the result:
 
 "Digest written to `<target-path>`. The file can be regenerated anytime with `{{CMD_DIGEST}}`."
-
-No cleanup needed — this skill does not use `.lineup/.ephemeral/` or `.lineup/.cache/`.

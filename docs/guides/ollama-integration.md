@@ -70,7 +70,7 @@ During kick-off initialization (before Stage 1), the orchestrator reads the host
 
 At Stage 2 (Research), for every researcher spawned while `OLLAMA_AVAILABLE = true`:
 
-- The tools `mcp__ollama__ollama_chat` and `mcp__ollama__ollama_generate` are appended to the researcher's tool list.
+- The tools `mcp__ollama__ollama_chat`, `mcp__ollama__ollama_generate`, `mcp__ollama__ollama_web_search`, and `mcp__ollama__ollama_web_fetch` are appended to the researcher's tool list.
 - The researcher's spawn prompt includes instructions explaining which tasks to delegate to Ollama and which to handle directly.
 
 No other stages are affected. The architect, developer, reviewer, and documenter agents do not receive Ollama tools.

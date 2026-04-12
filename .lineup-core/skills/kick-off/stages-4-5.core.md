@@ -1,6 +1,6 @@
 ## Stage 4 -- Plan
 
->  **Stage 4/7: Plan**
+> **Stage 4/7: Plan**
 
 Spawn one or more `architect` agents to create an implementation plan.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent). The triage
@@ -68,7 +68,7 @@ If only one area exists, spawn a single architect (current behavior).
 
 ## Stage 5 -- Implement
 
->  **Stage 5/7: Implement**
+> **Stage 5/7: Implement**
 
 Spawn one or more `developer` agents to execute the approved plan.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent).
@@ -108,10 +108,8 @@ Write stage output to `.lineup/.cache/<stage>-<hash>.yaml`, where:
 
 ### Cache key
 
-The cache key is the concatenation of:
-
-1. The user's original task prompt (verbatim)
-2. The triage assessment output (Stage 0)
+The cache key is computed by serializing `{prompt: <task_prompt>, triage: <triage_output>}`
+as JSON in fixed field order, then taking the SHA-256 hex digest.
 
 This produces a deterministic hash that invalidates when the task or its
 classification changes but remains stable across re-runs of the same task.
@@ -142,8 +140,7 @@ Support a `--from-stage N` argument to the kick-off command. When provided:
 
 ### Cache lifecycle
 
-- Cache files are **ephemeral** -- they are cleaned up by Pipeline Cleanup at
-  the end of every pipeline run.
+- Cache files are cleaned up on successful pipeline completion. Interrupted-run
+  cache files persist until the next successful completion, supporting `--from-stage`
+  restarts.
 - The `.lineup/.cache/` directory is created on first use (no pre-setup required).
-- Cache files from interrupted runs persist until the next successful pipeline
-  completion.

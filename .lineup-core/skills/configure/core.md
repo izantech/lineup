@@ -97,8 +97,11 @@ Present the configuration options using **{{QUESTION_PRIMITIVE}}**. Offer these 
   1. Check if Ollama is installed by running `ollama --version` via Bash. If the
      command fails or is not found, provide install instructions (`https://ollama.com`)
      and stop.
-  2. Check if the MCP server is configured by looking for `ollama` in the MCP config.
-     If not found, offer to run `claude mcp add ollama -- npx -y ollama-mcp` via Bash.
+   2. Check if the MCP server is configured by looking for `ollama` in the MCP config.
+      If not found, offer to run the host's MCP add command. Detect which host
+      the pipeline is running on and use the appropriate command (e.g., for Claude:
+      `claude mcp add ollama -- npx -y ollama-mcp`). For other hosts, guide the
+      user to register the MCP server using that host's configuration method.
   3. Ask which model to use. Run `ollama list` via Bash to show available models.
      Default recommendation: `llama3.1:8b` or whatever model is already pulled.
   4. Write `{{OLLAMA_CONFIG_PATH}}`:

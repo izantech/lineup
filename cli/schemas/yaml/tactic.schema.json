@@ -55,7 +55,12 @@
           }
         },
         "if": { "properties": { "tactic": true }, "required": ["tactic"] },
-        "then": { "not": { "properties": { "type": true, "agent": true }, "required": ["type", "agent"] } },
+        "then": {
+          "allOf": [
+            { "not": { "properties": { "type": true }, "required": ["type"] } },
+            { "not": { "properties": { "agent": true }, "required": ["agent"] } }
+          ]
+        },
         "else": { "properties": { "type": true, "agent": true }, "required": ["type", "agent"] }
       }
     },

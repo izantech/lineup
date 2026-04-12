@@ -14,7 +14,7 @@ Lineup uses specialized subagents for different stages of the pipeline. Each age
 | **Documenter** | Opus | Read-only + Write + Web | Generates project documentation |
 | **Teacher** | Opus | Read-only + Web | Explains codebase components |
 
-The "Default Model" column shows the model used for simple-complexity tasks. The orchestrator is the main Claude Code session itself -- it's not a subagent file, but the top-level coordinator that delegates to the others.
+The "Default Model" column shows the model used for simple-complexity tasks. The orchestrator is the top-level coordinator that manages and delegates to host-specific subagents.
 
 ## Effort-based model selection
 
@@ -122,6 +122,8 @@ Key differences from standard subagent mode:
 - **No sub-teammates**: teammates cannot spawn their own teammates. Nesting is blocked by the platform.
 
 If `TeamCreate` is not available (standard Claude Code without the experiment flag, Codex CLI, or OpenCode), the pipeline falls back to the standard subagent path transparently -- no configuration change needed.
+
+Teams mode also falls back to standard subagents when the terminal is narrower than 80 columns or when terminal width detection fails.
 
 ## Full configuration reference
 

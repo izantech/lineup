@@ -1,3 +1,5 @@
+<!-- architect-ollama.md: Conditional appendix appended to architect spawn prompts when OLLAMA_AVAILABLE = true -->
+
 ## Ollama-Assisted Planning
 
 You have access to Ollama tools (`mcp__ollama__ollama_chat`, `mcp__ollama__ollama_generate`)

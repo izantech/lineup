@@ -39,7 +39,7 @@ This builds the CLI from source, installs it globally, and installs skills for a
 
 ## Project structure
 
-```
+```text
 .lineup-core/skills/**        Canonical workflow templates (source of truth)
 .lineup-core/hosts/*.json     Host adapter maps (claude, codex, opencode)
 agents/*.md                   Shared agent definitions

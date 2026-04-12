@@ -1,6 +1,6 @@
 ## Stage 1 -- Clarify
 
->  **Stage 1/7: Clarify**
+> **Stage 1/7: Clarify**
 
 Refine the request before any work begins using **structured questions**.
 
@@ -14,7 +14,7 @@ Refine the request before any work begins using **structured questions**.
 
 ## Stage 2 -- Research
 
->  **Stage 2/7: Research**
+> **Stage 2/7: Research**
 
 Spawn one or more `researcher` agents to explore the codebase and gather context.
 Follow the **Agent Spawning** rules in `SKILL.md` for spawn mode (team or subagent).
@@ -50,7 +50,7 @@ When `OLLAMA_AVAILABLE = true`, augment each researcher spawn:
 
 ## Stage 3 -- Clarification Gate
 
->  **Stage 3/7: Clarification Gate**
+> **Stage 3/7: Clarification Gate**
 
 Review the research findings and identify any remaining ambiguities.
 

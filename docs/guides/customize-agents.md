@@ -119,7 +119,7 @@ The frontmatter defaults (Haiku for researcher, Opus for others) are the baselin
 
 Your `/lineup:configure` overrides act as a **floor** -- the orchestrator never uses a model lower than your override, but may use a higher one when effort requires it. Consider setting overrides when:
 
-- **Cost is a concern:** Set a Sonnet floor for agents that effort might upgrade to Opus. For simple tasks, effort will keep them on a lighter model anyway.
+- **Cost is a concern:** Set a Sonnet floor for agents that effort might upgrade to Opus. A Sonnet floor is a minimum model level that will elevate roles that would otherwise run Haiku on simple tasks — for simple tasks, effort keeps them at the floor; for moderate/complex tasks, effort may still upgrade them above the floor.
 - **Quality is always critical:** Set an Opus floor for specific agents to guarantee they never run below Opus, regardless of complexity.
 - **Speed matters more than depth:** Set all agents to Haiku. Effort will still upgrade them for moderate/complex tasks, but simple tasks stay fast.
 

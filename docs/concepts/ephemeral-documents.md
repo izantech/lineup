@@ -15,9 +15,9 @@ The only files Lineup writes to your project are the actual code changes (from t
 During a pipeline run, Lineup may use two temporary directories under `.lineup/`:
 
 - **`.lineup/.cache/`** -- stage result cache for `--from-stage` restarts (keyed by task prompt + triage hash)
-- **`.lineup/.ephemeral/`** -- transient files for large intermediate outputs that exceed the ~2 KB snapshot threshold
+- **`.lineup/.ephemeral/`** -- transient files for large intermediate outputs that exceed the ~2 KB compression threshold. After compression, outputs still exceeding 500 bytes are written here and passed as file references instead of inline content.
 
-Both are ephemeral. Cache files persist across runs to support restarts but are not repository artifacts. Ephemeral files are cleaned up automatically during Stage 6 (Verify) and pipeline cleanup. Neither directory needs to be tracked in version control.
+Both are ephemeral. Cache files persist until the next successful pipeline completion to support restarts. Ephemeral files are cleaned up during Pipeline Cleanup (after Stage 7 or on abort/error). Neither directory needs to be tracked in version control.
 
 ## The YAML format
 

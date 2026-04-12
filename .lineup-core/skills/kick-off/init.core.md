@@ -206,7 +206,7 @@ Before executing stages, expand any tactic references into their constituent sta
    in the stack. If so, report an error:
    "Error: Circular tactic reference detected: <stack trace as A -> B -> A>.
    Aborting tactic execution."
-   Use **AskUserQuestion** to let the user choose: abort or run the default pipeline.
+   Use **{{QUESTION_PRIMITIVE}}** to let the user choose: abort or run the default pipeline.
 3. **Variable scoping**: When inlining tactic B into tactic A:
    - Variables defined in A override B's defaults for any `${var}` references that
      share the same name.
@@ -262,8 +262,9 @@ Before checking for Teams availability, detect the terminal width:
    section (Detection, Creating the team, etc.). Log briefly:
    "Note: Terminal width (<N> cols) below 80 — using standard agents."
 3. If the command fails (non-zero exit, no output, or non-numeric output), log a
-   warning: "Warning: Could not detect terminal width — assuming wide terminal."
-   Then continue to Detection below. Do not abort the pipeline over a failed width check.
+   warning: "Warning: Could not detect terminal width — disabling Teams mode."
+   Set `TEAMS_MODE = false` and skip the rest of this section. Do not abort the
+   pipeline over a failed width check.
 4. If the width is **80 or greater**, continue to Detection below.
 
 ### Detection
@@ -344,10 +345,18 @@ After Team Setup, check whether Ollama is available for use by researcher agents
 1. Check if `{{OLLAMA_CONFIG_PATH}}` exists. If the file does not exist or cannot be
    read, set `OLLAMA_AVAILABLE = false` and skip the rest of this section silently.
 
-2. Read the file and parse the YAML. If `enabled` is missing or `false`, set
+2. Read the file and parse the YAML. Validate the config:
+   - `enabled` must be a boolean
+   - `model` must be a non-empty string
+   - `scope` must be present
+   If validation fails, set `OLLAMA_AVAILABLE = false`, log:
+   "Warning: Ollama config is invalid (<specific issue>). Disabling Ollama."
+   and skip the rest of this section.
+
+3. If validation passes but `enabled` is `false`, set
    `OLLAMA_AVAILABLE = false` and skip silently.
 
-3. If `enabled: true`, verify the MCP server is actually running. Use ToolSearch
+4. If `enabled: true`, verify the MCP server is actually running. Use ToolSearch
    with query `"select:mcp__ollama__ollama_list"` to check if the tool is available.
 
    a. If the tool is found and calling `mcp__ollama__ollama_list` returns a non-empty

@@ -22,6 +22,7 @@ Canonical field reference:
 | `stages` | top | Yes | ordered list, at least one stage |
 | `stages[].type` | stage | Yes | `clarify`, `research`, `clarification-gate`, `plan`, `implement`, `verify`, `document`, `explain` |
 | `stages[].agent` | stage | Yes | `researcher`, `architect`, `developer`, `reviewer`, `documenter`, `teacher` |
+| `stages[].tactic` | stage | Conditional | kebab-case tactic name (mutually exclusive with `type`/`agent`) |
 | `stages[].prompt` | stage | No | pipe-block string, custom instructions |
 | `stages[].optional` | stage | No | `true` or `false` (default: `false`) |
 | `stages[].gate` | stage | No | `approval` or omitted |
@@ -153,10 +154,14 @@ If a pattern is selected, pre-populate stages and let the user customize each.
 
 For each stage, collect four pieces:
 
-1. **Type and agent** — select type via **{{QUESTION_PRIMITIVE}}**, use conventional agent as default.
-2. **Custom prompt** (optional) — ask if the agent needs specific instructions. Allow `${variable_name}` references.
-3. **Optional flag** — ask if the stage should be skippable at runtime. Default: No.
-4. **Gate** — ask if an approval gate should follow this stage. Default: No.
+1. **Direct stage or composed tactic?** — Ask first whether this stage runs directly
+   (with `type`/`agent`) or inlines another tactic (with `tactic`). If composed
+   tactic, collect the tactic name and validate it references an existing tactic.
+   `tactic` is mutually exclusive with `type`/`agent`.
+2. **Type and agent** (if direct) — select type via **{{QUESTION_PRIMITIVE}}**, use conventional agent as default.
+3. **Custom prompt** (optional) — ask if the agent needs specific instructions. Allow `${variable_name}` references.
+4. **Optional flag** — ask if the stage should be skippable at runtime. Default: No.
+5. **Gate** — ask if an approval gate should follow this stage. Default: No.
 
 After each stage, show the current stage list and ask: "Add another stage or done?"
 
@@ -196,7 +201,9 @@ After all variables are defined:
 
 Check: name present/valid, description present, stages non-empty, valid types/agents,
 boolean `optional`, `gate` values are `approval`, variable names valid snake_case,
-all `${var}` references resolve.
+all `${var}` references resolve. Validate that `tactic` fields reference existing
+tactics and that no stage combines `tactic` with `type` or `agent`. Check for
+circular tactic references (a tactic referencing itself directly or indirectly).
 
 If errors exist, loop back to the relevant step.
 
@@ -248,7 +255,9 @@ Formatting rules:
 - `prompt` uses pipe-block with 6-space indent.
 - `verification` items are double-quoted strings.
 - `variables`: unquoted `name`, double-quoted `description`/`default`.
+- `tactic` stages use `tactic: <name>` instead of `type`/`agent`.
 - Omit `optional`/`gate` when false/absent. Omit empty sections.
+- `tactic` is mutually exclusive with `type`/`agent` — never include both in the same stage.
 - Trailing newline.
 
 Ask: "Write to `.lineup/tactics/<name>.yaml`?" — Yes / Go back / Cancel.

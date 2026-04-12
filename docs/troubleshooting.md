@@ -22,6 +22,7 @@ Install or re-install host assets:
 
 ```bash
 lineup install --host claude
+lineup install --host codex
 lineup install --host opencode
 ```
 
@@ -30,6 +31,8 @@ Force non-interactive recovery:
 ```bash
 lineup install --host claude --yes
 lineup update --host claude --version latest --yes
+lineup install --host codex --yes
+lineup update --host codex --version latest --yes
 lineup install --host opencode --yes
 lineup update --host opencode --version latest --yes
 ```
@@ -175,6 +178,7 @@ Refresh the host install from the latest release:
 
 ```bash
 lineup update --host claude --version latest --yes
+lineup update --host codex --version latest --yes
 lineup update --host opencode --version latest --yes
 ```
 
@@ -182,6 +186,7 @@ Then verify status:
 
 ```bash
 lineup status --host claude
+lineup status --host codex
 lineup status --host opencode
 ```
 
@@ -189,6 +194,7 @@ If needed, reinstall:
 
 ```bash
 lineup install --host claude --yes
+lineup install --host codex --yes
 lineup install --host opencode --yes
 ```
 
@@ -272,14 +278,14 @@ updates. The CLI refreshes generated host assets during update/install.
 **Solution:**
 
 Run `/lineup:configure` to re-apply your preferred settings. Customizations are
-stored in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode) and survive future updates when managed through overrides.
+stored in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode) and survive future updates when managed through overrides.
 
 ## Override file issues
 
 **Symptom:** An agent is using unexpected settings despite your customization,
 or the configurator shows a version mismatch warning.
 
-**Diagnosis:** The override file in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode) may reference settings from an older plugin version.
+**Diagnosis:** The override file in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode) may reference settings from an older plugin version.
 
 **Solution:**
 
@@ -287,4 +293,4 @@ or the configurator shows a version mismatch warning.
 2. The configurator marks overridden fields with `*` so you can see what's
    customized vs default.
 3. Use **Reset** to clear all overrides and start fresh if needed.
-4. You can also manually inspect or delete files in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.config/opencode/lineup/agents/` for OpenCode).
+4. You can also manually inspect or delete files in the host override directory (`~/.claude/lineup/agents/` for Claude, `~/.codex/lineup/agents/` for Codex, `~/.config/opencode/lineup/agents/` for OpenCode).

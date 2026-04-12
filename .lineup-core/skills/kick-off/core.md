@@ -36,10 +36,11 @@ conversation history. This keeps downstream agents focused and reduces token cos
 - The user can always ask to see any document from any stage -- snapshots control what
   agents receive, not what the user can access.
 
-### Snapshot size threshold
+### Snapshot compression threshold (~2 KB)
 
-Each context snapshot should stay under ~2 KB of text. When a snapshot exceeds
-this threshold, compress it to key findings with file path references. Strip
+Each context snapshot should stay under ~2 KB of text. This threshold governs
+**content size management** — when a snapshot exceeds ~2 KB, compress it to key
+findings with file path references before passing it to the next agent. Strip
 inline code blocks, raw file contents, and verbose explanations. Retain:
 structured lists, file paths, function/class names, and one-line summaries.
 
@@ -51,12 +52,13 @@ contents. Retain: structured lists, file paths, function/class names, one-line
 summaries. Keep under 2 KB." Replace the snapshot content with the Ollama output
 before passing it to the next agent.
 
-### Snapshot streaming
+### Snapshot streaming threshold (500 bytes)
 
-When a snapshot exceeds **500 bytes**, write it to `.lineup/.ephemeral/` and pass
-a file path reference to the downstream agent instead of embedding it inline.
-This keeps the orchestrator's conversation lean and lets each agent read only
-what it needs.
+After compression, if the snapshot still exceeds **500 bytes**, write it to
+`.lineup/.ephemeral/` and pass a file path reference to the downstream agent
+instead of embedding it inline. This threshold governs **inline vs
+file-reference delivery** — small payloads stay inline (cheaper than an extra
+file read), large payloads go to disk.
 
 File naming: `snapshot-<from-stage>-<to-stage>-<hash>.yaml` (e.g.,
 `snapshot-2-3-a1b2c3.yaml`). The hash is the first 6 characters of the SHA-256
@@ -284,14 +286,14 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Omit empty sections**: When passing agent output YAML downstream, strip any sections that are empty, null, or contain only placeholder values (e.g., `gaps: []`, `risks: null`). Do not pass skeleton structure -- pass only sections with substantive content.
 - **Prefer structured lists over prose**: When compressing agent output between stages, convert prose paragraphs to bullet-point lists with file path references. Downstream agents parse lists faster and more accurately than paragraphs.
 - **Clean up ephemeral artifacts**: Agents may write intermediate files to `.lineup/.ephemeral/`
-  during the pipeline. These files are **ephemeral** -- they must be cleaned up once they are
+  during the pipeline. These files are **ephemeral** — they must be cleaned up once they are
   no longer needed. Only files produced by Stage 5 (implementation code) and Stage 7
   (documentation markdown) should persist after the pipeline completes.
 - **Run artifact cleanup on any pipeline exit**: Whenever the pipeline ends — whether at
-  Stage 6 completion, on user abort, or on an error that terminates a stage early — delete
-  all files in `.lineup/.ephemeral/` and `.lineup/.cache/`, plus any other untracked YAML
-  reports or plan drafts not part of Stage 5 or Stage 7 output. Apply this same cleanup
-  before returning control to the user in any pipeline tier.
+  Stage 7 completion, on user abort, or on an error that terminates a stage early — delete
+  all files in `.lineup/.ephemeral/`. Only delete files in `.lineup/.cache/` after
+  successful pipeline completion. Never delete files outside these managed directories.
+  Apply this same cleanup before returning control to the user in any pipeline tier.
 - **Always run Pipeline Cleanup** at the end of the pipeline when `TEAMS_MODE = true`. This applies to all pipeline tiers (Full, Lightweight, Direct) and to tactic pipelines.
 - **Assign effort-based models**: Use the effort mapping table in `STAGES-1-3.md` to select
   the model for each agent spawn. User overrides act as a **floor** — an override can upgrade
@@ -299,6 +301,6 @@ When a stage is skipped, note it briefly before moving to the next stage.
 - **Cache stage results**: After each stage completes, write its output to `.lineup/.cache/`
   using the format defined in `STAGES-4-5.md`. Before spawning agents for a stage, check for
   cached output with a matching hash. Support `--from-stage N` to restart from a specific stage.
-- **Use file references for transient data**: When agent output exceeds the ~2 KB snapshot
+- **Use file references for transient data**: When agent output exceeds the ~2 KB compression
   threshold, write it to `.lineup/.ephemeral/` and pass a file path reference to the downstream
   agent instead of embedding inline. See `STAGES-6-7.md` for the transient file lifecycle.

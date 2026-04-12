@@ -48,18 +48,21 @@ Claude:
 - `/lineup:configure`
 - `/lineup:explain`
 - `/lineup:playbook`
+- `/lineup:digest`
 
 Codex:
 - `$lineup-kick-off`
 - `$lineup-configure`
 - `$lineup-explain`
 - `$lineup-playbook`
+- `$lineup-digest`
 
 OpenCode:
 - `/lineup-kick-off`
 - `/lineup-configure`
 - `/lineup-explain`
 - `/lineup-playbook`
+- `/lineup-digest`
 
 ## Canonical source model
 

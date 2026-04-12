@@ -15,7 +15,7 @@ describe("host selection", () => {
     expect(() => normalizeHostOption("gemini")).toThrow(CliError);
   });
 
-  it("expands all to both hosts", () => {
+  it("expands all to all supported hosts", () => {
     expect(hostOptionToHosts("all")).toEqual(["claude", "codex", "opencode"]);
   });
 
