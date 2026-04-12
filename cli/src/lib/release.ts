@@ -24,6 +24,7 @@ const MANIFEST_ASSET_NAME = "lineup-manifest.json";
 
 type ResolveReleaseInput = {
   version?: string;
+  hosts?: ReadonlyArray<string>;
 };
 
 type GithubReleaseAsset = {
@@ -174,15 +175,30 @@ async function fetchReleaseManifest(tag: string): Promise<ReleaseManifest> {
   });
 }
 
-function validateExtractedSource(sourceRoot: string): void {
-  const required = [
+function validateExtractedSource(sourceRoot: string, hosts?: ReadonlyArray<string>): void {
+  const coreRequired = [
     ".lineup-core/skills/kick-off/core.md",
-    ".lineup-core/hosts/claude.json",
-    ".lineup-core/hosts/codex.json",
-    ".lineup-core/hosts/opencode.json",
     "agents/researcher.md",
     "templates/tactic.yaml"
   ];
+
+  const hostAdapterFiles: Record<string, string> = {
+    claude: ".lineup-core/hosts/claude.json",
+    codex: ".lineup-core/hosts/codex.json",
+    opencode: ".lineup-core/hosts/opencode.json"
+  };
+
+  const required = [...coreRequired];
+  if (hosts && hosts.length > 0) {
+    for (const host of hosts) {
+      const adapterFile = hostAdapterFiles[host];
+      if (adapterFile) {
+        required.push(adapterFile);
+      }
+    }
+  } else {
+    required.push(...Object.values(hostAdapterFiles));
+  }
 
   const missing = required.filter((item) => !existsSync(path.join(sourceRoot, item)));
   if (missing.length > 0) {
@@ -231,7 +247,7 @@ export async function resolveRelease(input: ResolveReleaseInput = {}): Promise<R
 
   const cachedManifest = loadCachedManifest(manifestPath);
   if (cachedManifest && existsSync(sourceRoot)) {
-    validateExtractedSource(sourceRoot);
+    validateExtractedSource(sourceRoot, input.hosts);
     return {
       tag,
       sourceRoot,
@@ -261,7 +277,7 @@ export async function resolveRelease(input: ResolveReleaseInput = {}): Promise<R
   renameSync(extractedRoot, sourceRoot);
   rmSync(extractDir, { recursive: true, force: true });
 
-  validateExtractedSource(sourceRoot);
+  validateExtractedSource(sourceRoot, input.hosts);
 
   return {
     tag,
@@ -271,7 +287,7 @@ export async function resolveRelease(input: ResolveReleaseInput = {}): Promise<R
   };
 }
 
-export function resolveLocalRelease(dirPath: string): ResolvedRelease {
+export function resolveLocalRelease(dirPath: string, hosts?: ReadonlyArray<string>): ResolvedRelease {
   const resolvedPath = path.resolve(dirPath);
 
   if (!existsSync(resolvedPath)) {
@@ -280,7 +296,7 @@ export function resolveLocalRelease(dirPath: string): ResolvedRelease {
     });
   }
 
-  validateExtractedSource(resolvedPath);
+  validateExtractedSource(resolvedPath, hosts);
 
   let tag = "local";
   try {

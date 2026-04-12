@@ -168,8 +168,8 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
     yes: boolean;
   }): Promise<InstallUpdateResult> {
     const release = input.fromDir
-      ? deps.resolveLocalRelease(input.fromDir)
-      : await deps.resolveRelease({ version: input.version });
+      ? deps.resolveLocalRelease(input.fromDir, input.hosts)
+      : await deps.resolveRelease({ version: input.version, hosts: input.hosts });
     deps.validateSourceBundle(release.sourceRoot);
 
     const state = deps.loadState();

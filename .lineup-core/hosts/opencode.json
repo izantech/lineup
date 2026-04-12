@@ -11,7 +11,7 @@
     "CMD_EXPLAIN": "/lineup-explain",
     "CMD_PLAYBOOK": "/lineup-playbook",
     "CMD_DIGEST": "/lineup-digest",
-    "KICKOFF_INIT_PATH": ".opencode/skills/lineup-kick-off/INIT.md",
+    "KICKOFF_INIT_PATH": "~/.config/opencode/skills/lineup-kick-off/INIT.md",
     "QUESTION_PRIMITIVE": "question",
     "OVERRIDES_DIR": "~/.config/opencode/lineup/agents/",
     "MEMORY_USER_DIR": "~/.config/opencode/agent-memory/",

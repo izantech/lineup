@@ -6,7 +6,7 @@ import { createOperations, type OperationsDeps } from "../src/lib/operations";
 import type { InstallerState } from "../src/lib/types";
 
 type HarnessCalls = {
-  resolveReleaseInputs: Array<{ version?: string }>;
+  resolveReleaseInputs: Array<{ version?: string; hosts?: ReadonlyArray<string> }>;
   validateSourceBundleInputs: string[];
   detectLegacyClaudeInstall: number;
   prepareClaudePluginFromSourceInputs: Array<{ sourceRoot: string; version: string }>;
@@ -234,7 +234,7 @@ describe("operations lifecycle flows", () => {
       yes: true
     });
 
-    expect(harness.calls.resolveReleaseInputs).toEqual([{ version: "v2.0.0" }]);
+    expect(harness.calls.resolveReleaseInputs).toEqual([{ version: "v2.0.0", hosts: ["claude", "codex"] }]);
     expect(harness.calls.validateSourceBundleInputs).toEqual(["/tmp/release-source"]);
     expect(harness.calls.detectLegacyClaudeInstall).toBe(1);
     expect(harness.calls.prepareClaudePluginFromSourceInputs).toEqual([
