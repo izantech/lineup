@@ -186,11 +186,10 @@ describe("run command", () => {
   it("parses all options together", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);
-    await program.parseAsync(["node", "lineup", "run", "--workflow", "w.yaml", "--engine", "tf", "--dry-run", "--force-rerun", "--json"]);
+    await program.parseAsync(["node", "lineup", "run", "--workflow", "w.yaml", "--dry-run", "--force-rerun", "--json"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({
         workflow: "w.yaml",
-        engine: "tf",
         dryRun: true,
         forceRerun: true,
         json: true,

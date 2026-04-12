@@ -122,7 +122,7 @@ describe("differential regression harness", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("compares native and tf-reference runs on the same fixture corpus", async () => {
+  it("validates native execution against fixture corpus", async () => {
     const nativeDriver: NativeExecutionDriver = {
       async executeTask(input) {
         return {
@@ -149,7 +149,7 @@ describe("differential regression harness", () => {
     process.chdir(projectRoot);
     try {
       const nativeResult = await runPipeline(
-        { workflow: workflowPath, engine: "native", approvePlan: true },
+        { workflow: workflowPath, approvePlan: true },
         { runId: "diffnative", native: { planContent, driver: nativeDriver } }
       );
 
@@ -159,17 +159,6 @@ describe("differential regression harness", () => {
       const nativeTasksArtifact = JSON.parse(readFileSync(nativeTasksPath!, "utf8"));
       const goldenTasksArtifact = JSON.parse(goldenTasks);
       expect(nativeTasksArtifact.tasks).toEqual(goldenTasksArtifact.tasks);
-
-      const tfResult = await runPipeline(
-        { workflow: workflowPath, engine: "tf", approvePlan: true },
-        { runId: "difftf", native: { planContent } }
-      );
-
-      const tfRuntime = observeRuntimeStatus(projectRoot);
-      const tfTasksPath = tfRuntime.latest_run?.artifacts.find((artifact) => artifact.kind === "tasks")?.path;
-      expect(tfTasksPath).toBeDefined();
-      const tfTasksArtifact = JSON.parse(readFileSync(tfTasksPath!, "utf8"));
-      expect(tfTasksArtifact.tasks).toEqual(goldenTasksArtifact.tasks);
 
       const parsedPlan = parseRestrictedYaml(planContent, "fixture-plan") as Parameters<typeof compilePlanToTasks>[0];
       const compiled = compilePlanToTasks(parsedPlan, {
@@ -181,8 +170,6 @@ describe("differential regression harness", () => {
       expect(compiled.artifact.tasks).toEqual(goldenTasksArtifact.tasks);
       expect(buildTaskWaves(compiled.artifact.tasks)).toEqual([["CHANGE-001"], ["CHANGE-002"]]);
       expect(nativeResult.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
-      expect(tfResult.stageResults.get("implement")?.outputs).toHaveProperty("engine", "tf");
-      expect(tfResult.stageResults.get("implement")?.outputs).toHaveProperty("tasks_path");
     } finally {
       process.chdir(origCwd);
     }

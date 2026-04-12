@@ -28,7 +28,6 @@ import {
   type TacticListOptions,
   type TacticConvertOptions
 } from "./commands/tactic";
-import { runTfGenerateCommand } from "./commands/tf";
 import { runUninstallCommand, type UninstallCommandOptions } from "./commands/uninstall";
 import { runUpdateCommand, type UpdateCommandOptions } from "./commands/update";
 import { runValidateCommand, type ValidateCommandOptions } from "./commands/validate";
@@ -48,8 +47,6 @@ import {
 } from "./commands/workflow";
 import { CliError, asErrorMessage } from "./lib/errors";
 import { packageRoot } from "./lib/paths";
-import type { TfGenerateOptions } from "./lib/types";
-
 export type CliHandlers = {
   install: (options: InstallCommandOptions) => Promise<void>;
   update: (options: UpdateCommandOptions) => Promise<void>;
@@ -63,7 +60,6 @@ export type CliHandlers = {
   show: (options: ShowCommandOptions) => Promise<void>;
   logs: (options: LogsCommandOptions) => Promise<void>;
   replay: (options: ReplayCommandOptions) => Promise<void>;
-  tf: (options: TfGenerateOptions) => Promise<void>;
   validate: (options: ValidateCommandOptions) => Promise<void>;
   artifactsShow: (options: ArtifactsShowOptions) => Promise<void>;
   artifactsPath: (options: ArtifactsPathOptions) => Promise<void>;
@@ -102,7 +98,6 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     show: runShowCommand,
     logs: runLogsCommand,
     replay: runReplayCommand,
-    tf: runTfGenerateCommand,
     validate: runValidateCommand,
     artifactsShow: runArtifactsShowCommand,
     artifactsPath: runArtifactsPathCommand,
@@ -182,11 +177,9 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--workflow <path>", "Path to workflow YAML", undefined)
     .option("--tactic <name>", "Run a specific tactic", undefined)
     .option("--from-stage <id>", "Resume from a specific stage", undefined)
-    .option("--engine <mode>", "Execution engine: auto|native|tf", "auto")
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
     .option("--json", "Output state as JSON", false)
-    .option("--generate-only", "Generate reference adapter/config artifacts without executing stages", false)
     .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
     .option("--isolation <mode>", "Isolation mode: index|full|sparse")
@@ -248,15 +241,6 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("Cancel a running, pending, or blocked pipeline run")
     .option("--json", "Output state as JSON", false)
     .action((runId: string, opts: { json?: boolean }) => commandHandlers.cancel({ runId, ...opts }));
-
-  const tf = program.command("tf").description("Reference adapter generation commands");
-  tf.command("generate")
-    .description("Generate reference adapters and config for comparison or migration workflows")
-    .option("--host <host>", "Target host (claude|codex|opencode)")
-    .option("--output <dir>", "Output directory", undefined)
-    .option("--workflow <path>", "Path to workflow YAML", undefined)
-    .option("--manifest-path <path>", "Path to approved plan/task manifest reference", undefined)
-    .action(commandHandlers.tf);
 
   program
     .command("validate <file>")

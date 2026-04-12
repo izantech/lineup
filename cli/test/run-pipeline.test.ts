@@ -130,53 +130,6 @@ stages:
     expect(result.runId).toMatch(/^[a-f0-9]{6}$/);
   });
 
-  it("--generate-only produces artifacts without executing", async () => {
-    const projectRoot = join(tempDir, "project");
-    writeTemplatesTo(projectRoot);
-
-    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
-    mkdirSync(workflowDir, { recursive: true });
-    const workflowPath = join(workflowDir, "full-pipeline.yaml");
-    writeFileSync(workflowPath, `
-apiVersion: lineup/v3
-kind: Workflow
-name: test-pipeline
-stages:
-  - id: triage
-    type: builtin
-    description: "Classify task"
-  - id: plan
-    type: agent
-    agent: architect
-    depends_on: [triage]
-  - id: implement
-    type: agent
-    agent: developer
-    depends_on: [plan]
-`);
-
-    const { runPipeline } = await import("../src/lib/run-pipeline.js");
-
-    const origCwd = process.cwd();
-    process.chdir(projectRoot);
-    let result;
-    try {
-      result = await runPipeline({
-        workflow: workflowPath,
-        generateOnly: true,
-      });
-    } finally {
-      process.chdir(origCwd);
-    }
-
-    expect(result.status).toBe("success");
-    expect(result.outputDir).toBeDefined();
-    // No stage execution — stageResults map is empty
-    expect(result.stageResults.size).toBe(0);
-    // Verify artifacts were written to disk
-    expect(existsSync(join(result.outputDir!, "tf-config.yaml"))).toBe(true);
-    expect(existsSync(join(result.outputDir!, "adapters", "planner.sh"))).toBe(true);
-  });
 
   it("executes implement and verify through the native executor path", async () => {
     const projectRoot = join(tempDir, "project-native");
@@ -263,8 +216,6 @@ stages:
       expect(result.status).toBe("success");
       expect(result.stageResults.get("implement")?.outputs).toHaveProperty("tasks_path");
       expect(result.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
-      expect(result.stageResults.get("implement")?.outputs).not.toHaveProperty("tfOutputDir");
-      expect(stdoutChunks.join("")).not.toContain("Task Foundry output directory");
     } finally {
       process.chdir(origCwd);
       process.stdout.write = origWrite;
@@ -319,7 +270,7 @@ stages:
     try {
       await expect(
         runPipeline(
-          { workflow: workflowPath, engine: "native", approvePlan: true },
+          { workflow: workflowPath, approvePlan: true },
           {
             runId: "failrun",
             native: {

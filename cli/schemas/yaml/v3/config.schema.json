@@ -18,11 +18,11 @@
       "properties": {
         "default": {
           "type": "string",
-          "enum": ["native", "tf", "auto"]
+          "enum": ["native"]
         },
         "fallback": {
           "type": "string",
-          "enum": ["native", "tf", "auto"]
+          "enum": ["native"]
         }
       }
     },

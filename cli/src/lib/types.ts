@@ -242,10 +242,7 @@ export type WorkflowDefinition = {
   lifecycle?: LifecycleConfig;
 };
 
-export type TfRole = "scope_selector" | "planner" | "worker" | "validator";
-
 export type IsolationMode = "index" | "full" | "sparse";
-export type EngineMode = "auto" | "native" | "tf";
 
 export type PipelineRunStatus = "success" | "failed" | "aborted" | "blocked";
 
@@ -262,11 +259,9 @@ export type RunOptions = {
   workflow?: string;
   tactic?: string;
   fromStage?: string;
-  engine?: EngineMode;
   dryRun?: boolean;
   forceRerun?: boolean;
   json?: boolean;
-  generateOnly?: boolean;
   timeout?: number;
   maxParallel?: number;
   isolation?: IsolationMode;
@@ -274,11 +269,4 @@ export type RunOptions = {
   gateTimeout?: number;
   interactive?: boolean;
   validateOutputs?: boolean;
-};
-
-export type TfGenerateOptions = {
-  host?: string;
-  output?: string;
-  workflow?: string;
-  manifestPath?: string;
 };

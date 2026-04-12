@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-# Lineup TF Adapter: Passthrough Planner
-# For two-phase invocation: echoes the pre-approved manifest
-# Reads stdin (PlannerInput) but ignores it; outputs the approved manifest
-cat "{{APPROVED_MANIFEST_PATH}}"

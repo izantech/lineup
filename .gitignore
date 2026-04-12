@@ -26,10 +26,6 @@ cli/dist/
 **/.lineup/.ephemeral/
 **/.lineup/.cache/
 **/.lineup/runtime.lock
-.runner-output/
-
-# Task Foundry artifacts
-TASK_MANIFEST.yaml
 
 # Generated digests
 DIGEST.md

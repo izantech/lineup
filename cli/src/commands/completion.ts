@@ -8,7 +8,7 @@ export type CompletionCommandOptions = {
 const COMMANDS = [
   "install", "update", "uninstall", "status", "doctor", "run", "runs",
   "show", "logs", "resume", "cancel", "validate", "init", "approve", "pending",
-  "artifacts", "workflow", "tactic", "tf", "completion", "dag"
+  "artifacts", "workflow", "tactic", "completion", "dag"
 ];
 
 const BASH_COMPLETION = `

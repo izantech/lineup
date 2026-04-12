@@ -2,8 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node
 import { dirname, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { EngineMode, RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
-import type { HostName } from "./constants.js";
+import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store.js";
 import {
   executeNativeExecutor,
@@ -29,7 +28,6 @@ import {
 import {
   appendPipelineCompletedStage,
   defaultPipelineState,
-  invalidateLegacyRuntimeArtifacts,
   loadPipelineState,
   markPipelineCurrentStage,
   savePipelineState,
@@ -40,8 +38,7 @@ import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpression, type ExpressionContext } from "./expression.js";
 import { runVerificationHooks, type VerificationResult } from "./verification.js";
-import { generateTfConfig, generatePassthroughConfig, type TfGeneratorContext } from "./tf-config.js";
-import { generateTfAdapters, type AdapterGenerationContext } from "./tf-adapters.js";
+
 
 export type PipelineResult = {
   runId: string;
@@ -155,51 +152,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   let status: "success" | "failed" | "aborted" = "success";
   const stageResults = new Map<string, StageResult>();
-  const selectedEngine = resolveEngineMode(options.engine);
   let lockAcquired = false;
 
   try {
-    invalidateLegacyRuntimeArtifacts(projectRoot);
     acquireRuntimeLock(projectRoot, runId, workflowPath);
     lockAcquired = true;
 
-    // 5. Generate-only: produce TF artifacts and return immediately
-    if (options.generateOnly) {
-      const host = detectHost();
-      const adaptersDir = resolve(artifactDir, "adapters");
-      const adaptersCtx: AdapterGenerationContext = {
-        host,
-        adaptersSourceDir: resolve(projectRoot, ".lineup-core", "adapters"),
-        promptsSourceDir: resolve(projectRoot, ".lineup-core", "prompts"),
-        outputDir: adaptersDir,
-        agentsDir: resolve(projectRoot, "agents"),
-        modelMap: { scope_selector: "", planner: "claude-sonnet-4-6", worker: "claude-sonnet-4-6", validator: "claude-sonnet-4-6" },
-      };
-      generateTfAdapters(adaptersCtx);
-      const tfCtx: TfGeneratorContext = {
-        workflow,
-        projectRoot,
-        runId,
-        adaptersDir,
-        promptsDir: adaptersDir,
-        host,
-        timeout: options.timeout,
-      };
-      const configYaml = generateTfConfig(tfCtx);
-      const configPath = resolve(artifactDir, "tf-config.yaml");
-      writeFileSync(configPath, configYaml, "utf-8");
-      const configRecord = artifactStore.persistText("config", configYaml, "yaml");
-      pipelineState = savePipelineState(
-        updatePipelineArtifactHashes(pipelineState, {
-          config: configRecord.sha256
-        }),
-        projectRoot
-      );
-      persistProtocolArtifact();
-      return { runId, status: "success", stageResults: new Map<string, StageResult>(), outputDir: artifactDir };
-    }
-
-    // 6. Resolve execution order
+    // 5. Resolve execution order
     const waves = resolveExecutionOrder(workflow);
     const expressionCtx: ExpressionContext = { stages: {}, variables: {} };
 
@@ -209,10 +168,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       return { runId, status: "success", stageResults };
     }
 
-    // 8. Detect host (check which CLI is available)
-    const host = detectHost();
-
-    // 9. Execute stages in wave order
+    // 8. Execute stages in wave order
     const preStages = new Set(["triage", "clarify", "research", "gate"]);
     const postStages = new Set(["document"]);
 
@@ -251,7 +207,6 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           // Phase 1: invoke planner adapter directly
           const planResult = await executePlannerPhase(
             stage,
-            host,
             projectRoot,
             artifactDir,
             runId,
@@ -346,31 +301,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               throw new Error("No approved plan artifact path found. Plan stage must complete before native execution.");
             }
 
-            if (selectedEngine === "tf") {
-              const tfResult = await executeTfPhaseReference(
-                workflow,
-                host,
-                projectRoot,
-                artifactDir,
-                runId,
-                planPath,
-                artifactStore,
-                gitTreeSha,
-                options.timeout,
-                emitStatus
-              );
-              pipelineState = savePipelineState(
-                updatePipelineArtifactHashes(pipelineState, {
-                  plan: tfResult.planRecord.sha256,
-                  tasks: tfResult.tasksRecord.sha256
-                }),
-                projectRoot
-              );
-              stageResults.set("implement", tfResult.implementResult);
-              stageResults.set("verify", tfResult.verifyResult);
-              expressionCtx.stages["implement"] = { outputs: tfResult.implementResult.outputs };
-              expressionCtx.stages["verify"] = { outputs: tfResult.verifyResult.outputs };
-            } else {
+            {
               emitStatus("verify", "Running verification hooks...");
               let verificationResults: VerificationResult[] = [];
               try {
@@ -572,7 +503,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     writeDebugBundle(projectRoot, runId, {
       run_id: runId,
       workflow: workflowPath,
-      engine: selectedEngine,
+      engine: "native",
       error: error instanceof Error ? error.message : String(error),
       stage_results: Object.fromEntries(stageResults.entries()),
       protocol_messages: protocolMessages,
@@ -612,22 +543,6 @@ function resolveTacticPath(name: string): string {
     if (existsSync(c)) return c;
   }
   throw new Error(`Tactic '${name}' not found. Searched: ${candidates.join(", ")}`);
-}
-
-function detectHost(): HostName {
-  // Check for host CLIs in order of preference
-  try { execSync("which claude", { stdio: "ignore" }); return "claude"; } catch {}
-  try { execSync("which codex", { stdio: "ignore" }); return "codex"; } catch {}
-  try { execSync("which opencode", { stdio: "ignore" }); return "opencode"; } catch {}
-  throw new Error("No supported host CLI found (claude, codex, or opencode).");
-}
-
-function resolveEngineMode(raw: EngineMode | undefined): Exclude<EngineMode, "auto"> {
-  if (!raw || raw === "auto") {
-    return "native";
-  }
-
-  return raw;
 }
 
 function acquireRuntimeLock(projectRoot: string, runId: string, workflowPath: string): void {
@@ -850,7 +765,6 @@ async function emitGateAndWait(
 
 async function executePlannerPhase(
   stage: WorkflowStage,
-  host: HostName,
   projectRoot: string,
   artifactDir: string,
   runId: string,
@@ -859,17 +773,6 @@ async function executePlannerPhase(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   hooks: RunPipelineHooks
 ): Promise<StageResult> {
-  // Generate adapters
-  const adaptersCtx: AdapterGenerationContext = {
-    host,
-    adaptersSourceDir: resolve(projectRoot, ".lineup-core", "adapters"),
-    promptsSourceDir: resolve(projectRoot, ".lineup-core", "prompts"),
-    outputDir: resolve(artifactDir, "adapters"),
-    agentsDir: resolve(projectRoot, "agents"),
-    modelMap: { scope_selector: "", planner: "claude-sonnet-4-6", worker: "claude-sonnet-4-6", validator: "claude-sonnet-4-6" },
-  };
-  const adapterPaths = generateTfAdapters(adaptersCtx);
-
   emitProtocol(
     createLineupRequest({
       method: "agent/spawn",
@@ -878,7 +781,7 @@ async function executePlannerPhase(
         runId,
         stageId: stage.id,
         agent: stage.agent ?? "architect",
-        prompt: `Invoke planner adapter at ${adapterPaths.planner.adapterPath}`,
+        prompt: `Generate an implementation plan for the current pipeline run.`,
         timeoutMs: 300000,
         retryAttempt: 0
       }
@@ -896,72 +799,6 @@ async function executePlannerPhase(
     id: stage.id,
     status: "complete",
     outputs: { planPath },
-  };
-}
-
-async function executeTfPhaseReference(
-  workflow: WorkflowDefinition,
-  host: HostName,
-  projectRoot: string,
-  artifactDir: string,
-  runId: string,
-  planPath: string,
-  artifactStore: ReturnType<typeof createArtifactStore>,
-  gitTreeSha: string | undefined,
-  timeout: number | undefined,
-  emitStatus: (stageId: string, chunk: string, final?: boolean) => void
-): Promise<{
-  planRecord: StoredArtifactRecord;
-  tasksRecord: StoredArtifactRecord;
-  implementResult: StageResult;
-  verifyResult: StageResult;
-}> {
-  const preparedArtifacts = prepareExecutionArtifacts({
-    planPath,
-    artifactStore,
-    gitTreeSha
-  });
-
-  const tfCtx: TfGeneratorContext = {
-    workflow,
-    projectRoot,
-    runId,
-    adaptersDir: resolve(artifactDir, "adapters"),
-    promptsDir: resolve(artifactDir, "adapters"),
-    host,
-    timeout,
-  };
-  const configYaml = generatePassthroughConfig(tfCtx, planPath);
-  const configPath = resolve(artifactDir, "tf-config.yaml");
-  writeFileSync(configPath, configYaml, "utf-8");
-
-  const tfOutputDir = resolve(projectRoot, ".runner-output");
-  emitStatus("implement", `Using TF reference engine with config ${configPath}.`, true);
-  emitStatus("verify", `TF reference outputs would be read from ${tfOutputDir}.`, true);
-
-  return {
-    planRecord: preparedArtifacts.planRecord,
-    tasksRecord: preparedArtifacts.tasksRecord,
-    implementResult: {
-      id: "implement",
-      status: "complete",
-      outputs: {
-        engine: "tf",
-        output_dir: tfOutputDir,
-        config_path: configPath,
-        tasks_path: preparedArtifacts.tasksRecord.path
-      }
-    },
-    verifyResult: {
-      id: "verify",
-      status: "complete",
-      outputs: {
-        engine: "tf",
-        output_dir: tfOutputDir,
-        config_path: configPath,
-        tasks_path: preparedArtifacts.tasksRecord.path
-      }
-    }
   };
 }
 

@@ -159,25 +159,6 @@ export function loadPipelineState(runId: string, cwd = process.cwd()): PipelineS
   }
 }
 
-export function invalidateLegacyRuntimeArtifacts(cwd = process.cwd()): string[] {
-  const projectRoot = lineupProjectRoot(cwd);
-  const legacyTargets = [
-    path.join(cwd, ".runner-output"),
-    path.join(projectRoot, ".tf-adapters")
-  ];
-
-  const removed: string[] = [];
-  for (const target of legacyTargets) {
-    if (!existsSync(target)) {
-      continue;
-    }
-
-    rmSync(target, { recursive: true, force: true });
-    removed.push(target);
-  }
-
-  return removed;
-}
 
 export function savePipelineState(state: PipelineStateRecord, cwd = process.cwd()): PipelineStateRecord {
   const payload: PipelineStateRecord = {
