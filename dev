@@ -34,6 +34,18 @@ ${GREEN}Docs:${NC}
   docs build              Build docs for production
   docs preview            Preview production docs build
 
+${GREEN}Benchmark:${NC}
+  bench                   Run benchmark (all defaults)
+  bench --agent <name>    Run with specific agent (claude, codex, opencode)
+  bench --auto-models     Use recommended models per complexity
+  bench [...]             Any flag from scripts/benchmark-ollama.py
+  bench clean             Remove all benchmark results
+
+${GREEN}Clean:${NC}
+  clean                   Remove all generated artifacts (build, benchmark, cache)
+  clean --dry-run         Show what would be removed
+  bench clean             Remove only benchmark results
+
 ${GREEN}Other:${NC}
   setup                   Install dependencies
   help                    Show this help message
@@ -120,6 +132,42 @@ run_setup() {
     echo -e "\n${GREEN}Setup complete${NC}"
 }
 
+run_clean() {
+    local dry_run=false
+    [[ "${1:-}" == "--dry-run" ]] && dry_run=true
+
+    local dirs=(
+        "$ROOT_DIR/cli/dist"
+        "$ROOT_DIR/cli/node_modules"
+        "$ROOT_DIR/docs/node_modules"
+        "$ROOT_DIR/docs/.vitepress/cache"
+        "$ROOT_DIR/docs/.vitepress/dist"
+        "$ROOT_DIR/.lineup/.benchmark"
+        "$ROOT_DIR/.lineup/.ephemeral"
+        "$ROOT_DIR/.lineup/.cache"
+        "$ROOT_DIR/.runner-output"
+    )
+
+    for dir in "${dirs[@]}"; do
+        if [[ -d "$dir" ]]; then
+            local size
+            size="$(du -sh "$dir" 2>/dev/null | cut -f1)"
+            if $dry_run; then
+                echo "  would remove $dir ($size)"
+            else
+                echo "  removing $dir ($size)"
+                rm -rf "$dir"
+            fi
+        fi
+    done
+
+    if $dry_run; then
+        echo -e "\n${BOLD}Dry run — nothing removed.${NC}"
+    else
+        echo -e "${GREEN}done${NC}"
+    fi
+}
+
 run_docs() {
     local subcmd="${1:-dev}"
     case "$subcmd" in
@@ -150,6 +198,16 @@ main() {
         test)      run_test ;;
         check)     run_check ;;
         docs)      run_docs "$@" ;;
+        clean)     run_clean "$@" ;;
+        bench)
+            if [[ "${1:-}" == "clean" ]]; then
+                echo -e "${BOLD}Removing benchmark results...${NC}"
+                rm -rf "$ROOT_DIR/.lineup/.benchmark"
+                echo -e "${GREEN}done${NC}"
+            else
+                python3 "$ROOT_DIR/scripts/benchmark-ollama.py" "$@"
+            fi
+            ;;
         setup)     run_setup ;;
         help)      usage ;;
         *)         die "unknown command '$command' — run ./dev help" ;;

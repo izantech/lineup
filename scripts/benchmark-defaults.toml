@@ -1,0 +1,76 @@
+# Lineup Runtime Engine Benchmark — Default Configuration
+#
+# Hardware baseline: Mac Studio, Apple M3 Ultra, 96GB unified memory.
+# Adjust models and load_speed_gbs for your hardware.
+
+[benchmark]
+agent = "claude"            # which agent profile to use (claude, codex, opencode)
+runs = 1
+timeout = 1800              # seconds, per invocation
+output = ".lineup/.benchmark"
+
+# --- Agent profiles ---
+# Each profile defines how to invoke the agent CLI with Ollama.
+# Switch agents by changing benchmark.agent or using --agent <name>.
+
+[agents.claude]
+command = "claude"
+print_flags = ["--print", "--bare", "--verbose", "--output-format", "stream-json"]
+permission_flags = ["--permission-mode", "acceptEdits"]
+model_flag = "--model"
+tools_flag = "--allowedTools"
+prompt_flag = "-p"
+[agents.claude.env]
+ANTHROPIC_AUTH_TOKEN = "ollama"
+ANTHROPIC_BASE_URL = "http://localhost:11434"
+ANTHROPIC_API_KEY = ""
+
+[agents.codex]
+command = "codex"
+print_flags = ["--quiet"]
+permission_flags = ["--approval-mode", "auto-edit"]
+model_flag = "--model"
+tools_flag = ""                 # codex manages tools internally
+prompt_flag = "-p"
+[agents.codex.env]
+OPENAI_BASE_URL = "http://localhost:11434/v1"
+OPENAI_API_KEY = "ollama"
+
+[agents.opencode]
+command = "opencode"
+print_flags = ["--non-interactive"]
+permission_flags = []
+model_flag = "--model"
+tools_flag = ""                 # opencode manages tools internally
+prompt_flag = ""                # opencode reads from stdin
+[agents.opencode.env]
+OPENAI_BASE_URL = "http://localhost:11434/v1"
+OPENAI_API_KEY = "ollama"
+
+# --- Models ---
+
+[models]
+default = "qwen3-coder-next:q4_K_M"
+simple = "qwen3.5:9b"
+moderate = "qwen3-coder:30b"
+complex = "qwen3-coder-next:q4_K_M"
+
+# --- Tools (agent-specific, only used if agent supports --allowedTools) ---
+
+[tools]
+plan = "Read,Grep,Glob"
+full = "Read,Grep,Glob,Edit,Write,Bash"
+
+# --- Sample tasks ---
+
+[[tasks]]
+complexity = "simple"
+description = "Add a helper function 'capitalize' to src/lib/utils.ts that capitalizes the first letter of a string, and add a test for it"
+
+[[tasks]]
+complexity = "moderate"
+description = "Refactor the expression evaluator in cli/src/lib/expression.ts to support a new 'not' boolean operator, update tests"
+
+[[tasks]]
+complexity = "complex"
+description = "Add a --timeout flag to the lineup run command that kills TF after N seconds, with proper cleanup of ephemeral artifacts"

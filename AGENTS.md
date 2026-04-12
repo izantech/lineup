@@ -21,6 +21,9 @@ Dev script:
 - `./dev install remote` — install latest from npm
 - `./dev install clean [--purge]` — remove CLI and host skills
 - `./dev docs` — start VitePress dev server
+- `./dev bench [--agent claude|codex|opencode] [--auto-models] [...]` — run Ollama benchmark
+- `./dev bench clean` — remove benchmark results
+- `./dev clean [--dry-run]` — remove all generated artifacts (build, benchmark, cache)
 - `./dev setup` — install dependencies
 
 CLI runtime:
