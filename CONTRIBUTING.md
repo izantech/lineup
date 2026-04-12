@@ -24,7 +24,7 @@ The `./dev` script at the repo root is the main entry point for development task
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
 ./dev install local             # Build from source and install CLI + all host skills
-./dev docs                      # Start docs dev server
+./dev web                       # Start website dev server
 ```
 
 ### Testing your changes locally
@@ -45,7 +45,7 @@ This builds the CLI from source, installs it globally, and installs skills for a
 agents/*.md                   Shared agent definitions
 tactics/*.yaml                Built-in tactics
 cli/                          CLI package (install/update/uninstall/status)
-docs/                         VitePress documentation site
+site/                         Astro + Starlight website
 ```
 
 Generated host files are **not committed** — they are produced at install time from canonical templates plus host adapters.
@@ -56,7 +56,7 @@ Generated host files are **not committed** — they are produced at install time
 - **Canonical templates** live in `.lineup-core/skills/`. Changes here affect all hosts on next install/update.
 - **Host adapters** live in `.lineup-core/hosts/`. Each JSON file maps template variables to host-specific values.
 - **Agent definitions** live in `agents/`. These are shared across all hosts.
-- **Documentation** lives in `docs/`. Run `./dev docs` to preview locally.
+- **Website** lives in `site/`. Run `./dev web` to preview locally.
 
 ## Commit conventions
 

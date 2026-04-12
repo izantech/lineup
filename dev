@@ -29,10 +29,10 @@ ${GREEN}Build:${NC}
   test                    Run test suite
   check                   Run all checks (typecheck, test, schema, generate, build)
 
-${GREEN}Docs:${NC}
-  docs                    Start VitePress dev server
-  docs build              Build docs for production
-  docs preview            Preview production docs build
+${GREEN}Web:${NC}
+  web                     Start Astro dev server
+  web build               Build site for production
+  web preview             Preview production site build
 
 ${GREEN}Benchmark:${NC}
   bench                   Run benchmark (all defaults)
@@ -127,8 +127,8 @@ run_check() {
 run_setup() {
     echo -e "${BOLD}Installing CLI dependencies...${NC}"
     npm --prefix "$ROOT_DIR/cli" install
-    echo -e "${BOLD}Installing docs dependencies...${NC}"
-    npm --prefix "$ROOT_DIR/docs" install
+    echo -e "${BOLD}Installing site dependencies...${NC}"
+    npm --prefix "$ROOT_DIR/site" install
     echo -e "\n${GREEN}Setup complete${NC}"
 }
 
@@ -139,9 +139,9 @@ run_clean() {
     local dirs=(
         "$ROOT_DIR/cli/dist"
         "$ROOT_DIR/cli/node_modules"
-        "$ROOT_DIR/docs/node_modules"
-        "$ROOT_DIR/docs/.vitepress/cache"
-        "$ROOT_DIR/docs/.vitepress/dist"
+        "$ROOT_DIR/site/node_modules"
+        "$ROOT_DIR/site/.astro"
+        "$ROOT_DIR/site/dist"
         "$ROOT_DIR/.lineup/.benchmark"
         "$ROOT_DIR/.lineup/.ephemeral"
         "$ROOT_DIR/.lineup/.cache"
@@ -168,13 +168,13 @@ run_clean() {
     fi
 }
 
-run_docs() {
+run_web() {
     local subcmd="${1:-dev}"
     case "$subcmd" in
-        dev)     cd "$ROOT_DIR/docs" && npx vitepress dev ;;
-        build)   cd "$ROOT_DIR/docs" && npx vitepress build ;;
-        preview) cd "$ROOT_DIR/docs" && npx vitepress preview ;;
-        *)       die "unknown docs command '$subcmd' — use dev, build, or preview" ;;
+        dev)     cd "$ROOT_DIR/site" && npx astro dev ;;
+        build)   cd "$ROOT_DIR/site" && npx astro build ;;
+        preview) cd "$ROOT_DIR/site" && npx astro preview ;;
+        *)       die "unknown web command '$subcmd' — use dev, build, or preview" ;;
     esac
 }
 
@@ -197,7 +197,7 @@ main() {
         typecheck) run_typecheck ;;
         test)      run_test ;;
         check)     run_check ;;
-        docs)      run_docs "$@" ;;
+        web)       run_web "$@" ;;
         clean)     run_clean "$@" ;;
         bench)
             if [[ "${1:-}" == "clean" ]]; then

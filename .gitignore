@@ -1,9 +1,10 @@
 # Dependencies
 node_modules/
 
-# Docs site
-docs/.vitepress/cache/
-docs/.vitepress/dist/
+# Website
+site/node_modules/
+site/.astro/
+site/dist/
 
 # CLI build output
 cli/dist/

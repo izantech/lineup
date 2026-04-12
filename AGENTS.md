@@ -4,12 +4,11 @@ This file is the single source of truth for AI agent instructions in this reposi
 
 ## Project Overview
 
-Lineup provides a structured multi-agent workflow:
-**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?**
+Lineup is a multi-agent pipeline for Claude Code, Codex CLI, and OpenCode that picks the right model for every task — automatically.
 
-Stage 0 (Triage) is a lightweight orchestrator-only analysis that classifies complexity, identifies affected areas, and produces search targets before any agent is spawned.
+Pipeline: **Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?**
 
-Lineup 2.0 uses a canonical core plus a CLI-managed install flow across Claude Code and Codex CLI.
+Stage 0 (Triage) classifies complexity, identifies affected areas, and produces search targets before any agent is spawned. Distributed via a single CLI (`lineup`) across all supported hosts.
 
 ## Commands
 
@@ -20,7 +19,7 @@ Dev script:
 - `./dev install local` — build from source and install CLI + all host skills
 - `./dev install remote` — install latest from npm
 - `./dev install clean [--purge]` — remove CLI and host skills
-- `./dev docs` — start VitePress dev server
+- `./dev web` — start website dev server (Astro + Starlight)
 - `./dev bench [--agent claude|codex|opencode] [--auto-models] [...]` — run Ollama benchmark
 - `./dev bench clean` — remove benchmark results
 - `./dev clean [--dry-run]` — remove all generated artifacts (build, benchmark, cache)

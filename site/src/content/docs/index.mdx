@@ -1,0 +1,50 @@
+---
+title: One pipeline. Every AI coding tool.
+description: Lineup is a multi-agent pipeline for Claude Code, Codex CLI, and OpenCode that routes tasks through typed stages with automatic model selection.
+template: splash
+hero:
+  tagline: A multi-agent pipeline for Claude Code, Codex CLI, and OpenCode. Typed stages, automatic model selection, resumable execution.
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View Examples
+      link: /examples/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Works with
+
+Claude Code · Codex CLI · OpenCode
+
+## Core design
+
+<CardGrid>
+  <Card title="Triage-first">
+    Stage 0 classifies task complexity and selects models per role. Simple tasks run on Haiku, complex ones on Opus. No manual configuration.
+  </Card>
+  <Card title="Resumable">
+    Each stage caches its output. Interrupted runs restart from the last completed stage, not from scratch.
+  </Card>
+  <Card title="Token-efficient">
+    Staged prompt loading, lazy agent instantiation, and ephemeral file references keep context windows lean.
+  </Card>
+</CardGrid>
+
+---
+
+**V3 — Native engine. Coming soon.** Lineup v3 moves deterministic orchestration out of prompt prose and into a native CLI engine. Stage execution, artifact validation, and retry logic run natively. Same agent contracts, same tactics, significantly lower token overhead.
+
+---
+
+## Install
+
+```bash
+npm install -g @izantech/lineup-cli
+lineup install
+```
+
+[Get started →](/getting-started/)

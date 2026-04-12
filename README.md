@@ -3,10 +3,11 @@
 
 # [Lineup](https://lineup.izantech.app)
 
-Lineup is a structured multi-agent workflow for Claude Code, Codex CLI, and OpenCode:
-**Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document**.
+One pipeline. Every AI coding tool.
 
-Lineup 2.0 is distributed through a single CLI manager: `lineup`.
+Lineup is a multi-agent pipeline for Claude Code, Codex CLI, and OpenCode that picks the right model for every task — automatically. It splits your work into stages, assigns each one to the right agent, and caches results so interrupted runs pick up where they stopped.
+
+Distributed through a single CLI: `lineup`.
 
 ## Install the CLI
 
@@ -86,21 +87,15 @@ Lineup uses canonical templates plus host adapters:
 ./dev install local             # Build from source and install CLI + all host skills
 ./dev install remote            # Install latest from npm
 ./dev install clean [--purge]   # Remove CLI and host skills
-./dev docs                      # Start docs dev server
+./dev web                       # Start website dev server
 ./dev setup                     # Install dependencies
 ```
 
-## Upgrading from 1.x
-
-If you are using Lineup 1.x via the Claude marketplace, see the [Migration Guide](https://lineup.izantech.app/guides/migration-v2) for step-by-step upgrade instructions. The CLI detects legacy installs automatically and handles the transition.
-
 ## Learn more
 
-- [Getting Started](https://lineup.izantech.app/getting-started/installation)
-- [Concepts](https://lineup.izantech.app/concepts/pipeline)
-- [Guides](https://lineup.izantech.app/guides/run-kick-off)
-- [Reference](https://lineup.izantech.app/reference/agents)
-- [Examples](https://lineup.izantech.app/examples/feature-development)
+- [Getting Started](https://lineup.izantech.app/getting-started/)
+- [How It Works](https://lineup.izantech.app/how-it-works/)
+- [Examples](https://lineup.izantech.app/examples/)
 
 ## License
 
