@@ -363,9 +363,10 @@ After Team Setup, check whether Ollama is available for use by researcher agents
       model list, set `OLLAMA_AVAILABLE = true` and store `OLLAMA_MODEL` from the
       `model` field in the YAML.
 
-   b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
-      "Warning: Ollama is enabled in config but the MCP server is not available.
-      Run `claude mcp add ollama -- npx -y ollama-mcp` to set it up."
+    b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
+       "Warning: Ollama is enabled in config but the MCP server is not available.
+       Register the Ollama MCP server using your host's configuration method
+       (e.g., for Claude: `claude mcp add ollama -- npx -y ollama-mcp`)."
 
 Store in working context:
 - `OLLAMA_AVAILABLE` — boolean, whether Ollama is ready for use

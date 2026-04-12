@@ -1,3 +1,5 @@
+<!-- researcher-ollama.md: Conditional appendix appended to researcher spawn prompts when OLLAMA_AVAILABLE = true -->
+
 ## Ollama-Assisted Research
 
 You have access to Ollama tools (`mcp__ollama__ollama_chat`, `mcp__ollama__ollama_generate`)

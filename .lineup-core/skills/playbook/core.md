@@ -201,7 +201,8 @@ After all variables are defined:
 
 Check: name present/valid, description present, stages non-empty, valid types/agents,
 boolean `optional`, `gate` values are `approval`, variable names valid snake_case,
-all `${var}` references resolve. Validate that `tactic` fields reference existing
+all `${var}` references resolve. Reject YAML anchors (`&`), aliases (`*`),
+merge keys (`<<`), and custom tags (`!tag`). Validate that `tactic` fields reference existing
 tactics and that no stage combines `tactic` with `type` or `agent`. Check for
 circular tactic references (a tactic referencing itself directly or indirectly).
 
@@ -258,6 +259,7 @@ Formatting rules:
 - `tactic` stages use `tactic: <name>` instead of `type`/`agent`.
 - Omit `optional`/`gate` when false/absent. Omit empty sections.
 - `tactic` is mutually exclusive with `type`/`agent` — never include both in the same stage.
+- Do not emit anchors, aliases, merge keys, or custom tags anywhere in YAML.
 - Trailing newline.
 
 Ask: "Write to `.lineup/tactics/<name>.yaml`?" — Yes / Go back / Cancel.
