@@ -2,7 +2,7 @@ apiVersion: lineup/v3
 kind: RfcTask
 id: V3-16
 title: Dogfood, readiness metrics, and native-default cutover
-status: todo
+status: done
 last_updated: 2026-04-12
 depends_on:
   - V3-13
@@ -33,3 +33,7 @@ notes:
   determinism_rules:
     - Cutover decisions must be based on recorded measurements
     - Default switching should be reversible until metrics stabilize
+  completed_scope:
+    - Added docs/rfc/lineup-v3-readiness.md with the recorded metrics and cutover decision
+    - Added scripts/lineup-v3-readiness.sh to rerun the evidence collection path
+    - Captured current dogfood evidence for the Lineup repo and the differential fixture corpus

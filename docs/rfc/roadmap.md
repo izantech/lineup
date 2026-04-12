@@ -52,11 +52,11 @@ These RFC deltas are now part of the tracked plan:
 | [V3-13](./tasks/v3-13-transitional-engine-mode.yaml) | Add transitional engine mode and GA scope guards | `done` | `V3-07`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
 | [V3-14](./tasks/v3-14-differential-regression-harness.yaml) | Build differential regression harness and task corpus | `done` | `V3-10`, `V3-12` | 5 | reviewer | 2026-04-12 |
 | [V3-15](./tasks/v3-15-operational-hardening-and-migrations.yaml) | Add operational hardening and v3 clean-break invalidation | `done` | `V3-03`, `V3-09`, `V3-10`, `V3-12` | 5 | developer | 2026-04-12 |
-| [V3-16](./tasks/v3-16-dogfood-metrics-and-cutover.yaml) | Dogfood, readiness metrics, and native-default cutover | `todo` | `V3-13`, `V3-14`, `V3-15` | 6 | reviewer | 2026-04-12 |
+| [V3-16](./tasks/v3-16-dogfood-metrics-and-cutover.yaml) | Dogfood, readiness metrics, and native-default cutover | `done` | `V3-13`, `V3-14`, `V3-15` | 6 | reviewer | 2026-04-12 |
 
 ## Current Handoff
 
-- Active task: wave 6 dogfood evidence, readiness metrics, and native-default cutover
+- Active task: roadmap complete; next work is follow-on refinement, not required RFC scope
 - Current state:
   - `V3-00` complete
   - `V3-01` complete
@@ -65,11 +65,11 @@ These RFC deltas are now part of the tracked plan:
   - `V3-10` and `V3-11` are complete
   - `V3-12` is complete
   - `V3-13`, `V3-14`, and `V3-15` are complete
-  - `./dev check` passes with engine selection, regression harness, and runtime hardening landed
+  - `V3-16` is complete
+  - `./dev check` passes with the readiness metrics and cutover evidence recorded
 - Ready-to-start tasks after wave 6:
-  - none; wave 6 is the cutover gate
+  - none; the RFC roadmap is complete
 - Immediate next step:
-  - capture dogfood runs, define readiness metrics, and record the evidence needed before native becomes the default without fallback
+  - use the recorded readiness path for follow-on refinements or external-repo dogfood as needed
 - Known blockers:
-  - cutover metrics and dogfood evidence are not yet recorded in tracked docs
-  - native-default switching still lacks an explicit evidence gate
+  - no remaining blockers in the tracked RFC scope

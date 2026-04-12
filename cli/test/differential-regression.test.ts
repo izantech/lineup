@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -9,6 +10,8 @@ import type { NativeExecutionDriver } from "../src/lib/executor.js";
 import { observeRuntimeStatus } from "../src/lib/observer.js";
 import { buildTaskWaves, compilePlanToTasks } from "../src/lib/dag.js";
 import { parseRestrictedYaml } from "../src/lib/validation.js";
+
+const fixtureRoot = fileURLToPath(new URL("../fixtures/differential/", import.meta.url));
 
 const ADAPTER_TEMPLATE = `#!/usr/bin/env bash
 SYSTEM_PROMPT=$(cat "{{SYSTEM_PROMPT_PATH}}")
@@ -111,8 +114,8 @@ describe("differential regression harness", () => {
     writeTemplatesTo(projectRoot);
     initGitRepo(projectRoot);
     workflowPath = writeWorkflow(projectRoot);
-    planContent = readFileSync(join(process.cwd(), "fixtures", "differential", "cases", "basic", "plan.yaml"), "utf8");
-    goldenTasks = readFileSync(join(process.cwd(), "fixtures", "differential", "golden", "basic.tasks.json"), "utf8");
+    planContent = readFileSync(join(fixtureRoot, "cases", "basic", "plan.yaml"), "utf8");
+    goldenTasks = readFileSync(join(fixtureRoot, "golden", "basic.tasks.json"), "utf8");
   });
 
   afterEach(() => {
