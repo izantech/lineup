@@ -28,13 +28,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Conditional Ollama appendices -- researcher and architect Ollama instructions extracted into separate `*-ollama.md` files that are only appended to spawn prompts when `OLLAMA_AVAILABLE = true`; saves ~3.6 KB per agent spawn when Ollama is disabled
 
 ### Fixed
-- Artifact cleanup now uses `git status` to detect ephemeral files instead of relying on vague heuristics
-- Artifact cleanup runs on any pipeline exit (abort, error, or normal completion), not only at Stage 6
-- Parallel architect merge now detects file-level conflicts and presents them to the user for resolution
-- Developer batch failure handling -- significant issues block dependent batches, independent batches finish, user decides next step
-- Memory migration enforces write-then-clean order to prevent data loss on interruption
-- Terminal width detection logs a warning when `tput` fails instead of silently assuming wide terminal
-- Tactic variable fallback injects a note into affected stage prompts listing unresolved variable references
+- Snapshot threshold terminology clarified — compression threshold (~2 KB, content size management) distinguished from streaming threshold (500 bytes, inline vs file-reference delivery)
+- Cache lifecycle fixed — `.lineup/.cache/` preserved on error/abort to support `--from-stage` restarts; only deleted on successful pipeline completion
+- Ephemeral file lifecycle fixed — full `.lineup/.ephemeral/` cleanup moved to Pipeline Cleanup (after Stage 7), not after Stage 6, so documenter and Teams-mode spawns can still access earlier files
+- Cleanup safety improved — replaced `git status` heuristic with explicit allowlist of Lineup-managed paths (`.lineup/.ephemeral/*.yaml`, `.lineup/.cache/*.yaml`)
+- Cache key construction uses structured JSON serialization instead of plain concatenation to prevent hash collisions
+- Snapshot naming aligned — stages use `snapshot-<from>-<to>-<hash>.yaml` consistently (removed `implementation-<hash>.yaml` convention)
+- Host adapter schema fixed — removed unsupported `gemini` from host enum
+- Tactic schema fixed — `tactic` field now individually blocks both `type` and `agent` (previously only blocked the pair together)
+- Host-agnostic MCP guidance — configure and digest skills use host-aware MCP setup instructions instead of hardcoded `claude mcp add`
+- Template variable fix — replaced hardcoded `AskUserQuestion` with `{{QUESTION_PRIMITIVE}}` in init.core.md
+- Terminal width detection fails closed — `tput` failure now disables Teams mode instead of assuming wide terminal
+- Ollama config validation added — validates `enabled` (boolean), `model` (non-empty string), `scope` (present) before enabling
+- Playbook YAML safety — validation and formatting rules now explicitly reject anchors, aliases, merge keys, and custom tags
+- Playbook tactic composition — per-stage collection asks "Direct stage or composed tactic?" first; validation checks tactic references and cycles
+- OpenCode `KICKOFF_INIT_PATH` fixed — points to `~/.config/opencode/skills/...` to match actual install location
+- Release validation made host-aware — `validateExtractedSource` accepts hosts parameter so pre-OpenCode tags don't fail for Claude/Codex installs
+- Ollama appendix metadata headers added to `researcher-ollama.md` and `architect-ollama.md`
+- Digest skill adds ephemeral file spillover for large researcher outputs and cleanup step
+- Docs: digest command added to all host command lists (Claude, Codex, OpenCode)
+- Docs: host-agnostic orchestrator wording, Codex recovery commands, Ollama 4-tool list, Sonnet floor clarification, migration guide updated
+- Docs: MD027 lint fixes in stage files, code block language identifier in CONTRIBUTING.md
+- Docs: `--from-dir <path>` added to AGENTS.md CLI command signatures
 
 ## [2.1.1] - 2026-03-20
 
@@ -202,7 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
-[Unreleased]: https://github.com/izantech/lineup/compare/2.1.1...HEAD
+[Unreleased]: https://github.com/izantech/lineup/compare/2.2.0...HEAD
+[2.2.0]: https://github.com/izantech/lineup/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/izantech/lineup/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/izantech/lineup/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/izantech/lineup/compare/1.5.0...2.0.0
