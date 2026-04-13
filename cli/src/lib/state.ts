@@ -34,6 +34,9 @@ export type PipelineStateRecord = {
   completed_stages?: string[];
   artifact_hashes: PipelineArtifactHashes;
   updated_at: string;
+  started_at?: string;
+  finished_at?: string;
+  duration_ms?: number;
   approval?: {
     approved_at: string;
     approved_by: string;
@@ -276,6 +279,23 @@ export function clearStageRetry(state: PipelineStateRecord, stageId: string): Pi
   return {
     ...state,
     retry_state: Object.keys(rest).length > 0 ? rest : undefined,
+    updated_at: nowIso()
+  };
+}
+
+export function markPipelineTimestamps(
+  state: PipelineStateRecord,
+  phase: "start" | "finish"
+): PipelineStateRecord {
+  if (phase === "start") {
+    return { ...state, started_at: nowIso(), updated_at: nowIso() };
+  }
+  const startedAt = state.started_at ? new Date(state.started_at).getTime() : Date.now();
+  const finishedAt = Date.now();
+  return {
+    ...state,
+    finished_at: nowIso(),
+    duration_ms: finishedAt - startedAt,
     updated_at: nowIso()
   };
 }

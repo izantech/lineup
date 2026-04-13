@@ -77,6 +77,18 @@
       "type": "string",
       "format": "date-time"
     },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
     "approval": {
       "type": "object",
       "additionalProperties": false,

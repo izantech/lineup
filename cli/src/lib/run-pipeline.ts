@@ -30,6 +30,7 @@ import {
   defaultPipelineState,
   loadPipelineState,
   markPipelineCurrentStage,
+  markPipelineTimestamps,
   savePipelineState,
   updatePipelineArtifactHashes
 } from "./state.js";
@@ -109,12 +110,15 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   const gitTreeSha = resolveGitTreeSha(projectRoot);
   let pipelineState = savePipelineState(
-    defaultPipelineState({
-      runId,
-      workflow: workflowPath,
-      gitTreeSha,
-      status: "running"
-    }),
+    markPipelineTimestamps(
+      defaultPipelineState({
+        runId,
+        workflow: workflowPath,
+        gitTreeSha,
+        status: "running"
+      }),
+      "start"
+    ),
     projectRoot
   );
 
@@ -474,10 +478,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     );
     persistProtocolArtifact();
     pipelineState = savePipelineState(
-      {
-        ...markPipelineCurrentStage(pipelineState, null),
-        status: "succeeded"
-      },
+      markPipelineTimestamps(
+        {
+          ...markPipelineCurrentStage(pipelineState, null),
+          status: "succeeded"
+        },
+        "finish"
+      ),
       projectRoot
     );
     // 10. Cleanup on success
@@ -497,10 +504,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     );
     persistProtocolArtifact();
     pipelineState = savePipelineState(
-      {
-        ...markPipelineCurrentStage(pipelineState, null),
-        status: "failed"
-      },
+      markPipelineTimestamps(
+        {
+          ...markPipelineCurrentStage(pipelineState, null),
+          status: "failed"
+        },
+        "finish"
+      ),
       projectRoot
     );
     writeDebugBundle(projectRoot, runId, {
