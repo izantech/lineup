@@ -220,7 +220,8 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--json", "Output state as JSON", false)
     .option("--skip-task <id>", "Skip a blocked task before resuming")
     .option("--retry-failed", "Retry from the exact failed stage")
-    .action((runId: string, opts: { json?: boolean; skipTask?: string; retryFailed?: boolean }) =>
+    .option("--max-retries <n>", "Max retry attempts per stage (default: 3)", parseInt)
+    .action((runId: string, opts: { json?: boolean; skipTask?: string; retryFailed?: boolean; maxRetries?: number }) =>
       commandHandlers.resume({ runId, ...opts })
     );
 

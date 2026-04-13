@@ -15,6 +15,14 @@ export type PipelineArtifactKey = "constitution" | "spec" | "plan" | "tasks" | "
 
 export type PipelineArtifactHashes = Partial<Record<PipelineArtifactKey, string>>;
 
+export type StageRetryRecord = {
+  stage_id: string;
+  attempt: number;
+  max_attempts: number;
+  last_error?: string;
+  last_attempt_at: string;
+};
+
 export type PipelineStateRecord = {
   apiVersion: typeof PIPELINE_STATE_SCHEMA_VERSION;
   kind: "PipelineState";
@@ -30,6 +38,7 @@ export type PipelineStateRecord = {
     approved_at: string;
     approved_by: string;
   };
+  retry_state?: Record<string, StageRetryRecord>;
   errors?: Array<{
     code: string;
     message: string;
@@ -230,4 +239,43 @@ export function assertPipelineStateFresh(
   }
 
   return state;
+}
+
+export function recordStageRetry(
+  state: PipelineStateRecord,
+  stageId: string,
+  maxAttempts: number,
+  error?: string
+): PipelineStateRecord {
+  const existing = state.retry_state?.[stageId];
+  const attempt = (existing?.attempt ?? 0) + 1;
+
+  return {
+    ...state,
+    retry_state: {
+      ...state.retry_state,
+      [stageId]: {
+        stage_id: stageId,
+        attempt,
+        max_attempts: maxAttempts,
+        last_error: error,
+        last_attempt_at: nowIso()
+      }
+    },
+    updated_at: nowIso()
+  };
+}
+
+export function getStageRetryCount(state: PipelineStateRecord, stageId: string): number {
+  return state.retry_state?.[stageId]?.attempt ?? 0;
+}
+
+export function clearStageRetry(state: PipelineStateRecord, stageId: string): PipelineStateRecord {
+  if (!state.retry_state?.[stageId]) return state;
+  const { [stageId]: _, ...rest } = state.retry_state;
+  return {
+    ...state,
+    retry_state: Object.keys(rest).length > 0 ? rest : undefined,
+    updated_at: nowIso()
+  };
 }

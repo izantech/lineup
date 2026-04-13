@@ -3,13 +3,21 @@ import { execSync } from "node:child_process";
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { runPipeline } from "../lib/run-pipeline.js";
-import { appendPipelineCompletedStage, assertPipelineStateFresh, loadPipelineState, savePipelineState } from "../lib/state.js";
+import {
+  appendPipelineCompletedStage,
+  assertPipelineStateFresh,
+  getStageRetryCount,
+  loadPipelineState,
+  recordStageRetry,
+  savePipelineState
+} from "../lib/state.js";
 
 export type ResumeCommandOptions = {
   runId: string;
   json?: boolean;
   skipTask?: string;
   retryFailed?: boolean;
+  maxRetries?: number;
 };
 
 const RESUMABLE_STATUSES = new Set(["failed", "blocked", "canceled"]);
@@ -45,7 +53,25 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   let fromStage: string | null;
 
   if (options.retryFailed && state.status === "failed" && state.current_stage) {
+    const maxRetries = options.maxRetries ?? 3;
+    const currentAttempts = getStageRetryCount(state, state.current_stage);
+
+    if (currentAttempts >= maxRetries) {
+      throw new CliError(
+        `Stage '${state.current_stage}' has exhausted ${maxRetries} retry attempts.`,
+        { code: "command_failed" }
+      );
+    }
+
+    const lastError = state.errors?.[state.errors.length - 1]?.message;
+    const updated = recordStageRetry(state, state.current_stage, maxRetries, lastError);
+    savePipelineState(updated);
+
     fromStage = state.current_stage;
+
+    if (!options.json) {
+      printTableLine(`Retrying stage '${fromStage}' (attempt ${currentAttempts + 1}/${maxRetries}).`);
+    }
   } else {
     fromStage = state.current_stage ?? findFirstIncompleteStage(completedStages);
   }
@@ -67,6 +93,7 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
     resumed_from: options.runId,
     from_stage: fromStage,
     status: result.status,
+    retry_state: state.retry_state ?? {},
     stage_results: Object.fromEntries(result.stageResults.entries()),
   });
 }

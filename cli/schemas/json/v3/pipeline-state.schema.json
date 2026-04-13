@@ -92,6 +92,35 @@
         }
       }
     },
+    "retry_state": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage_id", "attempt", "max_attempts", "last_attempt_at"],
+        "properties": {
+          "stage_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
     "errors": {
       "type": "array",
       "items": {
