@@ -11,10 +11,19 @@ Stage 0 (Triage) classifies complexity, identifies affected areas, and produces 
 - `human` — interactive local terminal execution
 - `host` — NDJSON protocol mode for generated skills and automation
 
+Before the first native run in a new project, run `lineup init`. It scaffolds the
+workflow/runtime directories and initializes a git repository if needed. Native
+implementation still requires at least one commit because isolation uses git worktrees.
+
 In `host` mode, treat artifact handoff files as part of the runtime contract:
 - planner output path from `agent/spawn.params.outputs.path`
 - native task/review response files under `.lineup/.runs/<id>/artifacts/native/responses/`
 - write host-produced files atomically (temp file + rename)
+
+The runtime now includes a small amount of defensive normalization for host output
+(fenced payload repair, one planner retry when prose is returned, tolerant
+developer/reviewer parsing), but keep generated skills and docs aligned with the
+structured artifact contract rather than relying on recovery behavior.
 
 When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
 aligned on that contract.

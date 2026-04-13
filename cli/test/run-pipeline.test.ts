@@ -6,6 +6,7 @@ import { rmSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 import type { NativeExecutionDriver } from "../src/lib/executor.js";
+import type { LocalAgentRunner } from "../src/lib/agent-runner.js";
 
 const ADAPTER_TEMPLATE = `#!/usr/bin/env bash
 SYSTEM_PROMPT=$(cat "{{SYSTEM_PROMPT_PATH}}")
@@ -128,6 +129,90 @@ stages:
 
     expect(result.status).toBe("success");
     expect(result.runId).toMatch(/^[a-f0-9]{6}$/);
+  });
+
+  it("collects triage stats in a non-git project without failing", async () => {
+    const projectRoot = join(tempDir, "project-no-git");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: triage-only
+stages:
+  - id: triage
+    type: builtin
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      const result = await runPipeline({
+        workflow: workflowPath,
+      });
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("triage")?.outputs).toMatchObject({
+        changedFiles: 0,
+        insertions: 0,
+        deletions: 0,
+        diffSummary: "Not a git repository."
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("fails fast with a clear message when native execution is launched outside git", async () => {
+    const projectRoot = join(tempDir, "project-requires-git");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: native-pipeline
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
+  - id: implement
+    type: agent
+    agent: developer
+    depends_on: [plan-approval]
+  - id: verify
+    type: agent
+    agent: reviewer
+    depends_on: [implement]
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      await expect(
+        runPipeline({
+          workflow: workflowPath,
+          approvePlan: true
+        })
+      ).rejects.toThrow("Native Lineup execution requires a git repository");
+    } finally {
+      process.chdir(origCwd);
+    }
   });
 
 
@@ -416,6 +501,209 @@ stages:
 
       expect(result.status).toBe("success");
       expect(readFileSync(join(projectRoot, ".lineup", ".runs", "host01", "artifacts", "plan.yaml"), "utf8")).toContain("kind: Plan");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("waits for a host-written research artifact and uses its structured outputs", async () => {
+    const projectRoot = join(tempDir, "project-host-research");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-only
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      setTimeout(() => {
+        writeFileSync(
+          join(projectRoot, ".lineup", ".runs", "hostrs", "artifacts", "research.yaml"),
+          `type: research
+agent: researcher
+date: 2026-04-13
+topic: host research handoff
+status: complete
+pipeline_stage: research
+what_found:
+  modules:
+    - src/app.ts
+how_it_works: Reads the generated artifact.
+constraints:
+  git: required
+gaps:
+  follow_up: []
+`,
+          "utf8"
+        );
+      }, 50);
+
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "host"
+        },
+        {
+          runId: "hostrs"
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        how_it_works: "Reads the generated artifact."
+      });
+      expect(String(result.stageResults.get("research")?.outputs.artifactPath)).toContain("/.lineup/.runs/hostrs/artifacts/research.yaml");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("runs plan, implement, and verify through the local human agent runner", async () => {
+    const projectRoot = join(tempDir, "project-human-runner");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: human-pipeline
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [research]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
+  - id: implement
+    type: agent
+    agent: developer
+    depends_on: [plan-approval]
+  - id: verify
+    type: agent
+    agent: reviewer
+    depends_on: [implement]
+`);
+
+    const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        capturedPrompts.push({ agent: input.agent, prompt: input.prompt });
+        if (input.agent === "researcher") {
+          return {
+            host: "claude",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-13
+topic: test
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Captured by the local runner.
+constraints:
+  tooling: local
+gaps:
+  pending: []
+`
+          };
+        }
+
+        if (input.agent === "architect") {
+          return {
+            host: "claude",
+            stderr: "",
+            content: APPROVED_PLAN
+          };
+        }
+
+        if (input.agent === "developer") {
+          return {
+            host: "claude",
+            stderr: "",
+            content: JSON.stringify({
+              status: "complete",
+              summary: "implemented the requested change",
+              changes_made: [
+                {
+                  file: "README.md",
+                  description: "updated readme",
+                  task_id: "CHANGE-001"
+                }
+              ],
+              issues_encountered: []
+            })
+          };
+        }
+
+        return {
+          host: "claude",
+          stderr: "",
+          content: REVIEW_YAML
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          approvePlan: true,
+          prompt: "Add a site folder"
+        },
+        {
+          runId: "human1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        how_it_works: "Captured by the local runner."
+      });
+      expect(capturedPrompts.find((entry) => entry.agent === "researcher")?.prompt).not.toContain("Create or overwrite");
+      expect(capturedPrompts.find((entry) => entry.agent === "architect")?.prompt).not.toContain("Create or overwrite");
+      expect(result.stageResults.get("plan")?.outputs).toHaveProperty("planPath");
+      expect(result.stageResults.get("implement")?.outputs).toHaveProperty("task_results");
+      expect(result.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
     } finally {
       process.chdir(origCwd);
     }

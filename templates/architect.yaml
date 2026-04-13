@@ -1,3 +1,6 @@
+apiVersion: lineup/v3
+kind: Plan
+
 # Architect output schema -- used as a format reference.
 # Plans are ephemeral by default; saved to a user-chosen path on request.
 

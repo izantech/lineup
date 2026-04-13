@@ -20,8 +20,22 @@ Determine the CLI command based on the user's request:
 - **With workflow**: `lineup run "<user request>" --workflow <path> --mode host`
 - **Dry run** (preview only): add `--dry-run`
 
-Run the command via Bash. The CLI emits NDJSON (one JSON object per line) to
-stdout. Read the output line by line.
+Prefer a detached launch so the host session stays responsive while you monitor
+progress and handle gates.
+
+Recommended pattern:
+
+1. Create a temporary NDJSON log file under `.lineup/.runs/.host/`
+2. Launch `lineup run ... --mode host` in the background, redirecting:
+   - stdout → the NDJSON log file
+   - stderr → a sibling `.stderr` file
+   - pid → a sibling `.pid` file
+3. Poll the NDJSON log file and process only new lines as they appear
+4. If detached launch is unavailable in the host, fall back to a foreground Bash call
+   and stream stdout line by line
+
+The CLI emits NDJSON (one JSON object per line) to stdout. Treat stdout as the
+protocol stream and stderr as diagnostics.
 
 ## Protocol Messages
 
@@ -44,6 +58,38 @@ lineup gate respond <params.runId> <id> --choice "<user_choice>" --json
 
 If the user provides a reason or elaboration, add `--reason "<text>"`.
 
+### `agent/spawn` — execute the requested agent and hand back the artifact
+
+When you see `"method": "agent/spawn"` in the output:
+
+1. Read `params.agent`, `params.prompt`, `params.inputs`, and `params.outputs`
+2. Run the requested agent work inside the current host session
+3. Treat `params.prompt` as the full execution contract
+4. Return only the structured payload requested by the CLI — no wrapper prose
+5. If `params.outputs.path` is present, write the payload **atomically**:
+   - write to `<path>.tmp`
+   - rename `<path>.tmp` to `<path>`
+6. Do not invent a different file path and do not wait for the CLI to ask again
+
+Expected patterns:
+
+- `research` / `plan` / `document` stages:
+  - generate the requested YAML payload from `params.prompt`
+  - write it to `params.outputs.path`
+- `implement` task execution:
+  - do the code changes in the provided worktree/session
+  - return the requested JSON payload
+  - write it to `params.outputs.path` when provided, otherwise to the response path implied by the runtime contract
+- `verify`:
+  - review the implementation and emit the requested review payload
+  - write it to `params.outputs.path`
+
+If `params.outputs.path` is missing, use the path described in the prompt or in the
+native request artifact under `.lineup/.runs/<runId>/artifacts/native/requests/`.
+
+Never abandon the pipeline and "take over manually" just because an `agent/spawn`
+request arrived. The CLI is waiting for that artifact to continue.
+
 ### Gate types
 
 | gateType | When | Interaction |
@@ -60,6 +106,12 @@ If the user provides a reason or elaboration, add `--reason "<text>"`.
 
 When `params.channel` is `"status"`, show `params.chunk` to the user as a
 progress update. Ignore `"stdout"` and `"stderr"` channels.
+
+When you launch the CLI, tell the user what is happening in plain language:
+
+- "Launching Lineup in host mode."
+- "I will stream stage updates and stop when a gate needs your input."
+- "If the project is missing workflow or git prerequisites, I will fix or report that before the run starts."
 
 ### `pipeline/complete` — terminal
 
@@ -87,6 +139,10 @@ verification results.
 
 If the CLI exits with non-zero status:
 - Read stderr for the error message
+- If the error says a workflow is missing: run `lineup init --json`, explain what
+  was scaffolded, then retry
+- If the error says native execution requires git: explain that Lineup needs a git
+  repository with an initial commit because implementation uses isolated worktrees
 - If the error mentions a stale lock: suggest `lineup cancel <run-id>` or check
   `lineup pending --json`
 - If the error is a validation failure: report the specific issue

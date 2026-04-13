@@ -15,6 +15,10 @@ Distributed through a single CLI: `lineup`.
 npm install -g @izantech/lineup-cli
 ```
 
+For native implementation runs, Lineup expects the current project to have at least
+one git commit. In a new directory, `lineup init` will initialize git for you, then
+you should run `git add -A && git commit -m "Initial commit"` before the first full pipeline.
+
 ## Manage hosts
 
 ```bash
@@ -64,6 +68,15 @@ See [docs/commands.md](/Users/izan/Dev/Projects/lineup/docs/commands.md:1) for t
 
 If `--mode` is omitted, Lineup defaults to `human` on a TTY and `host` otherwise.
 
+`lineup init` scaffolds the workflow and runtime directories and initializes a git
+repository if one does not already exist. You still need an initial commit before
+native implementation can run. Use `lineup doctor --json` to check workflow and git
+readiness before the first run.
+
+`./dev install local` is a clean replace flow: it removes the previously installed
+global CLI, clears managed host installs, rebuilds the CLI from source, reinstalls
+the global package, and regenerates host skills from the current working tree.
+
 ### Host behavior
 
 | Operation | Claude | Codex | OpenCode |
@@ -97,6 +110,15 @@ OpenCode:
 - `/lineup-digest`
 
 These host wrappers call the same native runtime with `lineup run "<user request>" --mode host`.
+They should preflight workflow and git readiness first, then treat stdout as an
+NDJSON protocol stream and keep stderr for diagnostics.
+
+The runtime is also defensive about common host output mistakes:
+
+- planner responses that arrive as prose instead of a structured `Plan` get one stricter retry
+- fenced JSON/YAML is repaired before validation
+- developer responses accept common variants like `status: "done"`
+- markdown-style reviewer summaries are normalized into `lineup/v3 Review` YAML
 
 ## Canonical source model
 

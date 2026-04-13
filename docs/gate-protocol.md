@@ -2,6 +2,16 @@
 
 In `lineup run --mode host`, the CLI emits `gate/request` messages via NDJSON when
 user interaction is needed.
+
+Before a host launches `lineup run --mode host`, it should make sure the current
+project has:
+
+- a default workflow (`lineup init` scaffolds one)
+- a git repository (`lineup init` creates one if missing)
+- at least one git commit
+
+The recommended host pattern is to launch the CLI in the background, write stdout to
+an NDJSON log file, then poll and process only new lines as they appear.
 Each gate has a typed `gateType` field:
 
 | gateType | Stage | Purpose |
@@ -44,6 +54,14 @@ In `host` mode, `agent/spawn` messages are also part of the contract:
 
 Hosts should write these files atomically (temp file + rename). The CLI polls for them
 and repairs fenced JSON/YAML payloads before schema validation.
+
+If the planner writes prose instead of a structured `Plan`, the CLI issues one
+immediate retry with stricter instructions before failing the run. For developer
+and reviewer outputs, the runtime also normalizes a few common variants:
+
+- developer JSON may use `status: done|success|complete`
+- `changes_made` entries may omit `task_id`
+- reviewer markdown summaries are converted into `lineup/v3 Review` YAML
 
 ## Interactive Mode
 

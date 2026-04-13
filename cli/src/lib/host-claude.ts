@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -27,6 +28,28 @@ function checkPluginOnDisk(): { installed: boolean; source: StatusHost["source"]
     return { installed: true, source: "cli-managed" };
   }
   return { installed: false, source: null };
+}
+
+function claudePluginVersionsRoot(homeDir = os.homedir()): string {
+  return path.join(claudeMarketplaceRoot(homeDir), "plugins", "lineup");
+}
+
+function pruneClaudeManagedPluginVersions(options: { keepVersion?: string; homeDir?: string } = {}): void {
+  const versionsRoot = claudePluginVersionsRoot(options.homeDir);
+  if (!existsSync(versionsRoot)) {
+    return;
+  }
+
+  for (const entry of readdirSync(versionsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    if (options.keepVersion && entry.name === options.keepVersion) {
+      continue;
+    }
+
+    rmSync(path.join(versionsRoot, entry.name), { recursive: true, force: true });
+  }
 }
 
 function writeMarketplace(root: string, pluginSource: string, version: string): string {
@@ -101,8 +124,9 @@ export function describeClaudeProtocolBridge(sourceRoot: string): ClaudeProtocol
   };
 }
 
-export function prepareClaudePluginFromSource(sourceRoot: string, version: string): string {
-  const targetRoot = claudeManagedPluginDir(version);
+export function prepareClaudePluginFromSource(sourceRoot: string, version: string, homeDir = os.homedir()): string {
+  const targetRoot = claudeManagedPluginDir(version, homeDir);
+  rmSync(targetRoot, { recursive: true, force: true });
   mkdirSync(targetRoot, { recursive: true });
 
   prepareClaudePluginSkeleton(sourceRoot, targetRoot);
@@ -163,13 +187,16 @@ export async function statusClaude(): Promise<StatusHost> {
 export async function installClaudeFromPreparedPlugin({
   pluginSource,
   version,
-  migrateLegacy
+  migrateLegacy,
+  homeDir = os.homedir()
 }: {
   pluginSource: string;
   version: string;
   migrateLegacy: boolean;
+  homeDir?: string;
 }): Promise<void> {
-  const marketplaceRoot = claudeMarketplaceRoot();
+  pruneClaudeManagedPluginVersions({ keepVersion: version, homeDir });
+  const marketplaceRoot = claudeMarketplaceRoot(homeDir);
   const marketplacePath = writeMarketplace(marketplaceRoot, pluginSource, version);
 
   if (migrateLegacy) {
@@ -194,7 +221,7 @@ export async function updateClaudeLocal(): Promise<void> {
   assertSuccess(update, `claude plugin update ${CLAUDE_LOCAL_PLUGIN}`);
 }
 
-export async function uninstallClaude(): Promise<void> {
+export async function uninstallClaude(homeDir = os.homedir()): Promise<void> {
   const removeLocal = await runCommand("claude", ["plugin", "remove", CLAUDE_LOCAL_PLUGIN]);
   if (removeLocal.code !== 0) {
     const output = `${removeLocal.stdout}\n${removeLocal.stderr}`;
@@ -202,6 +229,9 @@ export async function uninstallClaude(): Promise<void> {
       assertSuccess(removeLocal, `claude plugin remove ${CLAUDE_LOCAL_PLUGIN}`);
     }
   }
+
+  pruneClaudeManagedPluginVersions({ homeDir });
+  rmSync(path.join(claudeMarketplaceRoot(homeDir), ".claude-plugin", "marketplace.json"), { force: true });
 }
 
 export async function detectLegacyClaudeInstall(): Promise<boolean> {

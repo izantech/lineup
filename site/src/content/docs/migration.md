@@ -37,6 +37,8 @@ If you installed from source:
 | Tactic execution | Skill interprets tactic YAML | CLI converts tactics to workflows via `tacticToWorkflow()` |
 
 Skills no longer contain pipeline logic. They launch `lineup run "<user request>" --mode host`, read NDJSON protocol messages from stdout, and handle gates by asking the user and calling `lineup gate respond <run-id> <request-id> --choice <value>`.
+In fresh projects they should preflight `lineup init` plus git readiness first. `lineup init`
+now initializes git when needed, but native implementation still requires an initial commit.
 
 ### Gate protocol
 
@@ -65,7 +67,10 @@ Use `lineup tactic convert <name>` to preview the conversion without running.
 
 ### Pre-stage logic
 
-The triage and research stages are no longer stubs. Triage now runs `git diff --stat HEAD` and counts project files to produce a structured assessment. Research stages emit `agent/spawn` protocol messages for researcher agents. Clarify and gate stages continue to use the existing `gate/request` flow.
+The triage and research stages are no longer stubs. Triage now reads git diff stats when a
+repository with a HEAD commit is available and otherwise falls back cleanly to file-system
+stats. Research stages emit `agent/spawn` protocol messages for researcher agents. Clarify
+and gate stages continue to use the existing `gate/request` flow.
 
 ## New CLI flags
 

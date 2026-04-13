@@ -3,12 +3,16 @@ import { dirname, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import process from "node:process";
+import { stringify as stringifyYaml } from "yaml";
 import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
+import type { LocalAgentRunner } from "./agent-runner.js";
 import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store.js";
 import {
+  applyWorkspacePatch,
   executeNativeExecutor,
   prepareExecutionArtifacts,
   type NativeExecutionDriver,
+  type NativeTaskExecutionResult,
   waitForResponseFile
 } from "./executor.js";
 import {
@@ -25,7 +29,8 @@ import {
   lineupRunArtifactsDir,
   lineupRunDebugBundleFile,
   lineupRunDir,
-  lineupRuntimeLockFile
+  lineupRuntimeLockFile,
+  packageRoot
 } from "./paths.js";
 import {
   appendPipelineCompletedStage,
@@ -42,7 +47,10 @@ import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpressionSafe, type ExpressionContext } from "./expression.js";
 import { runVerificationHooks, type VerificationResult } from "./verification.js";
 import { notifyPipelineComplete } from "./notify.js";
-import { repairYamlOutput } from "./llm-output-repair.js";
+import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
+import { CliError } from "./errors.js";
+import { inspectGitProject } from "./git.js";
+import { buildAgentSystemPrompt } from "./prompt-builder.js";
 
 
 export type PipelineResult = {
@@ -61,6 +69,7 @@ type StageResult = {
 
 export type RunPipelineHooks = {
   runId?: string;
+  localAgentRunner?: LocalAgentRunner;
   native?: {
     driver?: NativeExecutionDriver;
     planContent?: string;
@@ -72,6 +81,8 @@ export type RunPipelineHooks = {
  */
 export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
   const runMode = options.mode ?? (process.stdin.isTTY && process.stdout.isTTY ? "human" : "host");
+  const projectRoot = resolve(".");
+  const localAgentRunner = runMode === "human" ? hooks.localAgentRunner : undefined;
   // 1. Load workflow
   let workflow: WorkflowDefinition;
   let workflowPath: string;
@@ -91,6 +102,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   // 2. Validate DAG
   validateWorkflowDag(workflow);
+  validateProjectPrerequisites(projectRoot, workflow, Boolean(options.dryRun));
 
   // 3. Generate run ID (6 char hex from random bytes)
   const runId =
@@ -101,7 +113,6 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       .slice(0, 6);
 
   // 4. Setup directories
-  const projectRoot = resolve(".");
   const runRoot = lineupRunDir(runId, projectRoot);
   const artifactDir = lineupRunArtifactsDir(runId, projectRoot);
   const cacheDir = resolve(projectRoot, ".lineup", ".cache");
@@ -211,7 +222,21 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, runMode);
+          const result = await executePreStage(
+            stage,
+            expressionCtx,
+            projectRoot,
+            artifactDir,
+            runId,
+            options.prompt ?? "",
+            () => protocolRequestId++,
+            emitProtocol,
+            emitStatus,
+            options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined,
+            options.validateOutputs !== false,
+            runMode,
+            localAgentRunner
+          );
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
           if (result.status === "blocked") {
@@ -223,13 +248,17 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           // Phase 1: invoke planner adapter directly
           const planResult = await executePlannerPhase(
             stage,
+            expressionCtx,
             projectRoot,
             artifactDir,
             runId,
+            options.prompt ?? "",
             () => protocolRequestId++,
             emitProtocol,
             emitStatus,
-            hooks
+            hooks,
+            runMode,
+            localAgentRunner
           );
           stageResults.set(stageId, planResult);
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
@@ -346,7 +375,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 emitStatus,
                 implementStage,
                 verifyStage,
-                driver: hooks.native?.driver,
+                driver: hooks.native?.driver ?? createHumanNativeDriver(localAgentRunner),
                 implementMethod: options.implementMethod,
                 verificationResults
               });
@@ -410,11 +439,12 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     emitStatus,
                     implementStage,
                     verifyStage,
-                    driver: hooks.native?.driver,
+                    driver: hooks.native?.driver ?? createHumanNativeDriver(localAgentRunner),
                     implementMethod: options.implementMethod,
                     verificationResults,
                     taskFilter: nativeResult.failedTaskIds
                   });
+                  await applyWorkspacePatch(projectRoot, retryResult.workspacePatchPath);
                   pipelineState = savePipelineState(
                     updatePipelineArtifactHashes(pipelineState, {
                       plan: retryResult.planRecord.sha256,
@@ -428,6 +458,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                   expressionCtx.stages["implement"] = { outputs: retryResult.implementResult.outputs };
                   expressionCtx.stages["verify"] = { outputs: retryResult.verifyResult.outputs };
                 } else if (gateResponse.choice === "accept") {
+                  await applyWorkspacePatch(projectRoot, nativeResult.workspacePatchPath);
                   pipelineState = savePipelineState(
                     updatePipelineArtifactHashes(pipelineState, {
                       plan: nativeResult.planRecord.sha256,
@@ -450,6 +481,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                   throw new Error(`Verification aborted: ${reviewSummary}`);
                 }
               } else {
+                await applyWorkspacePatch(projectRoot, nativeResult.workspacePatchPath);
                 pipelineState = savePipelineState(
                   updatePipelineArtifactHashes(pipelineState, {
                     plan: nativeResult.planRecord.sha256,
@@ -565,7 +597,10 @@ function findDefaultWorkflow(): string {
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
-  throw new Error("No workflow file found. Specify one with --workflow <path>.");
+  throw new CliError(
+    "No workflow file found. Run `lineup init` to scaffold .lineup-core/workflows/full-pipeline.yaml, or pass --workflow <path>.",
+    { code: "artifact_validation_failed" }
+  );
 }
 
 function resolveTacticPath(name: string): string {
@@ -631,16 +666,7 @@ function writeDebugBundle(projectRoot: string, runId: string, payload: unknown):
 }
 
 function resolveGitTreeSha(projectRoot: string): string | undefined {
-  try {
-    return execSync("git rev-parse HEAD^{tree}", {
-      cwd: projectRoot,
-      stdio: ["ignore", "pipe", "ignore"]
-    })
-      .toString()
-      .trim();
-  } catch {
-    return undefined;
-  }
+  return inspectGitProject(projectRoot).treeSha;
 }
 
 function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): void {
@@ -654,17 +680,235 @@ function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): vo
   }
 }
 
+function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExecutionDriver | undefined {
+  if (!localAgentRunner) {
+    return undefined;
+  }
+
+  return {
+    async executeTask(input) {
+      const result = await localAgentRunner.invoke({
+        projectRoot: input.projectRoot,
+        workingDirectory: input.workspaceRoot,
+        agent: "developer",
+        prompt: input.prompt,
+        timeoutMs: input.timeoutMs,
+        addDirs: [input.runRoot, input.artifactDir]
+      });
+      return JSON.parse(repairJsonOutput(result.content).content) as NativeTaskExecutionResult;
+    },
+    async executeReview(input) {
+      const reviewPath = resolve(input.artifactDir, "review.yaml");
+      const result = await localAgentRunner.invoke({
+        projectRoot: input.projectRoot,
+        workingDirectory: input.workspaceRoot,
+        agent: "reviewer",
+        prompt: input.prompt,
+        timeoutMs: input.timeoutMs,
+        addDirs: [input.runRoot, input.artifactDir],
+        expectedOutputPath: reviewPath
+      });
+      return {
+        reviewYaml: repairYamlOutput(result.content).content
+      };
+    }
+  };
+}
+
+function selectStageInput(stage: WorkflowStage, ctx: ExpressionContext): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+
+  for (const input of stage.inputs ?? []) {
+    const sourceOutputs = (ctx.stages[input.source]?.outputs ?? {}) as Record<string, unknown>;
+    const selected: Record<string, unknown> = {};
+
+    for (const field of input.fields) {
+      if (field in sourceOutputs) {
+        selected[field] = sourceOutputs[field];
+      }
+    }
+
+    if (Object.keys(selected).length > 0) {
+      payload[input.source] = selected;
+      continue;
+    }
+
+    if (input.fallback) {
+      payload[input.source] = { fallback: input.fallback };
+    }
+  }
+
+  return payload;
+}
+
+function formatStageContext(stage: WorkflowStage, ctx: ExpressionContext): string {
+  const payload = selectStageInput(stage, ctx);
+  const lines: string[] = [];
+
+  for (const [source, value] of Object.entries(payload)) {
+    lines.push(`${source}:`);
+
+    if (value && typeof value === "object" && !Array.isArray(value) && "artifactPath" in value && typeof (value as { artifactPath?: unknown }).artifactPath === "string") {
+      lines.push(`Read artifact: ${(value as { artifactPath: string }).artifactPath}`);
+      const copy = { ...(value as Record<string, unknown>) };
+      delete copy.artifactPath;
+      if (Object.keys(copy).length > 0) {
+        lines.push(JSON.stringify(copy, null, 2));
+      }
+    } else {
+      lines.push(JSON.stringify(value, null, 2));
+    }
+
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
+}
+
+function describeStageOutputs(stage: WorkflowStage): string {
+  const entries = Object.entries(stage.outputs ?? {});
+  if (entries.length === 0) {
+    return "- Return structured output only.";
+  }
+
+  return entries
+    .map(([name, def]) => `- ${name}: ${def.type}${def.max_length ? ` (max ${def.max_length})` : ""}`)
+    .join("\n");
+}
+
+function loadOutputTemplate(projectRoot: string, agentName: string): string | null {
+  const candidates = [
+    resolve(projectRoot, "templates", `${agentName}.yaml`),
+    resolve(packageRoot(), "templates", `${agentName}.yaml`)
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return readFileSync(candidate, "utf8").trim();
+    }
+  }
+
+  return null;
+}
+
+function resolveArtifactSchemaPath(agentName: string, outputSchema: string): string | undefined {
+  const packageSchemas = resolve(packageRoot(), "schemas");
+  if (outputSchema === "Plan") {
+    return resolve(packageSchemas, "yaml", "v3", "plan.schema.json");
+  }
+  if (agentName === "researcher") {
+    return resolve(packageSchemas, "yaml", "agent-output", "researcher.schema.json");
+  }
+  return undefined;
+}
+
+function buildStageAgentPrompt(input: {
+  stage: WorkflowStage;
+  projectRoot: string;
+  taskPrompt: string;
+  ctx: ExpressionContext;
+  outputSchema: string;
+  outputPath?: string;
+}): string {
+  const agentName = input.stage.agent ?? "architect";
+  const outputTemplate = loadOutputTemplate(input.projectRoot, agentName);
+  const prompt = buildAgentSystemPrompt({
+    agentFilePath: resolve(input.projectRoot, "agents", `${agentName}.md`),
+    promptTemplate: "{{AGENT_BODY}}",
+    extraInstructions: [
+      "Lineup stage contract:",
+      `- Stage ID: ${input.stage.id}`,
+      `- Stage description: ${input.stage.description ?? "n/a"}`,
+      `- User request: ${input.taskPrompt}`,
+      `- Output schema: ${input.outputSchema}`,
+      input.outputPath
+        ? `- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`
+        : "- Emit only the payload content with no prose or explanation.",
+      "",
+      "Expected fields:",
+      describeStageOutputs(input.stage),
+      ...(outputTemplate
+        ? [
+            "",
+            "Follow this output template shape exactly. Replace placeholder values, but keep the same YAML-style structure:",
+            outputTemplate,
+            "",
+            "Do not return markdown headings, bullets, or prose outside the structured payload."
+          ]
+        : []),
+      "",
+      "Stage context:",
+      formatStageContext(input.stage, input.ctx) || "(none)"
+    ].join("\n")
+  });
+
+  return prompt.prompt;
+}
+
+function slugifyTopic(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "task";
+}
+
+function normalizeResearchArtifact(raw: string, taskPrompt: string, source: string): string {
+  const parsed = parseRestrictedYaml(raw, source);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return raw;
+  }
+
+  const doc = { ...(parsed as Record<string, unknown>) };
+  const today = new Date().toISOString().slice(0, 10);
+  doc.type = "research";
+  doc.agent = "researcher";
+  doc.date = typeof doc.date === "string" && doc.date.trim().length > 0 ? doc.date : today;
+  doc.topic = typeof doc.topic === "string" && doc.topic.trim().length > 0 ? doc.topic : slugifyTopic(taskPrompt);
+  doc.status = "complete";
+  doc.pipeline_stage = doc.pipeline_stage ?? 2;
+  return stringifyStructuredYaml(doc);
+}
+
+function stringifyStructuredYaml(payload: unknown): string {
+  return stringifyYaml(payload);
+}
+
+function isStructuredPlanDraft(raw: string, source: string): boolean {
+  try {
+    const parsed = parseRestrictedYaml(repairYamlOutput(raw).content, source);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
+function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string): string {
+  return [
+    originalPrompt.trimEnd(),
+    "",
+    "Previous output was invalid because it was not a structured lineup/v3 Plan payload.",
+    "Return only the structured payload. Do not say that you wrote the plan. Do not add prose before or after the payload.",
+    "",
+    "Previous invalid output:",
+    invalidOutput.trim()
+  ].join("\n");
+}
+
 async function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
+  artifactDir: string,
   runId: string,
+  taskPrompt: string,
   nextRequestId: () => number,
   emitProtocol: (message: LineupProtocolMessage) => void,
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   gateTimeoutMs?: number,
   validateOutputs = true,
-  runMode: "human" | "host" = "human"
+  runMode: "human" | "host" = "human",
+  localAgentRunner?: LocalAgentRunner
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
@@ -712,20 +956,74 @@ async function executePreStage(
 
   if (stage.type === "agent" && stage.agent) {
     emitStatus(stage.id, `Spawning ${stage.agent} for stage '${stage.id}'.`);
-    const reqId = nextRequestId();
-    emitProtocol(
-      createLineupRequest({
-        method: "agent/spawn",
-        id: reqId,
-        params: { runId, stageId: stage.id, agent: stage.agent, prompt: "" }
-      })
-    );
-    emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
-    const result: StageResult = { id: stage.id, status: "complete", outputs: { agentRequestId: reqId } };
-    if (typeof result.outputs["output_yaml"] === "string") {
-      validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, result.outputs["output_yaml"] as string, emitStatus, validateOutputs);
+    const outputPath = resolve(artifactDir, `${stage.id}.yaml`);
+    const prompt = buildStageAgentPrompt({
+      stage,
+      projectRoot,
+      taskPrompt,
+      ctx,
+      outputSchema: stage.agent === "researcher" ? "Research" : stage.agent,
+      outputPath: runMode === "host" ? outputPath : undefined
+    });
+
+    let rawOutput: string;
+    if (runMode === "human") {
+      if (!localAgentRunner) {
+        throw new CliError(`No local agent runner configured for stage '${stage.id}'.`, {
+          code: "agent_spawn_failed"
+        });
+      }
+      rawOutput = (
+        await localAgentRunner.invoke({
+          projectRoot,
+          workingDirectory: projectRoot,
+          agent: stage.agent,
+          prompt,
+          timeoutMs: 300_000,
+          addDirs: [artifactDir],
+          outputSchemaPath: resolveArtifactSchemaPath(stage.agent, stage.agent === "researcher" ? "Research" : stage.agent),
+          expectedOutputPath: outputPath
+        })
+      ).content;
+    } else {
+      const reqId = nextRequestId();
+      emitProtocol(
+        createLineupRequest({
+          method: "agent/spawn",
+          id: reqId,
+          params: {
+            runId,
+            stageId: stage.id,
+            agent: stage.agent,
+            prompt,
+            inputs: selectStageInput(stage, ctx),
+            outputs: {
+              schema: stage.agent === "researcher" ? "Research" : stage.agent,
+              path: outputPath
+            },
+            timeoutMs: 300_000,
+            retryAttempt: 0
+          }
+        })
+      );
+      rawOutput = await waitForResponseFile(outputPath, `${stage.id} response`, 300_000);
     }
-    return result;
+
+    let repaired = repairYamlOutput(rawOutput).content;
+    if (stage.agent === "researcher") {
+      repaired = normalizeResearchArtifact(repaired, taskPrompt, outputPath);
+    }
+    writeFileSync(outputPath, repaired, "utf8");
+    validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, repaired, emitStatus, validateOutputs);
+
+    const parsed = parseRestrictedYaml(repaired, outputPath) as Record<string, unknown>;
+    const outputs = {
+      ...Object.fromEntries(Object.keys(stage.outputs ?? {}).map((key) => [key, parsed[key]])),
+      artifactPath: outputPath
+    };
+
+    emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
+    return { id: stage.id, status: "complete", outputs };
   }
 
   if (stage.type === "reasoning") {
@@ -756,11 +1054,12 @@ type TriageOutputs = {
 };
 
 function executeTriageBuiltin(projectRoot: string): TriageStats {
+  const gitProject = inspectGitProject(projectRoot);
   let diffSummary = "";
   let changedFiles = 0;
   let insertions = 0;
   let deletions = 0;
-  try {
+  if (gitProject.hasHeadCommit) {
     diffSummary = execSync("git diff --stat HEAD", { cwd: projectRoot, timeout: 30000 }).toString().trim();
     const changedMatch = diffSummary.match(/(\d+) file/);
     const insertMatch = diffSummary.match(/(\d+) insertion/);
@@ -768,16 +1067,16 @@ function executeTriageBuiltin(projectRoot: string): TriageStats {
     changedFiles = changedMatch ? parseInt(changedMatch[1], 10) : 0;
     insertions = insertMatch ? parseInt(insertMatch[1], 10) : 0;
     deletions = deleteMatch ? parseInt(deleteMatch[1], 10) : 0;
-  } catch {
-    diffSummary = "";
+  } else if (gitProject.isRepository) {
+    diffSummary = "Git repository has no commits yet.";
+  } else {
+    diffSummary = "Not a git repository.";
   }
 
   let changedPaths: string[] = [];
-  try {
+  if (gitProject.hasHeadCommit) {
     const nameOnly = execSync("git diff --name-only HEAD", { cwd: projectRoot, timeout: 30000 }).toString().trim();
     changedPaths = nameOnly ? nameOnly.split("\n").filter(Boolean) : [];
-  } catch {
-    changedPaths = [];
   }
 
   let fileCount = 0;
@@ -792,6 +1091,32 @@ function executeTriageBuiltin(projectRoot: string): TriageStats {
   }
 
   return { fileCount, changedFiles, insertions, deletions, diffSummary, changedPaths };
+}
+
+function validateProjectPrerequisites(projectRoot: string, workflow: WorkflowDefinition, dryRun: boolean): void {
+  if (dryRun) {
+    return;
+  }
+
+  const requiresNativeExecution = workflow.stages.some((stage) => stage.id === "implement" || stage.id === "verify");
+  if (!requiresNativeExecution) {
+    return;
+  }
+
+  const gitProject = inspectGitProject(projectRoot);
+  if (!gitProject.isRepository) {
+    throw new CliError(
+      "Native Lineup execution requires a git repository because implementation runs use isolated git worktrees. Run `git init`, then create an initial commit before rerunning.",
+      { code: "isolation_failed" }
+    );
+  }
+
+  if (!gitProject.hasHeadCommit) {
+    throw new CliError(
+      "Native Lineup execution requires at least one git commit. Run `git add -A && git commit -m \"Initial commit\"`, then rerun.",
+      { code: "isolation_failed" }
+    );
+  }
 }
 
 function formatTriageContext(stats: TriageStats): string {
@@ -931,39 +1256,97 @@ async function emitGateAndWait(
 
 async function executePlannerPhase(
   stage: WorkflowStage,
+  ctx: ExpressionContext,
   projectRoot: string,
   artifactDir: string,
   runId: string,
+  taskPrompt: string,
   nextRequestId: () => number,
   emitProtocol: (message: LineupProtocolMessage) => void,
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
-  hooks: RunPipelineHooks
+  hooks: RunPipelineHooks,
+  runMode: "human" | "host",
+  localAgentRunner?: LocalAgentRunner
 ): Promise<StageResult> {
   const planPath = resolve(artifactDir, "plan.yaml");
-  emitProtocol(
-    createLineupRequest({
-      method: "agent/spawn",
-      id: nextRequestId(),
-      params: {
-        runId,
-        stageId: stage.id,
-        agent: stage.agent ?? "architect",
-        prompt: `Generate an implementation plan for the current pipeline run.`,
-        outputs: {
-          schema: "Plan",
-          path: planPath
-        },
-        timeoutMs: 300000,
-        retryAttempt: 0
-      }
-    })
-  );
+  const basePrompt = buildStageAgentPrompt({
+    stage,
+    projectRoot,
+    taskPrompt,
+    ctx,
+    outputSchema: "Plan",
+    outputPath: runMode === "host" ? planPath : undefined
+  });
 
   if (hooks.native?.planContent) {
     writeFileSync(planPath, repairYamlOutput(hooks.native.planContent).content, "utf8");
   } else {
-    const rawPlan = await waitForResponseFile(planPath, "Plan response", 300_000);
-    writeFileSync(planPath, repairYamlOutput(rawPlan).content, "utf8");
+    let prompt = basePrompt;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (runMode === "human") {
+        if (!localAgentRunner) {
+          throw new CliError("No local agent runner configured for the plan stage.", {
+            code: "agent_spawn_failed"
+          });
+        }
+        const result = await localAgentRunner.invoke({
+          projectRoot,
+          workingDirectory: projectRoot,
+          agent: stage.agent ?? "architect",
+          prompt,
+          timeoutMs: 300_000,
+          addDirs: [artifactDir],
+          outputSchemaPath: resolveArtifactSchemaPath(stage.agent ?? "architect", "Plan"),
+          expectedOutputPath: planPath
+        });
+        const repaired = repairYamlOutput(result.content).content;
+        writeFileSync(planPath, repaired, "utf8");
+        if (isStructuredPlanDraft(repaired, planPath)) {
+          break;
+        }
+        if (attempt === 1) {
+          throw new CliError(`Plan response at ${planPath} was not a structured lineup/v3 Plan payload.`, {
+            code: "malformed_output"
+          });
+        }
+        emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.")
+        prompt = buildPlannerRetryPrompt(basePrompt, repaired);
+        continue;
+      }
+
+      emitProtocol(
+        createLineupRequest({
+          method: "agent/spawn",
+          id: nextRequestId(),
+          params: {
+            runId,
+            stageId: stage.id,
+            agent: stage.agent ?? "architect",
+            prompt,
+            inputs: selectStageInput(stage, ctx),
+            outputs: {
+              schema: "Plan",
+              path: planPath
+            },
+            timeoutMs: 300000,
+            retryAttempt: attempt
+          }
+        })
+      );
+      const rawPlan = await waitForResponseFile(planPath, "Plan response", 300_000);
+      const repaired = repairYamlOutput(rawPlan).content;
+      writeFileSync(planPath, repaired, "utf8");
+      if (isStructuredPlanDraft(repaired, planPath)) {
+        break;
+      }
+      if (attempt === 1) {
+        throw new CliError(`Plan response at ${planPath} was not a structured lineup/v3 Plan payload.`, {
+          code: "malformed_output"
+        });
+      }
+      emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.")
+      prompt = buildPlannerRetryPrompt(basePrompt, repaired);
+    }
   }
 
   emitStatus(stage.id, `Approved plan artifact path: ${planPath}.`, true);

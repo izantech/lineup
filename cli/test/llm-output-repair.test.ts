@@ -57,6 +57,23 @@ describe("llm output repair", () => {
     expect(() => validateConstitutionYaml(repaired.content, "fixture/constitution.yaml")).not.toThrow();
   });
 
+  it("does not collapse valid yaml arrays into raw json snippets", () => {
+    const raw = [
+      "apiVersion: lineup/v3",
+      "kind: Review",
+      "status: PASS",
+      "summary: Looks good.",
+      "issues: []",
+      "test_results:",
+      "  test_suite:",
+      "    status: pass"
+    ].join("\n");
+
+    const repaired = repairYamlOutput(raw);
+    expect(repaired.content).toContain("kind: Review");
+    expect(repaired.content).toContain("issues: []");
+  });
+
   it("keeps invalid repaired output invalid", () => {
     const repaired = repairStructuredOutput(
       [

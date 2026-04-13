@@ -8,6 +8,28 @@ type PlanChange = {
   reads?: string[];
 };
 
+type PlanApproach = {
+  name: string;
+  strategy: string;
+  pros?: string[];
+  cons?: string[];
+  scope?: {
+    files_changed?: number;
+    lines_changed?: number;
+  };
+};
+
+type PlanAcceptanceCriterion = {
+  criterion: string;
+  verified_by?: string;
+};
+
+type PlanRisk = {
+  risk: string;
+  mitigation: string;
+  severity?: "low" | "medium" | "high" | "critical";
+};
+
 type PlanDependency = {
   from_change: number;
   to_change: number;
@@ -32,14 +54,14 @@ export type ApprovedPlan = {
   kind: "Plan";
   status: "approved";
   summary: string;
-  approaches: unknown[];
+  approaches: PlanApproach[];
   recommendation: {
     approach: string;
     rationale: string;
   };
   changes: PlanChange[];
-  acceptance_criteria: unknown[];
-  risks: unknown[];
+  acceptance_criteria: PlanAcceptanceCriterion[];
+  risks: PlanRisk[];
   dependencies?: PlanDependency[];
   parallelization_strategy?: PlanParallelizationStrategy;
 };

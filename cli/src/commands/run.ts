@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import process from "node:process";
+import { createLocalAgentRunner } from "../lib/agent-runner.js";
 import { CliError } from "../lib/errors.js";
 import { isInteractive } from "../lib/prompts.js";
 import { runPipeline } from "../lib/run-pipeline.js";
@@ -28,6 +29,7 @@ function resolveRunMode(mode?: RunMode): RunMode {
 
 export async function runRunCommand(options: RunCommandOptions): Promise<void> {
   const mode = resolveRunMode(options.mode);
+  const localAgentRunner = mode === "human" ? createLocalAgentRunner(options.host) : undefined;
   if (mode === "human" && !isInteractive()) {
     throw new CliError("Run mode 'human' requires an interactive TTY. Use --mode host in CI or host wrappers.", {
       code: "invalid_args"
@@ -48,7 +50,14 @@ export async function runRunCommand(options: RunCommandOptions): Promise<void> {
     });
   }
 
-  const result = await runPipeline({ ...options, mode });
+  if (mode === "human" && localAgentRunner) {
+    process.stderr.write(`Using local host '${localAgentRunner.host}' for Lineup agent stages.\n`);
+  }
+
+  const result = await runPipeline(
+    { ...options, mode, host: localAgentRunner?.host ?? options.host },
+    localAgentRunner ? { localAgentRunner } : {}
+  );
 
   if (mode === "human") {
     const summary =

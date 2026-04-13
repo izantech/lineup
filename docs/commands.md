@@ -4,7 +4,7 @@
 
 - `./dev check` — run all checks (typecheck, test, schema, generate, build)
 - `./dev build` / `./dev typecheck` / `./dev test` — individual checks
-- `./dev install local` — build from source and install CLI + all host skills
+- `./dev install local` — clean-replace the global CLI and managed host skills from the current source tree
 - `./dev install remote` — install latest from npm
 - `./dev install clean [--purge]` — remove CLI and host skills
 - `./dev web` — start website dev server (Astro + Starlight)
@@ -19,6 +19,7 @@
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
+- `lineup doctor [--json]`
 - `lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--mode human|host] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
 - `lineup runs [--status <status>] [--json]`
 - `lineup show <run-id> [-w|--watch] [--json]`
@@ -51,3 +52,18 @@
 - `host` — NDJSON protocol output for skills, automation, and CI
 
 If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
+
+Before the first full native run, make sure:
+
+- `lineup init` has scaffolded `.lineup-core/workflows/full-pipeline.yaml`
+- `lineup init` has initialized a git repository if one was missing
+- the repository has at least one commit
+
+`lineup doctor --json` reports all three checks explicitly.
+
+`lineup run` also repairs a few common host/runtime output issues before failing:
+
+- fenced JSON/YAML payloads are unwrapped and revalidated
+- host planner output gets one stricter retry if it is prose instead of a structured `Plan`
+- native developer responses accept common variants like `status: done`
+- markdown-style reviewer summaries are normalized into `Review` YAML

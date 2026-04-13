@@ -31,6 +31,7 @@ describe("init command", () => {
   it("creates all expected directories and files from scratch", async () => {
     await runInitCommand({});
 
+    expect(existsSync(join(tempDir, ".git"))).toBe(true);
     expect(existsSync(join(tempDir, ".lineup", ".runs"))).toBe(true);
     expect(existsSync(join(tempDir, ".lineup", ".cache"))).toBe(true);
     expect(existsSync(join(tempDir, ".lineup", ".artifacts"))).toBe(true);
@@ -46,6 +47,8 @@ describe("init command", () => {
 
     const output = stdout.join("");
     expect(output).toContain("created:");
+    expect(output).toContain(".git");
+    expect(output).toContain("Initial commit");
   });
 
   it("is idempotent — running twice does not overwrite files", async () => {
@@ -57,20 +60,23 @@ describe("init command", () => {
     const output = stdout.join("");
     expect(output).not.toContain("created:");
     expect(output).toContain("already exists:");
+    expect(output).toContain(".git");
   });
 
   it("json output contains created/skipped entries", async () => {
     await runInitCommand({ json: true });
 
-    const parsed = JSON.parse(stdout.join("")) as Array<{ status: string }>;
+    const parsed = JSON.parse(stdout.join("")) as Array<{ status: string; path: string }>;
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBeGreaterThan(0);
     expect(parsed.every((e) => e.status === "created")).toBe(true);
+    expect(parsed.some((entry) => entry.path.endsWith("/.git"))).toBe(true);
 
     stdout.length = 0;
     await runInitCommand({ json: true });
 
-    const second = JSON.parse(stdout.join("")) as Array<{ status: string }>;
+    const second = JSON.parse(stdout.join("")) as Array<{ status: string; path: string }>;
     expect(second.every((e) => e.status === "already_exists")).toBe(true);
+    expect(second.some((entry) => entry.path.endsWith("/.git"))).toBe(true);
   });
 });

@@ -262,6 +262,7 @@ export type PipelineState = {
 export type RunOptions = {
   workflow?: string;
   tactic?: string;
+  host?: HostName;
   fromStage?: string;
   dryRun?: boolean;
   forceRerun?: boolean;

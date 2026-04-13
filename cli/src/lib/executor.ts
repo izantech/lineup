@@ -28,6 +28,8 @@ import {
   validateTasksJson
 } from "./validation.js";
 import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
+import { packageRoot } from "./paths.js";
+import { assertSuccess, runCommand } from "./process.js";
 
 export type ImplementationChange = {
   file: string;
@@ -134,6 +136,7 @@ export type NativeExecutorResult = {
   planRecord: StoredArtifactRecord;
   tasksRecord: StoredArtifactRecord;
   reviewRecord: StoredArtifactRecord;
+  workspacePatchPath?: string;
   implementResult: {
     id: "implement";
     status: "complete";
@@ -159,12 +162,22 @@ function ensureParentDirectory(filePath: string): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function normalizeApprovedPlan(rawPlan: string, source: string): { raw: string; parsed: ApprovedPlan } {
-  validatePlanYaml(rawPlan, source);
-  const parsed = parseRestrictedYaml(rawPlan, source) as ApprovedPlan;
+function normalizeApprovedPlan(rawPlan: string, source: string, projectRoot: string): { raw: string; parsed: ApprovedPlan } {
+  let parsed: NormalizedPlanArtifact;
+  let validatedRaw = rawPlan;
+
+  try {
+    validatePlanYaml(rawPlan, source);
+    parsed = parseRestrictedYaml(rawPlan, source) as NormalizedPlanArtifact;
+  } catch {
+    const normalized = normalizePlanDraft(parseRestrictedYaml(rawPlan, source), source, projectRoot);
+    validatedRaw = stringifyYaml(normalized);
+    validatePlanYaml(validatedRaw, source);
+    parsed = normalized;
+  }
 
   if (parsed.status === "approved") {
-    return { raw: rawPlan, parsed };
+    return { raw: validatedRaw, parsed: parsed as ApprovedPlan };
   }
 
   const approvedPlan: ApprovedPlan = {
@@ -177,6 +190,400 @@ function normalizeApprovedPlan(rawPlan: string, source: string): { raw: string; 
     raw: approvedYaml,
     parsed: approvedPlan
   };
+}
+
+function normalizePlanDraft(raw: unknown, source: string, projectRoot: string): NormalizedPlanArtifact {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new CliError(`Plan ${source} must be a YAML object.`, {
+      code: "artifact_validation_failed"
+    });
+  }
+
+  const doc = raw as Record<string, unknown>;
+  const normalizedChanges = normalizePlanChanges(doc.changes, projectRoot);
+  const changeIdMap = new Map<string, number>();
+  normalizedChanges.forEach((change, index) => {
+    changeIdMap.set(String(index + 1), index + 1);
+    if (typeof change._sourceId === "string" && change._sourceId.length > 0) {
+      changeIdMap.set(change._sourceId, index + 1);
+    }
+  });
+
+  const dependencies = normalizePlanDependencies(doc.dependencies, changeIdMap);
+  const parallelizationStrategy = normalizeParallelizationStrategy(doc.parallelization_strategy, changeIdMap);
+
+  const batches = parallelizationStrategy.batches ?? [];
+  const normalized: NormalizedPlanArtifact = {
+    apiVersion: "lineup/v3",
+    kind: "Plan",
+    status: normalizePlanStatus(doc.status),
+    summary: coerceRequiredString(doc.summary, "summary", source),
+    approaches: normalizePlanApproaches(doc.approaches),
+    recommendation: normalizePlanRecommendation(doc.recommendation, doc.approaches),
+    changes: normalizedChanges.map(({ _sourceId, ...change }) => change),
+    acceptance_criteria: normalizeAcceptanceCriteria(doc.acceptance_criteria),
+    risks: normalizePlanRisks(doc.risks),
+    ...(dependencies.length > 0 ? { dependencies } : {}),
+    ...(batches.length > 0 ||
+    parallelizationStrategy.default_recommendation ||
+    parallelizationStrategy.rationale
+      ? { parallelization_strategy: parallelizationStrategy }
+      : {})
+  };
+
+  return normalized;
+}
+
+type NormalizedPlanArtifact = Omit<ApprovedPlan, "status"> & {
+  status: "draft" | "approved" | "superseded";
+};
+
+type NormalizedPlanChange = ApprovedPlan["changes"][number] & { _sourceId?: string };
+
+function coerceRequiredString(value: unknown, label: string, source: string): string {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+
+  throw new CliError(`Plan ${source} is missing required field '${label}'.`, {
+    code: "artifact_validation_failed"
+  });
+}
+
+function normalizePlanStatus(value: unknown): NormalizedPlanArtifact["status"] {
+  if (value === "approved" || value === "superseded") {
+    return value;
+  }
+  return "draft";
+}
+
+function normalizePlanApproaches(value: unknown): ApprovedPlan["approaches"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [
+      {
+        name: "Default approach",
+        strategy: "Implement the requested change directly with the smallest viable diff."
+      }
+    ];
+  }
+
+  return value.map((entry, index) => {
+    const item = typeof entry === "object" && entry !== null && !Array.isArray(entry) ? (entry as Record<string, unknown>) : {};
+    const scope = normalizeApproachScope(item.scope ?? item.estimated_scope);
+    return {
+      name:
+        firstNonEmptyString(item.name, item.id, item.approach, `Approach ${index + 1}`) ?? `Approach ${index + 1}`,
+      strategy:
+        firstNonEmptyString(item.strategy, item.description, item.summary, "Describe how the approach works.") ??
+        "Describe how the approach works.",
+      ...(normalizeStringArray(item.pros).length > 0 ? { pros: normalizeStringArray(item.pros) } : {}),
+      ...(normalizeStringArray(item.cons).length > 0 ? { cons: normalizeStringArray(item.cons) } : {}),
+      ...(scope ? { scope } : {})
+    };
+  });
+}
+
+function normalizeApproachScope(value: unknown): { files_changed?: number; lines_changed?: number } | undefined {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const item = value as Record<string, unknown>;
+    const filesChanged = coercePositiveInteger(item.files_changed);
+    const linesChanged = coercePositiveInteger(item.lines_changed);
+    if (filesChanged !== undefined || linesChanged !== undefined) {
+      return {
+        ...(filesChanged !== undefined ? { files_changed: filesChanged } : {}),
+        ...(linesChanged !== undefined ? { lines_changed: linesChanged } : {})
+      };
+    }
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const filesMatch = value.match(/(\d+)\s*file/i);
+  const lineMatch = value.match(/(\d+)(?:\s*-\s*(\d+))?\s*line/i);
+  const filesChanged = filesMatch ? Number.parseInt(filesMatch[1], 10) : undefined;
+  const linesChanged = lineMatch ? Number.parseInt(lineMatch[2] ?? lineMatch[1], 10) : undefined;
+  if (filesChanged === undefined && linesChanged === undefined) {
+    return undefined;
+  }
+  return {
+    ...(filesChanged !== undefined ? { files_changed: filesChanged } : {}),
+    ...(linesChanged !== undefined ? { lines_changed: linesChanged } : {})
+  };
+}
+
+function normalizePlanRecommendation(value: unknown, approaches: unknown): ApprovedPlan["recommendation"] {
+  const item = typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const normalizedApproaches = normalizePlanApproaches(approaches);
+  return {
+    approach: firstNonEmptyString(item.approach, normalizedApproaches[0]?.name, "Default approach") ?? "Default approach",
+    rationale:
+      firstNonEmptyString(
+        item.rationale,
+        "This approach best balances scope, risk, and implementation speed for the requested task."
+      ) ?? "This approach best balances scope, risk, and implementation speed for the requested task."
+  };
+}
+
+function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPlanChange[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new CliError("Plan must include at least one change.", {
+      code: "artifact_validation_failed"
+    });
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+
+    const item = entry as Record<string, unknown>;
+    const file = normalizeDraftPath(firstNonEmptyString(item.file), projectRoot);
+    const change = firstNonEmptyString(item.change, item.description, item.action);
+    if (!file || !change) {
+      return [];
+    }
+
+    return [
+      {
+        file,
+        change,
+        rationale:
+          firstNonEmptyString(item.rationale, item.description, item.reason, "Required to satisfy the approved plan.") ??
+          "Required to satisfy the approved plan.",
+        ...(normalizeDraftPaths(normalizeStringArray(item.reads), projectRoot).length > 0
+          ? { reads: normalizeDraftPaths(normalizeStringArray(item.reads), projectRoot) }
+          : {}),
+        ...(typeof item.id === "string" && item.id.trim().length > 0 ? { _sourceId: item.id.trim() } : {})
+      }
+    ];
+  });
+}
+
+function normalizeDraftPath(value: string | undefined, projectRoot: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (!path.isAbsolute(value)) {
+    return value;
+  }
+
+  const relative = path.relative(projectRoot, value);
+  if (!relative || relative.startsWith("..")) {
+    return value;
+  }
+
+  return relative.replaceAll(path.sep, "/");
+}
+
+function normalizeDraftPaths(values: string[], projectRoot: string): string[] {
+  return values
+    .map((value) => normalizeDraftPath(value, projectRoot))
+    .filter((value): value is string => Boolean(value));
+}
+
+function normalizeParallelizationStrategy(
+  value: unknown,
+  changeIdMap: Map<string, number>
+): NonNullable<ApprovedPlan["parallelization_strategy"]> {
+  const item = typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const batches = Array.isArray(item.batches)
+    ? item.batches.flatMap((entry, index) => {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+          return [];
+        }
+        const batch = entry as Record<string, unknown>;
+        const normalizedChanges = normalizeChangeReferences(batch.changes, changeIdMap);
+        if (normalizedChanges.length === 0) {
+          return [];
+        }
+        return [
+          {
+            batch_number: coercePositiveInteger(batch.batch_number) ?? coercePositiveInteger(batch.batch) ?? index + 1,
+            execution: normalizeExecutionMode(batch.execution, batch.parallel),
+            changes: normalizedChanges,
+            rationale:
+              firstNonEmptyString(batch.rationale, batch.notes, "These changes can be executed together.") ??
+              "These changes can be executed together."
+          }
+        ];
+      })
+    : [];
+
+  const defaultRecommendation = normalizeExecutionLabel(item.default_recommendation ?? item.recommendation);
+  const rationale = firstNonEmptyString(item.rationale, item.notes);
+
+  return {
+    ...(batches.length > 0 ? { batches } : {}),
+    ...(defaultRecommendation ? { default_recommendation: defaultRecommendation } : {}),
+    ...(rationale ? { rationale } : {})
+  };
+}
+
+function normalizePlanDependencies(
+  value: unknown,
+  changeIdMap: Map<string, number>
+): NonNullable<ApprovedPlan["dependencies"]> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+    const item = entry as Record<string, unknown>;
+    const fromChange = resolveChangeReference(item.from_change ?? item.from, changeIdMap);
+    const toChange = resolveChangeReference(item.to_change ?? item.to, changeIdMap);
+    const description = firstNonEmptyString(item.description, item.reason);
+    if (!fromChange || !toChange || !description || fromChange === toChange) {
+      return [];
+    }
+    return [
+      {
+        from_change: fromChange,
+        to_change: toChange,
+        description
+      }
+    ];
+  });
+}
+
+function normalizeAcceptanceCriteria(value: unknown): ApprovedPlan["acceptance_criteria"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [{ criterion: "The requested change is implemented and verified." }];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry === "string" && entry.trim().length > 0) {
+      return [{ criterion: entry.trim() }];
+    }
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+    const item = entry as Record<string, unknown>;
+    const criterion = firstNonEmptyString(item.criterion, item.description, item.name);
+    if (!criterion) {
+      return [];
+    }
+    const verifiedBy = firstNonEmptyString(item.verified_by, item.verification, item.verify_with);
+    return [
+      {
+        criterion,
+        ...(verifiedBy ? { verified_by: verifiedBy } : {})
+      }
+    ];
+  });
+}
+
+function normalizePlanRisks(value: unknown): ApprovedPlan["risks"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [
+      {
+        risk: "No explicit risks were captured in the draft plan.",
+        mitigation: "Review the implementation scope before execution.",
+        severity: "low"
+      }
+    ];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+    const item = entry as Record<string, unknown>;
+    const risk = firstNonEmptyString(item.risk, item.description);
+    if (!risk) {
+      return [];
+    }
+    const severity = normalizeSeverity(item.severity, item.impact, item.likelihood);
+    return [
+      {
+        risk,
+        mitigation:
+          firstNonEmptyString(item.mitigation, item.response, "Address during implementation review.") ??
+          "Address during implementation review.",
+        ...(severity ? { severity } : {})
+      }
+    ];
+  });
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function coercePositiveInteger(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return Number.parseInt(value.trim(), 10);
+  }
+  return undefined;
+}
+
+function normalizeExecutionMode(execution: unknown, parallel: unknown): "parallel" | "serial" {
+  const normalizedExecution = normalizeExecutionLabel(execution);
+  if (normalizedExecution) {
+    return normalizedExecution;
+  }
+  return parallel === true ? "parallel" : "serial";
+}
+
+function normalizeExecutionLabel(value: unknown): "parallel" | "serial" | undefined {
+  if (value === "parallel" || value === "serial") {
+    return value;
+  }
+  if (value === "sequential") {
+    return "serial";
+  }
+  return undefined;
+}
+
+function normalizeSeverity(...values: unknown[]): "low" | "medium" | "high" | "critical" | undefined {
+  for (const value of values) {
+    if (value === "low" || value === "medium" || value === "high" || value === "critical") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function resolveChangeReference(value: unknown, changeIdMap: Map<string, number>): number | undefined {
+  const direct = coercePositiveInteger(value);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (typeof value === "string") {
+    return changeIdMap.get(value.trim());
+  }
+  return undefined;
+}
+
+function normalizeChangeReferences(value: unknown, changeIdMap: Map<string, number>): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value.map((entry) => resolveChangeReference(entry, changeIdMap)).filter((entry): entry is number => entry !== undefined))];
 }
 
 function readRequiredTextFile(filePath: string, label: string): string {
@@ -196,6 +603,77 @@ function writeJsonRequest(filePath: string, payload: unknown): void {
 
 function writeExecutorFailureSnapshot(artifactDir: string, payload: unknown): void {
   writeJsonRequest(path.join(artifactDir, "native", "executor-debug.json"), payload);
+}
+
+function collectPatchScopes(tasksArtifact: CompiledTasksArtifact): string[] {
+  return [...new Set(
+    tasksArtifact.tasks
+      .flatMap((task) => task.write_scope ?? [])
+      .map((scope) => scope.trim())
+      .filter((scope) => scope.length > 0)
+      .sort((left, right) => left.localeCompare(right))
+  )];
+}
+
+async function scopeExistsInWorkspace(worktreeRoot: string, scope: string): Promise<boolean> {
+  if (existsSync(path.join(worktreeRoot, scope))) {
+    return true;
+  }
+
+  const trackedResult = await runCommand("git", ["-C", worktreeRoot, "ls-tree", "-r", "--name-only", "HEAD", "--", scope]);
+  if (trackedResult.code !== 0) {
+    return false;
+  }
+
+  return trackedResult.stdout
+    .split("\n")
+    .map((entry) => entry.trim())
+    .some((entry) => entry.length > 0);
+}
+
+async function captureWorkspacePatch(
+  worktreeRoot: string,
+  artifactDir: string,
+  tasksArtifact: CompiledTasksArtifact
+): Promise<string | undefined> {
+  const candidateScopes = collectPatchScopes(tasksArtifact);
+  const scopes: string[] = [];
+  for (const scope of candidateScopes) {
+    if (await scopeExistsInWorkspace(worktreeRoot, scope)) {
+      scopes.push(scope);
+    }
+  }
+  if (scopes.length === 0) {
+    return undefined;
+  }
+
+  const addResult = await runCommand("git", ["-C", worktreeRoot, "add", "-A"]);
+  assertSuccess(addResult, `git add -A for ${worktreeRoot}`);
+
+  const diffResult = await runCommand("git", ["-C", worktreeRoot, "diff", "--cached", "--binary", "HEAD", "--", ...scopes]);
+  assertSuccess(diffResult, `git diff --cached --binary HEAD for ${worktreeRoot}`);
+
+  const patch = diffResult.stdout;
+  if (patch.trim().length === 0) {
+    return undefined;
+  }
+
+  const patchPath = path.join(artifactDir, "native", "workspace.patch");
+  ensureParentDirectory(patchPath);
+  writeFileSync(patchPath, patch, "utf8");
+  return patchPath;
+}
+
+export async function applyWorkspacePatch(sourceRoot: string, patchPath?: string): Promise<void> {
+  if (!patchPath || !existsSync(patchPath)) {
+    return;
+  }
+
+  const checkResult = await runCommand("git", ["-C", sourceRoot, "apply", "--check", "--whitespace=nowarn", patchPath]);
+  assertSuccess(checkResult, `git apply --check for ${patchPath}`);
+
+  const applyResult = await runCommand("git", ["-C", sourceRoot, "apply", "--whitespace=nowarn", patchPath]);
+  assertSuccess(applyResult, `git apply for ${patchPath}`);
 }
 
 export async function waitForResponseFile(filePath: string, label: string, timeoutMs = 300_000): Promise<string> {
@@ -239,6 +717,289 @@ function normalizeYamlArtifact(
       throw yamlError;
     }
   }
+}
+
+function normalizeReviewArtifact(raw: string, source: string): string {
+  try {
+    validateReviewYaml(raw, source);
+    return raw;
+  } catch {
+    // fall through to best-effort normalization
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = parseRestrictedYaml(raw, source);
+  } catch {
+    const markdownReview = normalizeMarkdownReviewArtifact(raw);
+    if (markdownReview) {
+      return stringifyYaml(markdownReview);
+    }
+    return raw;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return raw;
+  }
+
+  const doc = parsed as Record<string, unknown>;
+  const testSuite = normalizeReviewTestSuite(doc.test_results);
+  const normalized = {
+    apiVersion: normalizeReviewApiVersion(doc.apiVersion, doc.lineup),
+    kind: "Review",
+    ...(typeof doc.type === "string" && doc.type.trim().length > 0 ? { type: "review" } : {}),
+    ...(typeof doc.agent === "string" && doc.agent.trim().length > 0 ? { agent: "reviewer" } : {}),
+    ...(typeof doc.date === "string" && doc.date.trim().length > 0 ? { date: doc.date.trim() } : {}),
+    ...(typeof doc.topic === "string" && doc.topic.trim().length > 0 ? { topic: doc.topic.trim() } : {}),
+    ...(doc.pipeline_stage !== undefined ? { pipeline_stage: doc.pipeline_stage } : {}),
+    ...(typeof doc.plan_ref === "string" && doc.plan_ref.trim().length > 0 ? { plan_ref: doc.plan_ref.trim() } : {}),
+    status: normalizeReviewStatus(doc.status),
+    summary: firstNonEmptyString(doc.summary, "Review completed.") ?? "Review completed.",
+    issues: normalizeReviewIssues(doc.issues),
+    test_results: {
+      test_suite: testSuite
+    }
+  };
+
+  return stringifyYaml(normalized);
+}
+
+function normalizeMarkdownReviewArtifact(raw: string): Record<string, unknown> | undefined {
+  const statusMatch = raw.match(/\*\*Status:\s*([A-Z_ ]+)\*\*/i);
+  const summaryMatch = raw.match(/\*\*Summary:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
+  if (!statusMatch && !summaryMatch) {
+    return undefined;
+  }
+
+  const issuesMatch = raw.match(/\*\*Issues:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
+  const testsMatch = raw.match(/\*\*Test results:\*\*\s*([\s\S]*)$/i);
+  const testLines = (testsMatch?.[1] ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "));
+  const testsFailed = testLines.filter((line) => /\*\*fail\*\*|: fail\b/i.test(line)).length;
+  const testsRun = testLines.length;
+
+  return {
+    apiVersion: "lineup/v3",
+    kind: "Review",
+    status: normalizeReviewStatus(statusMatch?.[1]?.trim()?.replaceAll(" ", "_")),
+    summary: (summaryMatch?.[1] ?? "Review completed.").trim(),
+    issues: normalizeMarkdownIssues(issuesMatch?.[1]),
+    test_results: {
+      test_suite: {
+        status: testsFailed > 0 ? "fail" : "pass",
+        ...(testsRun > 0 ? { tests_run: testsRun } : {}),
+        ...(testsRun > 0 ? { tests_passed: Math.max(0, testsRun - testsFailed) } : {}),
+        ...(testsRun > 0 ? { tests_failed: testsFailed } : {})
+      }
+    }
+  };
+}
+
+function normalizeMarkdownIssues(rawIssues: string | undefined): Array<{
+  severity: "critical" | "warning" | "suggestion";
+  confidence: number;
+  file: string;
+  line: number;
+  description: string;
+  fix: string;
+}> {
+  if (!rawIssues) {
+    return [];
+  }
+
+  const trimmed = rawIssues.trim();
+  if (trimmed.length === 0 || /^none\.?$/i.test(trimmed)) {
+    return [];
+  }
+
+  return trimmed
+    .split("\n")
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter((line) => line.length > 0)
+    .map((line) => ({
+      severity: "warning" as const,
+      confidence: 80,
+      file: "unknown",
+      line: 1,
+      description: line,
+      fix: "Review and address the reported issue."
+    }));
+}
+
+function normalizeReviewApiVersion(apiVersion: unknown, lineup: unknown): "lineup/v3" {
+  if (apiVersion === "lineup/v3") {
+    return "lineup/v3";
+  }
+  if (lineup === "v3" || lineup === "lineup/v3") {
+    return "lineup/v3";
+  }
+  return "lineup/v3";
+}
+
+function normalizeReviewStatus(value: unknown): "PASS" | "FAIL" | "PASS_WITH_WARNINGS" {
+  if (value === "PASS" || value === "FAIL" || value === "PASS_WITH_WARNINGS") {
+    return value;
+  }
+  if (value === "PASS WITH WARNINGS") {
+    return "PASS_WITH_WARNINGS";
+  }
+  return "PASS";
+}
+
+function normalizeReviewIssues(value: unknown): Array<{
+  severity: "critical" | "warning" | "suggestion";
+  confidence: number;
+  file: string;
+  line: number;
+  description: string;
+  fix: string;
+}> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+    const item = entry as Record<string, unknown>;
+    const severity = normalizeIssueSeverity(item.severity);
+    const confidence = typeof item.confidence === "number" ? item.confidence : 75;
+    const file = firstNonEmptyString(item.file);
+    const line = typeof item.line === "number" ? item.line : 1;
+    const description = firstNonEmptyString(item.description);
+    const fix = firstNonEmptyString(item.fix, item.recommendation);
+    if (!severity || !file || !description || !fix) {
+      return [];
+    }
+    return [{ severity, confidence: Math.max(75, Math.min(100, Math.round(confidence))), file, line, description, fix }];
+  });
+}
+
+function normalizeIssueSeverity(value: unknown): "critical" | "warning" | "suggestion" | undefined {
+  if (value === "critical" || value === "warning" || value === "suggestion") {
+    return value;
+  }
+  if (value === "Critical") return "critical";
+  if (value === "Warning") return "warning";
+  if (value === "Suggestion") return "suggestion";
+  return undefined;
+}
+
+function normalizeReviewTestSuite(value: unknown): {
+  status: "pass" | "fail";
+  tests_run?: number;
+  tests_passed?: number;
+  tests_failed?: number;
+} {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const item = value as Record<string, unknown>;
+    if (typeof item.test_suite === "object" && item.test_suite !== null && !Array.isArray(item.test_suite)) {
+      const suite = item.test_suite as Record<string, unknown>;
+      const status = suite.status === "fail" ? "fail" : "pass";
+      return {
+        status,
+        ...(typeof suite.tests_run === "number" ? { tests_run: suite.tests_run } : {}),
+        ...(typeof suite.tests_passed === "number" ? { tests_passed: suite.tests_passed } : {}),
+        ...(typeof suite.tests_failed === "number" ? { tests_failed: suite.tests_failed } : {})
+      };
+    }
+  }
+
+  if (Array.isArray(value)) {
+    const testsRun = value.length;
+    const testsFailed = value.filter((entry) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        return false;
+      }
+      const item = entry as Record<string, unknown>;
+      return item.outcome === "fail" || item.status === "fail";
+    }).length;
+    const testsPassed = Math.max(0, testsRun - testsFailed);
+    return {
+      status: testsFailed > 0 ? "fail" : "pass",
+      tests_run: testsRun,
+      tests_passed: testsPassed,
+      tests_failed: testsFailed
+    };
+  }
+
+  return { status: "pass" };
+}
+
+function normalizeTaskExecutionStatus(value: unknown): "complete" {
+  if (value === "complete" || value === "done" || value === "success") {
+    return "complete";
+  }
+  return "complete";
+}
+
+function normalizeImplementationChanges(value: unknown, task: CompiledTask): ImplementationChange[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+
+    const item = entry as Record<string, unknown>;
+    const file = firstNonEmptyString(item.file);
+    const description = firstNonEmptyString(item.description, item.change, item.summary);
+    if (!file || !description) {
+      return [];
+    }
+
+    return [{
+      file,
+      description,
+      task_id: firstNonEmptyString(item.task_id, item.taskId, task.id) ?? task.id
+    }];
+  });
+}
+
+function normalizeImplementationIssues(value: unknown): ImplementationIssue[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return [];
+    }
+
+    const item = entry as Record<string, unknown>;
+    const issue = firstNonEmptyString(item.issue, item.description, item.summary);
+    if (!issue) {
+      return [];
+    }
+
+    const impact = item.impact === "minor" || item.impact === "moderate" || item.impact === "significant" ? item.impact : "none";
+    return [{
+      issue,
+      ...(typeof item.resolution === "string" && item.resolution.trim().length > 0 ? { resolution: item.resolution.trim() } : {}),
+      impact
+    }];
+  });
+}
+
+function normalizeTaskExecutionResult(raw: string, task: CompiledTask, source: string): NativeTaskExecutionResult {
+  const parsed = JSON.parse(repairJsonOutput(raw).content) as Record<string, unknown>;
+  const summary = firstNonEmptyString(parsed.summary, parsed.result, parsed.message);
+  if (!summary) {
+    throw new CliError(`Task response ${source} is invalid.`, {
+      code: "malformed_output"
+    });
+  }
+
+  return {
+    status: normalizeTaskExecutionStatus(parsed.status),
+    summary,
+    changes_made: normalizeImplementationChanges(parsed.changes_made, task),
+    issues_encountered: normalizeImplementationIssues(parsed.issues_encountered)
+  };
 }
 
 function buildDeveloperPrompt(input: {
@@ -301,12 +1062,18 @@ function buildReviewerPrompt(input: {
   implementationState: ImplementationState;
   tasksArtifact: CompiledTasksArtifact;
   verificationResults?: VerificationResult[];
+  outputPath?: string;
 }): string {
+  const templatePath = path.join(packageRoot(), "templates", "reviewer.yaml");
+  const outputTemplate = existsSync(templatePath) ? readFileSync(templatePath, "utf8").trim() : null;
   const extraInstructions = [
     "Native Lineup v3 review contract:",
     "- Review the completed implementation against the approved plan.",
     "- Validate acceptance criteria and note concrete issues only.",
     "- Return a lineup/v3 Review YAML document.",
+    ...(input.outputPath
+      ? [`- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`]
+      : []),
     "",
     "Approved plan summary:",
     input.approvedPlan.summary,
@@ -317,6 +1084,16 @@ function buildReviewerPrompt(input: {
     "Implementation state:",
     JSON.stringify(input.implementationState, null, 2)
   ];
+
+  if (outputTemplate) {
+    extraInstructions.push(
+      "",
+      "Follow this output template shape exactly. Replace placeholder values, but keep the same YAML structure:",
+      outputTemplate,
+      "",
+      "Do not return markdown headings, bullets, or prose outside the structured payload."
+    );
+  }
 
   if (input.verificationResults && input.verificationResults.length > 0) {
     extraInstructions.push(
@@ -351,15 +1128,7 @@ function defaultDriver(artifactDir: string): NativeExecutionDriver {
         `Native task response for ${input.task.id}`,
         input.timeoutMs ?? 600_000
       );
-      const parsed = JSON.parse(repairJsonOutput(raw).content) as NativeTaskExecutionResult;
-
-      if (parsed.status !== "complete" || !parsed.summary) {
-        throw new CliError(`Task response ${responsePath} is invalid.`, {
-          code: "malformed_output"
-        });
-      }
-
-      return parsed;
+      return normalizeTaskExecutionResult(raw, input.task, responsePath);
     },
     async executeReview(input) {
       const requestPath = path.join(buildRequestDir(artifactDir), "review.json");
@@ -378,7 +1147,7 @@ function defaultDriver(artifactDir: string): NativeExecutionDriver {
         input.timeoutMs ?? 300_000
       );
       return {
-        reviewYaml: normalizeYamlArtifact(raw, reviewPath, validateReviewYaml)
+        reviewYaml: normalizeReviewArtifact(raw, reviewPath)
       };
     }
   };
@@ -414,6 +1183,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
     planRecord,
     tasksRecord
   } = prepareExecutionArtifacts({
+    projectRoot: options.projectRoot,
     planPath: options.planPath,
     artifactStore: options.artifactStore,
     gitTreeSha: options.gitTreeSha
@@ -558,7 +1328,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       approvedPlan,
       implementationState,
       tasksArtifact,
-      verificationResults: options.verificationResults
+      verificationResults: options.verificationResults,
+      outputPath: path.join(options.artifactDir, "review.yaml")
     });
 
     options.emitProtocol(
@@ -607,9 +1378,11 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       });
       throw error;
     }
-    validateReviewYaml(reviewResult.reviewYaml, path.join(options.artifactDir, "review.yaml"));
-    const reviewRecord = options.artifactStore.persistText("review", reviewResult.reviewYaml, "yaml");
-    const parsedReview = parseRestrictedYaml(reviewResult.reviewYaml, reviewRecord.path) as Record<string, unknown>;
+    const normalizedReviewYaml = normalizeReviewArtifact(reviewResult.reviewYaml, path.join(options.artifactDir, "review.yaml"));
+    validateReviewYaml(normalizedReviewYaml, path.join(options.artifactDir, "review.yaml"));
+    const reviewRecord = options.artifactStore.persistText("review", normalizedReviewYaml, "yaml");
+    const workspacePatchPath = await captureWorkspacePatch(workspace.worktreeRoot, options.artifactDir, tasksArtifact);
+    const parsedReview = parseRestrictedYaml(normalizedReviewYaml, reviewRecord.path) as Record<string, unknown>;
 
     options.emitProtocol(
       createLineupNotification({
@@ -636,6 +1409,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       planRecord,
       tasksRecord,
       reviewRecord,
+      workspacePatchPath,
       implementResult: {
         id: "implement",
         status: "complete",
@@ -654,12 +1428,13 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
 }
 
 export function prepareExecutionArtifacts(input: {
+  projectRoot: string;
   planPath: string;
   artifactStore: ArtifactStore;
   gitTreeSha?: string;
 }): PreparedExecutionArtifacts {
   const rawPlan = readRequiredTextFile(input.planPath, "Approved plan");
-  const normalizedPlan = normalizeApprovedPlan(rawPlan, input.planPath);
+  const normalizedPlan = normalizeApprovedPlan(rawPlan, input.planPath, input.projectRoot);
   const planRecord = input.artifactStore.persistText("plan", normalizedPlan.raw, "yaml");
   const { artifact: tasksArtifact } = compilePlanToTasks(normalizedPlan.parsed, {
     gitTreeSha: input.gitTreeSha

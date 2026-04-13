@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createArtifactStore } from "../src/lib/artifact-store.js";
-import { executeNativeExecutor, type NativeExecutionDriver } from "../src/lib/executor.js";
+import { applyWorkspacePatch, executeNativeExecutor, type NativeExecutionDriver } from "../src/lib/executor.js";
 import { CliError } from "../src/lib/errors.js";
 
 const APPROVED_PLAN = `apiVersion: lineup/v3
@@ -45,6 +45,26 @@ issues: []
 test_results:
   test_suite:
     status: pass
+`;
+
+const QUIRKY_REVIEW = `lineup: v3
+kind: Review
+status: PASS
+summary: >
+  The implementation correctly appends a blank line and the descriptive sentence
+  after the heading.
+issues: []
+test_results:
+  - name: "Visual inspection of README.md"
+    outcome: pass
+    detail: File contains heading, blank line, and descriptive sentence.
+  - name: "Git diff verification"
+    outcome: pass
+    detail: Only README.md was modified.
+tasks:
+  - id: CHANGE-001
+    status: verified
+    notes: "README.md updated correctly."
 `;
 
 function initGitRepo(projectRoot: string): void {
@@ -142,7 +162,7 @@ describe("executeNativeExecutor", () => {
         };
       },
       async executeReview() {
-        return { reviewYaml: PASS_REVIEW };
+        return { reviewYaml: QUIRKY_REVIEW };
       }
     };
 
@@ -203,13 +223,12 @@ describe("executeNativeExecutor", () => {
         [
           "```json",
           JSON.stringify({
-            status: "complete",
+            status: "done",
             summary: "completed CHANGE-001",
             changes_made: [
               {
                 file: "cli/src/lib/executor.ts",
-                description: "updated executor",
-                task_id: "CHANGE-001"
+                description: "updated executor"
               }
             ],
             issues_encountered: []
@@ -238,22 +257,15 @@ describe("executeNativeExecutor", () => {
 
       writeFileSync(
         join(responseDir, "review.yaml"),
-        [
-          "```json",
-          JSON.stringify({
-            apiVersion: "lineup/v3",
-            kind: "Review",
-            status: "PASS",
-            summary: "Native executor passed verification.",
-            issues: [],
-            test_results: {
-              test_suite: {
-                status: "pass"
-              }
-            }
-          }, null, 2),
-          "```"
-        ].join("\n"),
+        `**Status: PASS**
+
+**Summary:** Native executor passed verification.
+
+**Issues:** None.
+
+**Test results:**
+- Diff verification: **pass** — expected files changed only.
+`,
         "utf8"
       );
     }, 50);
@@ -287,5 +299,125 @@ describe("executeNativeExecutor", () => {
     expect(result.implementResult.outputs.task_results).toHaveLength(2);
     expect(result.verifyResult.outputs.status).toBe("PASS");
     expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("kind: Review");
+  });
+
+  it("normalizes near-schema plan drafts produced by local hosts", async () => {
+    const nearSchemaPlan = `apiVersion: lineup/v3
+kind: Plan
+stage_id: plan
+run_id: 3a10b0
+summary: |
+  Add a second sentence to README.md describing the app's purpose.
+approaches:
+  - id: minimal-smoke-test
+    strategy: Add a concise sentence describing the app.
+    pros:
+      - Smallest possible change
+    cons:
+      - Assumes the project intent from current files
+    estimated_scope: 1 file, 1 line added
+recommendation:
+  approach: minimal-smoke-test
+  rationale: The project is intentionally minimal and needs one sentence only.
+changes:
+  - id: add-readme-description
+    file: ${join(projectRoot, "README.md")}
+    action: append_line
+    description: Add a second sentence after the heading describing the app's purpose
+parallelization_strategy:
+  batches:
+    - batch: 1
+      changes: [add-readme-description]
+      parallel: false
+      notes: Single change; no parallelization needed
+  recommendation: sequential
+  rationale: Only one file changes.
+dependencies: []
+acceptance_criteria:
+  - README.md contains a second descriptive sentence about the app's purpose
+risks:
+  - risk: The inferred purpose may not match maintainer intent
+    likelihood: low
+    impact: low
+    mitigation: Review during plan approval
+`;
+
+    writeFileSync(join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"), nearSchemaPlan, "utf8");
+
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        return {
+          status: "complete",
+          summary: `completed ${input.task.id}`,
+          changes_made: [
+            {
+              file: input.task.write_scope?.[0] ?? "README.md",
+              description: "updated file",
+              task_id: input.task.id
+            }
+          ]
+        };
+      },
+      async executeReview() {
+        return { reviewYaml: QUIRKY_REVIEW };
+      }
+    };
+
+    const result = await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts"),
+      planPath: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      },
+      driver
+    });
+
+    const normalizedPlan = readFileSync(result.planRecord.path, "utf8");
+    expect(normalizedPlan).toContain("status: approved");
+    expect(normalizedPlan).toContain("change: Add a second sentence after the heading describing the app's purpose");
+    expect(normalizedPlan).toContain("batch_number: 1");
+    expect(result.implementResult.outputs.task_results).toHaveLength(1);
+    expect(result.verifyResult.outputs.status).toBe("PASS");
+    expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("apiVersion: lineup/v3");
+    expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("tests_run: 2");
+  });
+
+  it("applies captured workspace patches back to the source repository", async () => {
+    const patchPath = join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native", "workspace.patch");
+    mkdirSync(join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native"), { recursive: true });
+    writeFileSync(
+      patchPath,
+      `diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1,3 @@
+ # test
++
++Applied from patch
+`,
+      "utf8"
+    );
+
+    await applyWorkspacePatch(projectRoot, patchPath);
+
+    expect(readFileSync(join(projectRoot, "README.md"), "utf8")).toContain("Applied from patch");
   });
 });

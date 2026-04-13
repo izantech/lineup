@@ -96,8 +96,32 @@ function extractBalancedJsonSnippet(raw: string): { content: string; note: strin
   return null;
 }
 
+function unwrapJsonStringLiteral(raw: string): { content: string; note: string } | null {
+  if (!(raw.startsWith("\"") && raw.endsWith("\""))) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === "string") {
+      return {
+        content: parsed.trim(),
+        note: "unwrapped JSON string literal"
+      };
+    }
+  } catch {
+    // Ignore and fall through.
+  }
+
+  return null;
+}
+
 function repairJsonText(raw: string): RepairResult {
   const normalized = normalizeRawText(raw).trim();
+  const unwrapped = unwrapJsonStringLiteral(normalized);
+  if (unwrapped) {
+    return finalize(unwrapped.content, normalized, [unwrapped.note]);
+  }
   const fenced = extractFencedBlock(normalized, "json");
   if (fenced) {
     return finalize(fenced.content, normalized, [fenced.note]);
@@ -113,6 +137,10 @@ function repairJsonText(raw: string): RepairResult {
 
 function repairYamlText(raw: string): RepairResult {
   const normalized = normalizeRawText(raw).trim();
+  const unwrapped = unwrapJsonStringLiteral(normalized);
+  if (unwrapped) {
+    return finalize(unwrapped.content, normalized, [unwrapped.note]);
+  }
   const fencedJson = extractFencedBlock(normalized, "json");
   if (fencedJson) {
     try {
@@ -128,7 +156,9 @@ function repairYamlText(raw: string): RepairResult {
     return finalize(fenced.content, normalized, [fenced.note]);
   }
 
-  const balancedJson = extractBalancedJsonSnippet(normalized);
+  const balancedJson = normalized.startsWith("{") || normalized.startsWith("[")
+    ? extractBalancedJsonSnippet(normalized)
+    : null;
   if (balancedJson) {
     try {
       const parsed = JSON.parse(balancedJson.content);

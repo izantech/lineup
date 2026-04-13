@@ -36,6 +36,8 @@ To test the full install flow with your local changes:
 ```
 
 This builds the CLI from source, installs it globally, and installs skills for all hosts.
+It also removes the previous managed CLI/host installation first, so you are always
+testing the current source tree instead of a stale local install.
 
 ## Project structure
 
@@ -71,6 +73,11 @@ Generated host files are **not committed** — they are produced at install time
 - `human` for local interactive terminal use
 - `host` for generated skills, automation, and CI
 
+Native implementation also requires the current project to have at least one git
+commit. `lineup init` scaffolds workflow/runtime files and initializes git when
+needed; use `lineup doctor --json` to verify workflow and git readiness before
+testing a fresh project.
+
 When changing gate behavior, stdout/stderr behavior, or protocol messages, treat the
 mode contract as part of the public API:
 
@@ -80,6 +87,10 @@ mode contract as part of the public API:
 For `host` mode, artifact handoff files are also part of the public API. If a host writes
 plan, task, or review outputs on behalf of `agent/spawn`, write them atomically
 (temp file + rename) and keep the documented file locations stable.
+
+The runtime includes best-effort repair for common host mistakes, but treat that as
+defensive compatibility rather than the primary contract. Keep prompts, artifact
+paths, and output shapes aligned with the docs and canonical skills.
 
 ## Commit conventions
 

@@ -127,7 +127,6 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
   program
     .name("lineup")
     .description("Lineup multi-host manager for Claude Code, Codex, and OpenCode")
-    .version(packageVersion(), "--cli-version", "output CLI version")
     .showHelpAfterError();
 
   program
@@ -182,6 +181,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .description("Run a Lineup pipeline through the native v3 engine")
     .option("--workflow <path>", "Path to workflow YAML", undefined)
     .option("--tactic <name>", "Run a specific tactic", undefined)
+    .option("--host <host>", "Local execution host for human mode: claude|codex|opencode")
     .option("--from-stage <id>", "Resume from a specific stage", undefined)
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
@@ -388,8 +388,21 @@ export function handleFatalError(error: unknown): never {
 }
 
 export async function run(argv: string[] = process.argv): Promise<void> {
+  if (isTopLevelVersionRequest(argv)) {
+    process.stdout.write(`${packageVersion()}\n`);
+    return;
+  }
   const program = buildProgram();
   await program.parseAsync(argv);
+}
+
+function isTopLevelVersionRequest(argv: string[]): boolean {
+  const args = argv.slice(2);
+  if (args.length !== 1) {
+    return false;
+  }
+
+  return args[0] === "--version" || args[0] === "-V" || args[0] === "--cli-version";
 }
 
 function isDirectExecution(argv: string[]): boolean {

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { initializeGitRepository, inspectGitProject } from "../lib/git.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { lineupProjectRoot, projectRoot } from "../lib/paths.js";
 
@@ -11,7 +12,7 @@ export type InitCommandOptions = {
 
 type InitEntry = {
   path: string;
-  kind: "directory" | "file";
+  kind: "directory" | "file" | "repository";
   status: "created" | "already_exists";
 };
 
@@ -126,6 +127,23 @@ export async function runInitCommand(options: InitCommandOptions): Promise<void>
   // Gitignore
   ensureFile(path.join(lineupRoot, ".gitignore"), GITIGNORE_CONTENT, entries);
 
+  let gitProject = inspectGitProject(root);
+  if (!gitProject.isRepository) {
+    initializeGitRepository(root);
+    gitProject = inspectGitProject(root);
+    entries.push({
+      path: path.join(root, ".git"),
+      kind: "repository",
+      status: "created"
+    });
+  } else {
+    entries.push({
+      path: path.join(root, ".git"),
+      kind: "repository",
+      status: "already_exists"
+    });
+  }
+
   if (options.json) {
     printJson(entries);
     return;
@@ -134,5 +152,9 @@ export async function runInitCommand(options: InitCommandOptions): Promise<void>
   for (const entry of entries) {
     const label = entry.status === "created" ? "created" : "already exists";
     printTableLine(`${label}: ${entry.path}`);
+  }
+
+  if (!gitProject.hasHeadCommit) {
+    printTableLine('note: native Lineup runs require at least one git commit. Run `git add -A && git commit -m "Initial commit"` before `lineup run`.')
   }
 }

@@ -17,10 +17,14 @@ One of the following AI coding hosts, already installed and configured:
 npm install -g @izantech/lineup-cli
 lineup install
 lineup init
+git add -A
+git commit -m "Initial commit"
 ```
 
 `lineup install` detects available hosts and installs skill files for each one.
-`lineup init` scaffolds the local `.lineup/` runtime directories and a default workflow.
+`lineup init` scaffolds the local `.lineup/` runtime directories, a default workflow,
+and initializes a git repository if one does not already exist. The initial git commit
+is still required because native implementation uses isolated git worktrees.
 
 ## First pipeline run with the CLI
 
@@ -58,6 +62,8 @@ If you prefer to stay inside your host UI, Lineup also installs thin host comman
 
 These wrappers launch the same native CLI pipeline and handle `gate/request` messages for you.
 Under the hood they invoke `lineup run "<user request>" --mode host`.
+They should preflight workflow and git readiness first, then monitor the host-mode
+NDJSON stream instead of treating the run as an opaque blocking command.
 
 ## When a run fails
 

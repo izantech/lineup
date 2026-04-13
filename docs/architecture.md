@@ -33,6 +33,7 @@ Key internals:
 - `cli/src/cli.ts` — Commander command registration and dispatch
 - `cli/src/commands/*.ts` — CLI command handlers (runtime, inspection, lifecycle, gate operations)
 - `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
+- `cli/src/lib/git.ts` — project git readiness checks and tree SHA resolution
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
 - `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`
 - `cli/src/lib/interactive-gate.ts` — Interactive stdin gate handler for `lineup run --mode human`
@@ -51,3 +52,6 @@ Key internals:
 Agent prompt resolution prefers repo-local `agents/*.md` when present, then falls back to
 bundled definitions shipped in `cli/agents/` so freshly initialized projects can execute
 without copying agent files into the repo.
+
+Fresh projects still need a git repository with at least one commit before native
+implementation can run, because isolation uses detached git worktrees.

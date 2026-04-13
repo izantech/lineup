@@ -210,4 +210,13 @@ describe("run command", () => {
       expect.objectContaining({ prompt: "Fix the login bug", mode: "host" })
     );
   });
+
+  it("parses local execution host", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "Fix the login bug", "--host", "claude"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Fix the login bug", host: "claude" })
+    );
+  });
 });

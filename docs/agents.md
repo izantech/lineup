@@ -50,6 +50,11 @@ skills launch `lineup run "<user request>" --mode host`, consume NDJSON protocol
 messages, and answer gates with `lineup gate respond`. Interactive terminal use stays on
 `lineup run --mode human`.
 
+Fresh projects still need `lineup init` before native implementation can run. It
+scaffolds the workflow/runtime files and initializes git if needed. Host wrappers
+should still verify that the repo has at least one commit before launching
+`lineup run --mode host`.
+
 Repo-local `agents/*.md` files are optional. When a project does not define one, Lineup
 falls back to the bundled definitions shipped in `cli/agents/`. Use repo-local files only
 when the project needs to override the default role instructions.
