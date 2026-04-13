@@ -9,6 +9,7 @@ import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
 import { runCompletionCommand, type CompletionCommandOptions } from "./commands/completion";
 import { runDagCommand, type DagCommandOptions } from "./commands/dag";
 import { runGateRespondCommand, type GateRespondOptions } from "./commands/gate";
+import { runWavesCommand, type WavesCommandOptions } from "./commands/waves";
 import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
@@ -75,6 +76,7 @@ export type CliHandlers = {
   gateRespond: (options: GateRespondOptions) => Promise<void>;
   completion: (options: CompletionCommandOptions) => Promise<void>;
   dag: (options: DagCommandOptions) => Promise<void>;
+  waves: (options: WavesCommandOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -113,6 +115,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     gateRespond: runGateRespondCommand,
     completion: runCompletionCommand,
     dag: runDagCommand,
+    waves: runWavesCommand,
     ...handlers
   };
 
@@ -341,6 +344,14 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--workflow <path>", "Path to workflow YAML")
     .option("--json", "Emit machine-readable JSON output")
     .action(commandHandlers.dag);
+
+  program
+    .command("waves")
+    .description("Visualize task execution waves from a compiled plan")
+    .option("--run <id>", "Specify a run ID (default: latest)")
+    .option("--json", "Emit machine-readable JSON output")
+    .option("--compact", "Compact output without dependency details")
+    .action(commandHandlers.waves);
 
   return program;
 }
