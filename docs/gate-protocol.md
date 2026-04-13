@@ -28,7 +28,7 @@ deriving areas from the changed file paths.
 
 The skill reads `gate/request` from stdout, asks the user, then calls
 `lineup gate respond <run-id> <request-id> --choice <value>`. The CLI
-writes pending gate files to `.lineup/runs/<id>/gates/` and blocks until
+writes pending gate files to `.lineup/.runs/<id>/gates/` and blocks until
 a response file appears (atomic write via temp+rename).
 
 ## Interactive Mode

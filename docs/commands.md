@@ -37,6 +37,7 @@
 - `lineup tactic list [--json]`
 - `lineup approve <run-id> [--json]`
 - `lineup pending [--json]`
+- `lineup gate respond <run-id> <request-id> --choice <value> [--reason <text>] [--json]`
 - `lineup completion <bash|zsh|fish>`
 - `lineup dag [--workflow <path>] [--json]`
 - `lineup waves [--run <id>] [--compact] [--json]`

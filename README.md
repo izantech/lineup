@@ -5,7 +5,7 @@
 
 One pipeline. Every AI coding tool.
 
-Lineup is a multi-agent pipeline for Claude Code, Codex CLI, and OpenCode that picks the right model for every task — automatically. It splits your work into stages, assigns each one to the right agent, and caches results so interrupted runs pick up where they stopped.
+Lineup is a native multi-agent pipeline for Claude Code, Codex CLI, and OpenCode. It classifies work, routes stages to the right agent/model, validates artifacts, compiles implementation waves, and persists run state so interrupted work can be resumed and inspected.
 
 Distributed through a single CLI: `lineup`.
 
@@ -34,8 +34,28 @@ lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
-lineup run [--workflow <path>] [--dry-run] [--json]
+lineup init [--workflow <name>] [--json]
+lineup run [--workflow <path>] [--tactic <name>] [--dry-run] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--interactive] [--json]
+lineup runs [--status <status>] [--json]
+lineup show <run-id> [--watch] [--json]
+lineup logs <run-id> [--json]
+lineup replay <run-id> [--json]
+lineup resume <run-id> [--retry-failed] [--max-retries <n>] [--json]
+lineup cancel <run-id> [--json]
+lineup validate <file> [--kind <kind>] [--json]
+lineup artifacts show|path|diff ...
+lineup workflow lint|list ...
+lineup tactic new|list|convert ...
+lineup approve <run-id> [--json]
+lineup pending [--json]
+lineup gate respond <run-id> <request-id> --choice <value> [--reason <text>] [--json]
+lineup completion <bash|zsh|fish>
+lineup dag [--workflow <path>] [--json]
+lineup waves [--run <id>] [--compact] [--json]
+lineup history [--status <status>] [--limit <n>] [--json]
 ```
+
+See [docs/commands.md](/Users/izan/Dev/Projects/lineup/docs/commands.md:1) for the full command reference used by the repo and agent docs.
 
 ### Host behavior
 
@@ -95,6 +115,7 @@ Lineup uses canonical templates plus host adapters:
 
 - [Getting Started](https://lineup.izantech.app/getting-started/)
 - [How It Works](https://lineup.izantech.app/how-it-works/)
+- [Migration](https://lineup.izantech.app/migration/)
 - [Examples](https://lineup.izantech.app/examples/)
 
 ## License

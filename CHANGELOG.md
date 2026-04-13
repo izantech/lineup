@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-04-13
+
 ### Added
+- Native-only v3 runtime -- deterministic orchestration, artifact validation, task compilation, retry state, and run persistence now live entirely in the CLI
+- Lean skill wrappers -- host commands launch `lineup run --json`, consume NDJSON protocol messages, and relay gate responses via `lineup gate respond`
+- Run inspection commands -- `lineup runs`, `show`, `logs`, and `replay`
+- Artifact commands -- `lineup validate`, `artifacts show`, `artifacts path`, and `artifacts diff`
+- Authoring commands -- `lineup init`, `workflow lint`, `workflow list`, `tactic new`, `tactic list`, and `tactic convert`
+- Approval UX -- `lineup approve`, `lineup pending`, typed approval gates, and file-backed gate persistence
+- Shell completion generation for bash, zsh, and fish
+- Workflow and task visualization commands -- `lineup dag` and `lineup waves`
+- Pipeline history command with status, duration, and retry counts
+- Persistent run timing (`started_at`, `finished_at`, `duration_ms`) recorded in pipeline state
+- Desktop notifications on pipeline completion and failure
+- Task-level execution isolation via `lineup run --implement-method task`
+- External dogfood fixture corpus for fullstack, library, and monorepo scenarios
 - Interactive mode (`lineup run --interactive`) -- handle gates via stdin prompts without a host skill; maps gate types to readline prompts (approval Y/n, clarify free-text, verify-decision numbered menu)
 - Gate timeout (`lineup run --gate-timeout <seconds>`) -- saves pipeline state as `blocked` on timeout instead of `failed`, enabling clean resume
 - Real pre-stage logic -- triage stage analyzes `git diff --stat HEAD` and file count; research stage emits `agent/spawn` protocol messages for researcher agents
@@ -18,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replay command (`lineup replay <run-id>`) -- parses NDJSON protocol artifacts and formats a chronological human-readable narrative with timestamps; supports `--json` for structured output
 - Task compiler improvements -- cross-cutting detection (>3 files same extension/directory kept as single task), read-write dependency edges (write scope overlapping read scope produces sequential waves), better wave assignment for parallel execution
 - Tactic-to-workflow conversion test suite -- 7 test cases covering basic conversion, gate insertion, optional stages, verification auto-append, duplicate ID resolution, unknown type errors, and variable passthrough
+
+### Changed
+- Public docs moved from VitePress under `docs/` to Astro + Starlight under `site/`
+- Public site copy and getting-started flows now describe the shipped native engine instead of a planned future state
+- Root README now reflects the expanded native CLI surface rather than the early v3 subset
+
+### Removed
+- Task Foundry integration, reference adapters, and TF generation commands from the shipped runtime path
+
+### Fixed
+- CLI and docs now agree on the current command surface, including `lineup gate respond`
+- Release-facing metadata and docs now describe OpenCode support and the native runtime accurately
 
 ## [2.2.0] - 2026-04-12
 
@@ -231,7 +258,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
-[Unreleased]: https://github.com/izantech/lineup/compare/2.2.0...HEAD
+[Unreleased]: https://github.com/izantech/lineup/compare/3.0.0...HEAD
+[3.0.0]: https://github.com/izantech/lineup/compare/2.2.0...3.0.0
 [2.2.0]: https://github.com/izantech/lineup/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/izantech/lineup/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/izantech/lineup/compare/2.0.0...2.1.0

@@ -16,7 +16,7 @@ npm install -g @izantech/lineup-cli@latest
 lineup update
 ```
 
-`lineup update` regenerates host skill files from the new lean templates. Existing runs in `.lineup/runs/` are not modified.
+`lineup update` regenerates host skill files from the new lean templates. Existing runs in `.lineup/.runs/` are not modified.
 
 If you installed from source:
 

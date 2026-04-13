@@ -1,8 +1,8 @@
 {
   "name": "@izantech/lineup-cli",
-  "version": "3.0.0-SNAPSHOT",
+  "version": "3.0.0",
   "private": false,
-  "description": "Lineup multi-host installer and manager for Claude Code and Codex",
+  "description": "Lineup native multi-host pipeline CLI for Claude Code, Codex, and OpenCode",
   "license": "MIT",
   "type": "module",
   "engines": {

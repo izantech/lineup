@@ -16,40 +16,47 @@ One of the following AI coding hosts, already installed and configured:
 ```bash
 npm install -g @izantech/lineup-cli
 lineup install
+lineup init
 ```
 
 `lineup install` detects available hosts and installs skill files for each one.
+`lineup init` scaffolds the local `.lineup/` runtime directories and a default workflow.
 
-## First pipeline run
+## First pipeline run with the CLI
 
-Run a task through the full pipeline:
+Pipe a request into the native engine and let Lineup handle approval gates interactively:
 
 ```bash
-lineup kick-off "Review the auth middleware in src/auth.ts and identify security gaps"
+printf 'Review the auth middleware in src/auth.ts and identify security gaps\n' | lineup run --interactive
 ```
 
 Expected output:
 
 ```
-Triage: analyzing task complexity...
-  Task: medium complexity
-  Route: 3-stage pipeline (research → analysis → report)
-
-Starting pipeline...
-[Stage 1/3] Research: Gathering context on authentication patterns
-[Stage 2/3] Analysis: Checking for security vulnerabilities
-[Stage 3/3] Report: Generating findings and recommendations
-
-Pipeline complete. Results in ./lineup-output/
+[triage] Collecting project stats...
+[plan] Waiting for approval...
+[implement] Executing native wave 1...
+[verify] Running verification hooks...
+Pipeline completed successfully.
 ```
 
 ## What happened
 
-1. **Triage** classified the task as medium complexity and selected a 3-stage pipeline.
-2. Each stage was assigned to an agent with the appropriate model — lightweight models for context gathering, more capable models for analysis.
-3. Stage outputs were cached. If the run had been interrupted, re-running the same command would resume from the last completed stage.
+1. **Triage** classified the task, identified affected areas, and selected the right model tier per role.
+2. The CLI evaluated the workflow DAG, compiled the approved plan into execution waves, and drove the run through typed stages.
+3. Stage outputs and protocol events were persisted under `.lineup/.runs/` and `.lineup/.artifacts/`, so the run can be inspected or resumed later.
 
 The triage step drives model selection automatically. Simple tasks (rename a variable) use fast models. Complex tasks (redesign a subsystem) escalate to more capable ones. This is determined by the task scope, not by user configuration.
+
+## First pipeline run from a host
+
+If you prefer to stay inside your host UI, Lineup also installs thin host commands:
+
+- Claude Code: `/lineup:kick-off`
+- Codex CLI: `$lineup-kick-off`
+- OpenCode: `/lineup-kick-off`
+
+These wrappers launch the same native CLI pipeline and handle `gate/request` messages for you.
 
 ## When a run fails
 
@@ -64,6 +71,8 @@ The pipeline restarts from the failed stage, preserving all completed upstream w
 To inspect past runs:
 
 ```bash
+lineup runs                  # recent runs with status
+lineup show <run-id>         # stage details and artifact hashes
 lineup history               # table of recent runs with status and duration
 lineup waves --run <run-id>  # task execution waves and parallelism
 ```
