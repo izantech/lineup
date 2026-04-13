@@ -11,6 +11,20 @@ NC=$'\033[0m'
 
 die() { echo -e "${RED}error:${NC} $1" >&2; exit 1; }
 
+ensure_cli_deps() {
+    if [[ ! -d "$ROOT_DIR/cli/node_modules" ]]; then
+        echo -e "${BOLD}CLI dependencies missing. Installing...${NC}"
+        npm --prefix "$ROOT_DIR/cli" install
+    fi
+}
+
+ensure_site_deps() {
+    if [[ ! -d "$ROOT_DIR/site/node_modules" ]]; then
+        echo -e "${BOLD}Site dependencies missing. Installing...${NC}"
+        npm --prefix "$ROOT_DIR/site" install
+    fi
+}
+
 usage() {
     cat <<EOF
 ${GREEN}${BOLD}Lineup Dev Script${NC}
@@ -57,6 +71,7 @@ install_local() {
     npm uninstall -g "$PKG" 2>/dev/null || true
     lineup uninstall --host all --yes 2>/dev/null || true
 
+    ensure_cli_deps
     echo -e "${BOLD}Building CLI from source...${NC}"
     npm --prefix "$ROOT_DIR/cli" run build
 
@@ -97,24 +112,28 @@ install_clean() {
 }
 
 run_build() {
+    ensure_cli_deps
     echo -e "${BOLD}Building CLI...${NC}"
     npm --prefix "$ROOT_DIR/cli" run build
     echo -e "${GREEN}done${NC}"
 }
 
 run_typecheck() {
+    ensure_cli_deps
     echo -e "${BOLD}Running typecheck...${NC}"
     npm --prefix "$ROOT_DIR/cli" run typecheck
     echo -e "${GREEN}done${NC}"
 }
 
 run_test() {
+    ensure_cli_deps
     echo -e "${BOLD}Running tests...${NC}"
     npm --prefix "$ROOT_DIR/cli" test
     echo -e "${GREEN}done${NC}"
 }
 
 run_check() {
+    ensure_cli_deps
     echo -e "${BOLD}Running all checks...${NC}\n"
     npm --prefix "$ROOT_DIR/cli" run typecheck
     npm --prefix "$ROOT_DIR/cli" test
@@ -170,10 +189,11 @@ run_clean() {
 
 run_web() {
     local subcmd="${1:-dev}"
+    ensure_site_deps
     case "$subcmd" in
-        dev)     cd "$ROOT_DIR/site" && npx astro dev ;;
-        build)   cd "$ROOT_DIR/site" && npx astro build ;;
-        preview) cd "$ROOT_DIR/site" && npx astro preview ;;
+        dev)     npm --prefix "$ROOT_DIR/site" run dev ;;
+        build)   npm --prefix "$ROOT_DIR/site" run build ;;
+        preview) npm --prefix "$ROOT_DIR/site" run preview ;;
         *)       die "unknown web command '$subcmd' — use dev, build, or preview" ;;
     esac
 }

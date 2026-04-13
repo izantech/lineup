@@ -57,6 +57,56 @@ export type RuntimeStatus = {
   latest_run: ObservedPipelineRun | null;
 };
 
+export type BridgeSessionStatus = "starting" | "running" | "blocked" | "succeeded" | "failed" | "canceled";
+
+export type BridgeSessionRecord = {
+  apiVersion: Extract<LineupApiVersion, "lineup/v3">;
+  kind: "BridgeSession";
+  run_id: string;
+  status: BridgeSessionStatus;
+  executor_host: HostName;
+  worker_pid?: number;
+  current_seq: number;
+  workflow?: string;
+  tactic?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+};
+
+export type BridgeStatusEvent = {
+  seq: number;
+  type: "status";
+  runId: string;
+  stageId: string;
+  text: string;
+  final?: boolean;
+};
+
+export type BridgeQuestionEvent = {
+  seq: number;
+  type: "question";
+  runId: string;
+  requestId: string | number;
+  gateType: string;
+  question: string;
+  choices: readonly string[];
+  defaultChoice?: string;
+  context?: string;
+  allowFreeText?: boolean;
+};
+
+export type BridgeCompleteEvent = {
+  seq: number;
+  type: "complete";
+  runId: string;
+  status: BridgeSessionStatus;
+  summary?: string;
+  completedAt?: string;
+};
+
+export type BridgeEvent = BridgeStatusEvent | BridgeQuestionEvent | BridgeCompleteEvent;
+
 export type StatusOutput = {
   schema_version: number;
   state_file: string;

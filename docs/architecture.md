@@ -33,6 +33,8 @@ Key internals:
 - `cli/src/cli.ts` — Commander command registration and dispatch
 - `cli/src/commands/*.ts` — CLI command handlers (runtime, inspection, lifecycle, gate operations)
 - `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
+- `cli/src/commands/bridge.ts` — Detached bridge session lifecycle for generated skills
+- `cli/src/lib/bridge.ts` — Bridge session/event persistence and replay
 - `cli/src/lib/git.ts` — project git readiness checks and tree SHA resolution
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
 - `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`

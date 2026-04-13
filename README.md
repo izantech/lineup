@@ -9,6 +9,14 @@ Lineup is a native multi-agent pipeline for Claude Code, Codex CLI, and OpenCode
 
 Distributed through a single CLI: `lineup`.
 
+Users typically enter Lineup in one of two ways:
+
+- directly in a terminal with `lineup run "<task>"`
+- from Claude/Codex/OpenCode through the installed Lineup skill
+
+In both cases, the CLI is the engine. Skills are host-native entrypoints layered on
+top of it.
+
 ## Install the CLI
 
 ```bash
@@ -40,6 +48,9 @@ lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
 lineup init [--workflow <name>] [--json]
 lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
+lineup bridge start <task> --executor-host <host> [--workflow <path>] [--tactic <name>] [--approve-plan] [--gate-timeout <seconds>] [--json]
+lineup bridge events <run-id> --after <seq> --wait <seconds> [--json]
+lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>] [--json]
 lineup runs [--status <status>] [--json]
 lineup show <run-id> [--watch] [--json]
 lineup logs <run-id> [--json]
@@ -64,9 +75,18 @@ See [docs/commands.md](/Users/izan/Dev/Projects/lineup/docs/commands.md:1) for t
 `lineup run` has two execution modes:
 
 - `--mode human` for interactive terminal use. Prompts and progress render for people.
-- `--mode host` for skills and CI. The CLI emits NDJSON protocol messages on stdout and expects gate responses via `lineup gate respond`.
+- `--mode host` for raw protocol consumers, advanced integrations, and CI. The CLI emits NDJSON protocol messages on stdout and expects gate responses via `lineup gate respond`.
 
 If `--mode` is omitted, Lineup defaults to `human` on a TTY and `host` otherwise.
+
+Generated skills should prefer the bridge API:
+
+- `lineup bridge start` launches a detached session owned by the CLI
+- `lineup bridge events` streams compact `status`, `question`, and `complete` events
+- `lineup bridge answer` responds to user questions
+
+Keep `lineup run --mode host` for advanced/custom integrations that need the raw protocol.
+Use `lineup gate respond` only for raw host-mode consumers; generated skills should answer via `lineup bridge answer`.
 
 `lineup init` scaffolds the workflow and runtime directories and initializes a git
 repository if one does not already exist. You still need an initial commit before
@@ -74,8 +94,9 @@ native implementation can run. Use `lineup doctor --json` to check workflow and 
 readiness before the first run.
 
 `./dev install local` is a clean replace flow: it removes the previously installed
-global CLI, clears managed host installs, rebuilds the CLI from source, reinstalls
-the global package, and regenerates host skills from the current working tree.
+global CLI, clears managed host installs, installs missing CLI build dependencies if
+needed, rebuilds the CLI from source, reinstalls the global package, and regenerates
+host skills from the current working tree.
 
 ### Host behavior
 
@@ -109,9 +130,10 @@ OpenCode:
 - `/lineup-playbook`
 - `/lineup-digest`
 
-These host wrappers call the same native runtime with `lineup run "<user request>" --mode host`.
-They should preflight workflow and git readiness first, then treat stdout as an
-NDJSON protocol stream and keep stderr for diagnostics.
+These host wrappers now call the bridge API instead of supervising raw host-mode
+NDJSON streams directly. They should preflight workflow and git readiness first,
+then start a bridge session, poll `lineup bridge events`, and answer only
+`question` events.
 
 The runtime is also defensive about common host output mistakes:
 

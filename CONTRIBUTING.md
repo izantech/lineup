@@ -71,7 +71,14 @@ Generated host files are **not committed** — they are produced at install time
 `lineup run` supports two modes:
 
 - `human` for local interactive terminal use
-- `host` for generated skills, automation, and CI
+- `host` for raw protocol consumers, automation, and CI
+
+Generated skills should use the bridge API instead of supervising raw host-mode
+NDJSON. The bridge command surface is:
+
+- `lineup bridge start <task> --executor-host <host>`
+- `lineup bridge events <run-id> --after <seq> --wait <seconds>`
+- `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>]`
 
 Native implementation also requires the current project to have at least one git
 commit. `lineup init` scaffolds workflow/runtime files and initializes git when
@@ -84,13 +91,12 @@ mode contract as part of the public API:
 - `human`: prompts and human-readable progress belong on `stderr`
 - `host`: NDJSON protocol belongs on `stdout`
 
-For `host` mode, artifact handoff files are also part of the public API. If a host writes
-plan, task, or review outputs on behalf of `agent/spawn`, write them atomically
-(temp file + rename) and keep the documented file locations stable.
+For bridge mode, the compact event stream is the public API. Generated skills
+should answer only `question` events and inspect results after `complete`.
 
-The runtime includes best-effort repair for common host mistakes, but treat that as
-defensive compatibility rather than the primary contract. Keep prompts, artifact
-paths, and output shapes aligned with the docs and canonical skills.
+The runtime includes best-effort repair for common raw-host mistakes, but treat that
+as defensive compatibility rather than the primary contract. Keep prompts, bridge
+events, and output shapes aligned with the docs and canonical skills.
 
 ## Commit conventions
 

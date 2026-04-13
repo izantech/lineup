@@ -32,7 +32,7 @@ Tell the user that Lineup scaffolded the workflow/runtime directories and initia
 git if needed before launch.
 
 If the user provided a tactic name as an argument (e.g., `{{CMD_KICKOFF}} my-tactic`),
-pass it to the CLI: `lineup run "<user request>" --tactic <name> --mode host`.
+pass it to the bridge: `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`.
 
 If the user provided NO argument, check if project tactics exist:
 
@@ -43,8 +43,8 @@ lineup tactic list --json
 If tactics are found, use **{{QUESTION_PRIMITIVE}}** to ask:
 
 - Options: each tactic name + description, plus "Run the default pipeline"
-- If the user selects a tactic: `lineup run "<user request>" --tactic <name> --mode host`
-- If the user selects default: `lineup run "<user request>" --mode host`
+- If the user selects a tactic: `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`
+- If the user selects default: `lineup bridge start "<user request>" --executor-host <host>`
 
 If no tactics exist, proceed with the default pipeline.
 

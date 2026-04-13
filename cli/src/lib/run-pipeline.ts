@@ -70,6 +70,8 @@ type StageResult = {
 export type RunPipelineHooks = {
   runId?: string;
   localAgentRunner?: LocalAgentRunner;
+  emitProtocolToStdout?: boolean;
+  onProtocolMessage?: (message: LineupProtocolMessage) => void;
   native?: {
     driver?: NativeExecutionDriver;
     planContent?: string;
@@ -82,7 +84,7 @@ export type RunPipelineHooks = {
 export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
   const runMode = options.mode ?? (process.stdin.isTTY && process.stdout.isTTY ? "human" : "host");
   const projectRoot = resolve(".");
-  const localAgentRunner = runMode === "human" ? hooks.localAgentRunner : undefined;
+  const localAgentRunner = hooks.localAgentRunner;
   // 1. Load workflow
   let workflow: WorkflowDefinition;
   let workflowPath: string;
@@ -140,7 +142,8 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   const emitProtocol = (message: LineupProtocolMessage): void => {
     protocolMessages.push(message);
-    if (runMode === "host") {
+    hooks.onProtocolMessage?.(message);
+    if (runMode === "host" && hooks.emitProtocolToStdout !== false) {
       process.stdout.write(`${encodeNdjsonMessage(message)}\n`);
     }
   };
@@ -963,11 +966,11 @@ async function executePreStage(
       taskPrompt,
       ctx,
       outputSchema: stage.agent === "researcher" ? "Research" : stage.agent,
-      outputPath: runMode === "host" ? outputPath : undefined
-    });
+    outputPath: runMode === "host" ? outputPath : undefined
+  });
 
     let rawOutput: string;
-    if (runMode === "human") {
+    if (localAgentRunner) {
       if (!localAgentRunner) {
         throw new CliError(`No local agent runner configured for stage '${stage.id}'.`, {
           code: "agent_spawn_failed"
@@ -1283,7 +1286,7 @@ async function executePlannerPhase(
   } else {
     let prompt = basePrompt;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      if (runMode === "human") {
+      if (localAgentRunner) {
         if (!localAgentRunner) {
           throw new CliError("No local agent runner configured for the plan stage.", {
             code: "agent_spawn_failed"

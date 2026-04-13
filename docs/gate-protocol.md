@@ -1,86 +1,84 @@
-# Gate Protocol
+# Bridge Protocol
 
-In `lineup run --mode host`, the CLI emits `gate/request` messages via NDJSON when
-user interaction is needed.
+Generated skills use the bridge API, not raw `lineup run --mode host` supervision.
+The bridge keeps the host thin: it polls compact events, asks the user only when a
+question event arrives, and answers back through the CLI.
 
-Before a host launches `lineup run --mode host`, it should make sure the current
-project has:
+Before starting a bridge session, the project should have:
 
 - a default workflow (`lineup init` scaffolds one)
 - a git repository (`lineup init` creates one if missing)
-- at least one git commit
+- at least one git commit before native implementation stages run
 
-The recommended host pattern is to launch the CLI in the background, write stdout to
-an NDJSON log file, then poll and process only new lines as they appear.
-Each gate has a typed `gateType` field:
+## Bridge Commands
 
-| gateType | Stage | Purpose |
-|----------|-------|---------|
-| `classify` | Triage | LLM-driven complexity classification and area identification |
-| `clarify` | Clarify | Structured questions about the request |
-| `clarification` | Gate | Research-driven ambiguity resolution |
-| `approval` | Plan-approval | Plan approve/reject |
-| `cache` | Any cached stage | Use cached results or re-run |
-| `verify-decision` | Verify | Retry failed tasks, accept with warnings, or abort |
-| `custom` | Tactic-defined | Custom gate from tactic `gate: approval` |
+The skill-facing contract is:
 
-## Classify Gate
+- `lineup bridge start "<task>" --executor-host <host> [--workflow <path>] [--tactic <name>] [--approve-plan] [--gate-timeout <seconds>] [--json]`
+- `lineup bridge events <run-id> --after <seq> --wait <seconds> [--json]`
+- `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>] [--json]`
 
-The triage stage collects deterministic project stats (file count, changed files, diff stats,
-changed file paths) then emits a `classify` gate. The `context` field carries the stats as
-structured text. The orchestrator LLM should:
+Recommended host pattern:
 
-1. Read the `context` (project stats and changed file paths)
-2. Select `choice` from `["simple", "moderate", "complex"]`
-3. Put a JSON object in `reason` with: `affected_areas`, `search_targets`, `independent_areas`
+1. Start a bridge session and capture the returned `runId`
+2. Poll `lineup bridge events` for `status`, `question`, and `complete` events
+3. Present only `question` events to the user and answer them with `lineup bridge answer`
+4. Inspect results after completion with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
-If the orchestrator cannot provide structured JSON in `reason`, the engine falls back to
-deriving areas from the changed file paths.
+## Event Types
 
-The skill reads `gate/request` from stdout, asks the user, then calls
-`lineup gate respond <run-id> <request-id> --choice <value>`. The CLI
-writes pending gate files to `.lineup/.runs/<id>/gates/` and blocks until
-a response file appears (atomic write via temp+rename).
+| type | Purpose |
+|------|---------|
+| `status` | Progress updates for stage execution |
+| `question` | User-facing decisions that require a response |
+| `complete` | Terminal success, failure, or aborted state |
 
-## Agent Spawn Handoff
+`question` events carry the interaction details that the skill should present:
 
-In `host` mode, `agent/spawn` messages are also part of the contract:
+- `gateType`
+- `question`
+- `choices`
+- `defaultChoice` if present
+- `context` if present
+- `allowFreeText` if present
 
-- `plan` stages include `params.outputs.path` for the plan artifact the host must write
-- native `implement` stages include `params.inputs.task` plus a response file path under
-  `.lineup/.runs/<id>/artifacts/native/responses/`
-- native `verify` stages expect a review artifact at
-  `.lineup/.runs/<id>/artifacts/native/responses/review.yaml`
+The skill should present the question via its normal question primitive, then call
+`lineup bridge answer <run-id> <request-id> --choice <value>` with an optional reason.
 
-Hosts should write these files atomically (temp file + rename). The CLI polls for them
-and repairs fenced JSON/YAML payloads before schema validation.
+## Triage Gate
 
-If the planner writes prose instead of a structured `Plan`, the CLI issues one
-immediate retry with stricter instructions before failing the run. For developer
-and reviewer outputs, the runtime also normalizes a few common variants:
+The triage stage still classifies task complexity before any work is spawned. The
+`classify` gate uses project stats and changed-file context to choose one of:
 
-- developer JSON may use `status: done|success|complete`
-- `changes_made` entries may omit `task_id`
-- reviewer markdown summaries are converted into `lineup/v3 Review` YAML
+- `simple`
+- `moderate`
+- `complex`
 
-## Interactive Mode
+When the bridge receives a `classify` question, the skill should:
 
-`lineup run` operates in two modes:
-
-- `human` — local readline prompts, human-readable progress, prompts/progress on `stderr`
-- `host` — no local prompts, NDJSON protocol on `stdout`
-
-Interactive gate prompts are used in `human` mode. Each gate type maps to a readline
-prompt (approval → Y/n, clarify → free text, verify-decision → numbered menu). Host
-skills and CI should pass `--mode host` to receive `gate/request` JSON via stdout.
-
-## Gate Timeout
-
-`--gate-timeout <seconds>`: On timeout, the pipeline saves state as `blocked`
-(not `failed`) and exits cleanly. Blocked runs can be resumed with `lineup resume`.
+1. Read the `context` block
+2. Choose a complexity option
+3. Add structured reasoning in `--reason` when possible
 
 ## Retry UX
 
-When verification fails (`FAIL` or `PASS_WITH_WARNINGS`), a `verify-decision` gate
-presents three options: retry (re-runs only failed tasks within the same run), accept
-with warnings (pipeline continues), or abort (marks failed).
+When verification fails (`FAIL` or `PASS_WITH_WARNINGS`), the bridge can surface a
+`verify-decision` question with retry, accept-with-warnings, or abort choices.
+Skills should present those choices directly and answer with `lineup bridge answer`.
+
+## Low-Level Host Mode
+
+`lineup run --mode host` still exists for advanced/custom integrations and CI. It is
+the raw protocol path, not the default skill path. Generated skills should not
+background it or tail NDJSON logs directly.
+
+## Output Contract
+
+The bridge event stream is intentionally smaller than the raw host protocol:
+
+- `status`
+- `question`
+- `complete`
+
+The bridge owns orchestration, local agent spawning, and artifact handoff. Generated
+skills stay focused on progress display and user decisions.

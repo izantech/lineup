@@ -50,6 +50,26 @@ export function lineupRunArtifactsDir(runId: string, cwd = process.cwd()): strin
   return path.join(lineupRunDir(runId, cwd), "artifacts");
 }
 
+export function lineupRunBridgeDir(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunDir(runId, cwd), "bridge");
+}
+
+export function lineupRunBridgeSessionFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunBridgeDir(runId, cwd), "session.json");
+}
+
+export function lineupRunBridgeEventsFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunBridgeDir(runId, cwd), "events.ndjson");
+}
+
+export function lineupRunBridgeStdoutLogFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunBridgeDir(runId, cwd), "stdout.log");
+}
+
+export function lineupRunBridgeStderrLogFile(runId: string, cwd = process.cwd()): string {
+  return path.join(lineupRunBridgeDir(runId, cwd), "stderr.log");
+}
+
 export function lineupRunStateFile(runId: string, cwd = process.cwd()): string {
   return path.join(lineupRunDir(runId, cwd), "pipeline-state.json");
 }

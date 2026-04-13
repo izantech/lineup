@@ -26,7 +26,7 @@ git commit -m "Initial commit"
 and initializes a git repository if one does not already exist. The initial git commit
 is still required because native implementation uses isolated git worktrees.
 
-## First pipeline run with the CLI
+## Use Lineup from the CLI
 
 Pass a task description and let Lineup handle approval gates interactively:
 
@@ -44,15 +44,9 @@ Expected output:
 Pipeline completed successfully.
 ```
 
-## What happened
+This is the direct path: you are talking to the Lineup engine in your terminal.
 
-1. **Triage** classified the task, identified affected areas, and selected the right model tier per role.
-2. The CLI evaluated the workflow DAG, compiled the approved plan into execution waves, and drove the run through typed stages.
-3. Stage outputs and protocol events were persisted under `.lineup/.runs/` and `.lineup/.artifacts/`, so the run can be inspected or resumed later.
-
-The triage step drives model selection automatically. Simple tasks (rename a variable) use fast models. Complex tasks (redesign a subsystem) escalate to more capable ones. This is determined by the task scope, not by user configuration.
-
-## First pipeline run from a host
+## Use Lineup from Claude, Codex, or OpenCode
 
 If you prefer to stay inside your host UI, Lineup also installs thin host commands:
 
@@ -60,10 +54,19 @@ If you prefer to stay inside your host UI, Lineup also installs thin host comman
 - Codex CLI: `$lineup-kick-off`
 - OpenCode: `/lineup-kick-off`
 
-These wrappers launch the same native CLI pipeline and handle `gate/request` messages for you.
-Under the hood they invoke `lineup run "<user request>" --mode host`.
-They should preflight workflow and git readiness first, then monitor the host-mode
-NDJSON stream instead of treating the run as an opaque blocking command.
+From the user's point of view, these host commands do the same kind of work as
+`lineup run`, but inside the host session instead of a standalone terminal flow.
+The CLI still owns the engine; the skill is just the host-native entrypoint.
+
+## What happens behind the scenes
+
+1. **Triage** classified the task, identified affected areas, and selected the right model tier per role.
+2. The CLI evaluated the workflow DAG, compiled the approved plan into execution waves, and drove the run through typed stages.
+3. Stage outputs and protocol events were persisted under `.lineup/.runs/` and `.lineup/.artifacts/`, so the run can be inspected or resumed later.
+
+The triage step drives model selection automatically. Simple tasks use faster
+models; complex tasks escalate to more capable ones. This is determined by task
+scope, not by user configuration.
 
 ## When a run fails
 

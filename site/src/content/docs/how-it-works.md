@@ -3,6 +3,16 @@ title: How It Works
 description: Pipeline architecture, triage, stage caching, tactics, teams mode, and Ollama integration.
 ---
 
+## How users enter Lineup
+
+There are two normal entrypoints:
+
+- **CLI**: `lineup run "<task>"`
+- **Host skills**: `/lineup:kick-off`, `$lineup-kick-off`, or `/lineup-kick-off`
+
+Both use the same Lineup engine. The difference is only where the user starts:
+their own terminal or their host assistant session.
+
 ## Pipeline
 
 Lineup decomposes a task into **stages**, each assigned to a typed agent (researcher, architect, developer, reviewer, documenter). Stages execute sequentially by default, with parallel execution where the dependency graph allows it.
@@ -10,7 +20,7 @@ Lineup decomposes a task into **stages**, each assigned to a typed agent (resear
 `lineup run` supports two public runtime modes:
 
 - `human` for interactive local terminal use
-- `host` for generated skills, automation, and CI via NDJSON protocol
+- `host` for automation and advanced protocol consumers
 
 The full pipeline: **Triage → Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document**
 
@@ -148,6 +158,10 @@ The orchestrator creates a session-scoped team (`lineup-<session_id>`) and manag
 Lineup optionally delegates summarization and context gathering to local Ollama models. Code generation and architectural decisions always use the primary model.
 
 Configuration is in `~/.claude/lineup/ollama.yaml`. When enabled, researchers use Ollama for pre-digesting large files and web fetch results. When unavailable, all features degrade cleanly — Ollama is never required for correctness.
+
+Contributor- and agent-facing integration details live in the repository docs.
+The public site keeps the model intentionally simple: use the CLI directly, or use
+the installed Lineup skill inside your host.
 
 ---
 

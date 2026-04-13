@@ -9,21 +9,28 @@ Stage 0 (Triage) classifies complexity, identifies affected areas, and produces 
 `lineup run` has two public modes:
 
 - `human` — interactive local terminal execution
-- `host` — NDJSON protocol mode for generated skills and automation
+- `host` — raw NDJSON protocol mode for advanced integrations and CI
+
+Generated skills should use the bridge API instead of supervising raw host-mode
+NDJSON:
+
+- `lineup bridge start <task> --executor-host <host>`
+- `lineup bridge events <run-id> --after <seq> --wait <seconds>`
+- `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>]`
 
 Before the first native run in a new project, run `lineup init`. It scaffolds the
 workflow/runtime directories and initializes a git repository if needed. Native
 implementation still requires at least one commit because isolation uses git worktrees.
 
-In `host` mode, treat artifact handoff files as part of the runtime contract:
-- planner output path from `agent/spawn.params.outputs.path`
-- native task/review response files under `.lineup/.runs/<id>/artifacts/native/responses/`
-- write host-produced files atomically (temp file + rename)
+In bridge mode, treat the compact event stream as the skill contract:
+- `status` events carry progress updates
+- `question` events require user interaction and must be answered with `lineup bridge answer`
+- `complete` events mark terminal status and summary
 
-The runtime now includes a small amount of defensive normalization for host output
-(fenced payload repair, one planner retry when prose is returned, tolerant
+The runtime now includes a small amount of defensive normalization for raw host
+output (fenced payload repair, one planner retry when prose is returned, tolerant
 developer/reviewer parsing), but keep generated skills and docs aligned with the
-structured artifact contract rather than relying on recovery behavior.
+bridge contract rather than relying on recovery behavior.
 
 When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
 aligned on that contract.

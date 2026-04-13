@@ -5,6 +5,16 @@ import process from "node:process";
 import { Command } from "commander";
 
 import { runApproveCommand, type ApproveCommandOptions } from "./commands/approve";
+import {
+  runBridgeAnswerCommand,
+  runBridgeEventsCommand,
+  runBridgeStartCommand,
+  runBridgeWorkerCommand,
+  type BridgeAnswerOptions,
+  type BridgeEventsOptions,
+  type BridgeStartOptions,
+  type BridgeWorkerOptions
+} from "./commands/bridge";
 import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
 import { runCompletionCommand, type CompletionCommandOptions } from "./commands/completion";
 import { runDagCommand, type DagCommandOptions } from "./commands/dag";
@@ -67,6 +77,10 @@ export type CliHandlers = {
   artifactsPath: (options: ArtifactsPathOptions) => Promise<void>;
   artifactsDiff: (options: ArtifactsDiffOptions) => Promise<void>;
   approve: (options: ApproveCommandOptions) => Promise<void>;
+  bridgeStart: (options: BridgeStartOptions) => Promise<void>;
+  bridgeEvents: (options: BridgeEventsOptions) => Promise<void>;
+  bridgeAnswer: (options: BridgeAnswerOptions) => Promise<void>;
+  bridgeWorker: (options: BridgeWorkerOptions) => Promise<void>;
   pending: (options: PendingCommandOptions) => Promise<void>;
   init: (options: InitCommandOptions) => Promise<void>;
   workflowLint: (options: WorkflowLintOptions) => Promise<void>;
@@ -107,6 +121,10 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     artifactsPath: runArtifactsPathCommand,
     artifactsDiff: runArtifactsDiffCommand,
     approve: runApproveCommand,
+    bridgeStart: runBridgeStartCommand,
+    bridgeEvents: runBridgeEventsCommand,
+    bridgeAnswer: runBridgeAnswerCommand,
+    bridgeWorker: runBridgeWorkerCommand,
     pending: runPendingCommand,
     init: runInitCommand,
     workflowLint: runWorkflowLintCommand,
@@ -194,6 +212,64 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--approve-plan", "Skip interactive plan approval gate", false)
     .action((task: string | undefined, opts: RunCommandOptions) =>
       commandHandlers.run({ ...opts, prompt: task ?? opts.prompt })
+    );
+
+  const bridge = program.command("bridge").description("Detached host bridge commands");
+
+  bridge
+    .command("start [task]")
+    .description("Start a detached bridge session backed by the native engine")
+    .requiredOption("--executor-host <host>", "Execution host: claude|codex|opencode")
+    .option("--workflow <path>", "Path to workflow YAML", undefined)
+    .option("--tactic <name>", "Run a specific tactic", undefined)
+    .option("--host <host>", "Preferred local execution host override inside the worker")
+    .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
+    .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
+    .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
+    .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds", parseInt)
+    .option("--approve-plan", "Skip interactive plan approval gate", false)
+    .option("--json", "Emit machine-readable JSON output")
+    .action((task: string | undefined, opts: BridgeStartOptions) =>
+      commandHandlers.bridgeStart({ ...opts, prompt: task ?? opts.prompt })
+    );
+
+  bridge
+    .command("events <run-id>")
+    .description("Read bridge events for a detached session")
+    .option("--after <seq>", "Return events with seq greater than this value", parseInt)
+    .option("--wait <seconds>", "Long-poll for new events before returning", parseInt)
+    .option("--json", "Emit machine-readable JSON output")
+    .action((runId: string, opts: { after?: number; wait?: number; json?: boolean }) =>
+      commandHandlers.bridgeEvents({ runId, ...opts })
+    );
+
+  bridge
+    .command("answer <run-id> <request-id>")
+    .description("Answer a pending bridge question")
+    .requiredOption("--choice <value>", "Response choice")
+    .option("--reason <text>", "Optional reason for the choice")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((runId: string, requestId: string, opts: { choice: string; reason?: string; json?: boolean }) =>
+      commandHandlers.bridgeAnswer({ runId, requestId, ...opts })
+    );
+
+  bridge
+    .command("_worker <task>")
+    .description("Internal detached bridge worker")
+    .requiredOption("--run-id <id>", "Run identifier")
+    .requiredOption("--executor-host <host>", "Execution host")
+    .option("--workflow <path>", "Path to workflow YAML", undefined)
+    .option("--tactic <name>", "Run a specific tactic", undefined)
+    .option("--host <host>", "Preferred local execution host override inside the worker")
+    .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
+    .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
+    .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
+    .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds", parseInt)
+    .option("--approve-plan", "Skip interactive plan approval gate", false)
+    .action((task: string, opts: Omit<BridgeWorkerOptions, "prompt">) =>
+      commandHandlers.bridgeWorker({ ...opts, prompt: task } as BridgeWorkerOptions)
     );
 
   program

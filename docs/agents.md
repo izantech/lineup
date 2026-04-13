@@ -46,14 +46,19 @@ Teams mode falls back to standard subagents transparently when unavailable.
 ## Runtime Contract
 
 Agents are orchestrated by the CLI runtime, not by the host skill templates. Generated
-skills launch `lineup run "<user request>" --mode host`, consume NDJSON protocol
-messages, and answer gates with `lineup gate respond`. Interactive terminal use stays on
-`lineup run --mode human`.
+skills launch `lineup bridge start "<user request>" --executor-host <host>`, poll
+`lineup bridge events <run-id> --after <seq> --wait <seconds> --json`, and answer
+questions with `lineup bridge answer <run-id> <request-id> --choice <value>`.
+Interactive terminal use stays on `lineup run --mode human`.
 
 Fresh projects still need `lineup init` before native implementation can run. It
 scaffolds the workflow/runtime files and initializes git if needed. Host wrappers
 should still verify that the repo has at least one commit before launching
-`lineup run --mode host`.
+the bridge or `lineup run --mode host`.
+
+`lineup run --mode host` remains public for advanced/custom integrations and CI, but
+generated skills should treat it as the low-level raw protocol path rather than the
+default host integration.
 
 Repo-local `agents/*.md` files are optional. When a project does not define one, Lineup
 falls back to the bundled definitions shipped in `cli/agents/`. Use repo-local files only

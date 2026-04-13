@@ -10,6 +10,10 @@ function createMockHandlers() {
     status: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
+    bridgeStart: vi.fn(async () => undefined),
+    bridgeEvents: vi.fn(async () => undefined),
+    bridgeAnswer: vi.fn(async () => undefined),
+    bridgeWorker: vi.fn(async () => undefined),
   };
 }
 
@@ -21,6 +25,10 @@ describe("CLI command parsing", () => {
     status: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
+    bridgeStart: vi.fn(async () => undefined),
+    bridgeEvents: vi.fn(async () => undefined),
+    bridgeAnswer: vi.fn(async () => undefined),
+    bridgeWorker: vi.fn(async () => undefined),
   };
 
   beforeEach(() => {
@@ -217,6 +225,72 @@ describe("run command", () => {
     await program.parseAsync(["node", "lineup", "run", "Fix the login bug", "--host", "claude"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: "Fix the login bug", host: "claude" })
+    );
+  });
+
+  it("parses bridge start options", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync([
+      "node",
+      "lineup",
+      "bridge",
+      "start",
+      "Analyze the system",
+      "--executor-host",
+      "claude",
+      "--tactic",
+      "lux-commons",
+      "--approve-plan",
+      "--json"
+    ]);
+    expect(handlers.bridgeStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Analyze the system",
+        executorHost: "claude",
+        tactic: "lux-commons",
+        approvePlan: true,
+        json: true
+      })
+    );
+  });
+
+  it("parses bridge events options", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "bridge", "events", "abc123", "--after", "4", "--wait", "30", "--json"]);
+    expect(handlers.bridgeEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "abc123",
+        after: 4,
+        wait: 30,
+        json: true
+      })
+    );
+  });
+
+  it("parses bridge answer options", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync([
+      "node",
+      "lineup",
+      "bridge",
+      "answer",
+      "abc123",
+      "7",
+      "--choice",
+      "approve",
+      "--reason",
+      "Looks good"
+    ]);
+    expect(handlers.bridgeAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "abc123",
+        requestId: "7",
+        choice: "approve",
+        reason: "Looks good"
+      })
     );
   });
 });

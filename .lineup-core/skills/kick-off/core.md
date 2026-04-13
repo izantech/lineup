@@ -15,80 +15,45 @@ Before launching the pipeline, run the lightweight init in `{{KICKOFF_INIT_PATH}
 
 Determine the CLI command based on the user's request:
 
-- **Default pipeline**: `lineup run "<user request>" --mode host`
-- **Specific tactic**: `lineup run "<user request>" --tactic <name> --mode host`
-- **With workflow**: `lineup run "<user request>" --workflow <path> --mode host`
-- **Dry run** (preview only): add `--dry-run`
+- **Default pipeline**: `lineup bridge start "<user request>" --executor-host <host>`
+- **Specific tactic**: `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`
+- **With workflow**: `lineup bridge start "<user request>" --executor-host <host> --workflow <path>`
 
-Prefer a detached launch so the host session stays responsive while you monitor
-progress and handle gates.
+Prefer a detached bridge session so the host stays responsive while you monitor
+progress and handle questions.
 
 Recommended pattern:
 
-1. Create a temporary NDJSON log file under `.lineup/.runs/.host/`
-2. Launch `lineup run ... --mode host` in the background, redirecting:
-   - stdout → the NDJSON log file
-   - stderr → a sibling `.stderr` file
-   - pid → a sibling `.pid` file
-3. Poll the NDJSON log file and process only new lines as they appear
-4. If detached launch is unavailable in the host, fall back to a foreground Bash call
-   and stream stdout line by line
+1. Start `lineup bridge start ...` and capture the returned `runId`
+2. Poll `lineup bridge events <run-id> --after <seq> --wait 30 --json`
+3. Render `status` events as progress updates
+4. Render `question` events to the user and answer them with `lineup bridge answer`
+5. When `complete` arrives, inspect the run with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
-The CLI emits NDJSON (one JSON object per line) to stdout. Treat stdout as the
-protocol stream and stderr as diagnostics.
+The bridge is the skill-facing API. Keep the host session focused on rendering
+progress and answering questions.
 
-## Protocol Messages
+## Bridge Events
 
-Each line is a JSON-RPC 2.0 message. Handle these methods:
+Each bridge event is a compact JSON object from `lineup bridge events`. Handle
+these event types:
 
-### `gate/request` — requires user interaction
+### `question` — requires user interaction
 
-When you see `"method": "gate/request"` in the output:
+When you see a `question` event:
 
-1. Read `params.gateType` to determine the interaction pattern
-2. Present `params.question` to the user
-3. If `params.context` is present, show it as background before the question
-4. Present `params.choices` as options via **{{QUESTION_PRIMITIVE}}**
-5. If `params.allowFreeText` is true, include a free-text option
+1. Read `gateType` to determine the interaction pattern
+2. Present `question` to the user
+3. If `context` is present, show it as background before the question
+4. Present `choices` as options via **{{QUESTION_PRIMITIVE}}**
+5. If `allowFreeText` is true, include a free-text option
 6. After the user answers, respond immediately:
 
 ```bash
-lineup gate respond <params.runId> <id> --choice "<user_choice>" --json
+lineup bridge answer <run-id> <request-id> --choice "<user_choice>"
 ```
 
 If the user provides a reason or elaboration, add `--reason "<text>"`.
-
-### `agent/spawn` — execute the requested agent and hand back the artifact
-
-When you see `"method": "agent/spawn"` in the output:
-
-1. Read `params.agent`, `params.prompt`, `params.inputs`, and `params.outputs`
-2. Run the requested agent work inside the current host session
-3. Treat `params.prompt` as the full execution contract
-4. Return only the structured payload requested by the CLI — no wrapper prose
-5. If `params.outputs.path` is present, write the payload **atomically**:
-   - write to `<path>.tmp`
-   - rename `<path>.tmp` to `<path>`
-6. Do not invent a different file path and do not wait for the CLI to ask again
-
-Expected patterns:
-
-- `research` / `plan` / `document` stages:
-  - generate the requested YAML payload from `params.prompt`
-  - write it to `params.outputs.path`
-- `implement` task execution:
-  - do the code changes in the provided worktree/session
-  - return the requested JSON payload
-  - write it to `params.outputs.path` when provided, otherwise to the response path implied by the runtime contract
-- `verify`:
-  - review the implementation and emit the requested review payload
-  - write it to `params.outputs.path`
-
-If `params.outputs.path` is missing, use the path described in the prompt or in the
-native request artifact under `.lineup/.runs/<runId>/artifacts/native/requests/`.
-
-Never abandon the pipeline and "take over manually" just because an `agent/spawn`
-request arrived. The CLI is waiting for that artifact to continue.
 
 ### Gate types
 
@@ -102,20 +67,19 @@ request arrived. The CLI is waiting for that artifact to continue.
 | `verify-decision` | After verification | If verification fails/warns: "Retry or stop?" Show the reviewer's summary. |
 | `custom` | Tactic-defined gates | Follow the question and choices as provided. |
 
-### `agent/output` — informational
+### `status` — informational
 
-When `params.channel` is `"status"`, show `params.chunk` to the user as a
-progress update. Ignore `"stdout"` and `"stderr"` channels.
+Show `text` to the user as a progress update.
 
 When you launch the CLI, tell the user what is happening in plain language:
 
-- "Launching Lineup in host mode."
-- "I will stream stage updates and stop when a gate needs your input."
+- "Launching Lineup bridge mode."
+- "I will stream stage updates and stop when a question needs your input."
 - "If the project is missing workflow or git prerequisites, I will fix or report that before the run starts."
 
-### `pipeline/complete` — terminal
+### `complete` — terminal
 
-The pipeline finished. Show `params.status` and `params.summary` to the user.
+The bridge finished. Show `status` and `summary` to the user.
 
 - On `"success"`: report what was accomplished.
 - On `"failed"`: show the error summary and suggest `lineup logs <runId>` for details.
@@ -155,25 +119,25 @@ orchestrator, classify the task to choose the right approach:
 
 | Complexity | Approach |
 |------------|----------|
-| **Simple** (single file, explicit instructions) | Skip the pipeline. Just do it directly. |
-| **Moderate** (multiple files, clear scope) | `lineup run "<user request>" --mode host` with default workflow |
-| **Complex** (multiple modules, unclear trade-offs) | `lineup run "<user request>" --mode host` with default workflow (full pipeline) |
+| **Simple** (single file, explicit instructions) | Skip the bridge. Just do it directly. |
+| **Moderate** (multiple files, clear scope) | `lineup bridge start "<user request>" --executor-host <host>` with default workflow |
+| **Complex** (multiple modules, unclear trade-offs) | `lineup bridge start "<user request>" --executor-host <host>` with default workflow (full pipeline) |
 
 For simple tasks, do not invoke the CLI — handle directly as the orchestrator.
 
 ## Tactics
 
 If the user names a specific tactic or if project tactics exist in
-`.lineup/tactics/`, use `lineup run "<user request>" --tactic <name> --mode host`.
+`.lineup/tactics/`, use `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`.
 
 To list available tactics: `lineup tactic list --json`.
 
 ## Rules
 
-- **Handle gates promptly** — the CLI blocks until you respond. Do not leave
-  gates pending.
+- **Handle questions promptly** — the bridge blocks until you respond. Do not
+  leave questions pending.
 - **Always use {{QUESTION_PRIMITIVE}}** for user decisions at gates.
-- **Report stage progress** — show `agent/output` status messages as they arrive.
+- **Report stage progress** — show `status` events as they arrive.
 - **Never implement code yourself** — the CLI delegates to developer agents.
 - **One pipeline at a time** — the CLI enforces a runtime lock. Do not start
-  a second `lineup run` while one is active.
+  a second bridge session while one is active.

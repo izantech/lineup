@@ -5,7 +5,7 @@ description: What changed in Lineup V3, how to upgrade, and what to watch for.
 
 ## Overview
 
-V3 rewrites the skill layer from ~100 KB of orchestrator prompt down to ~12 KB of thin CLI wrappers. Pipeline orchestration — agent spawning, DAG scheduling, state management, artifacts — now lives entirely in the CLI. Skills handle only the gate protocol (presenting gates to the user and relaying responses).
+V3 rewrites the skill layer from ~100 KB of orchestrator prompt down to ~12 KB of thin CLI wrappers. Pipeline orchestration — agent spawning, DAG scheduling, state management, artifacts — now lives entirely in the CLI. Skills now use the bridge API: they start a session, poll compact events, and answer user questions. The CLI handles the actual orchestration.
 
 This is a breaking change for the skill format. Agent overrides, tactics, project memory, and cached stage results are preserved.
 
@@ -32,17 +32,17 @@ If you installed from source:
 |--|----|----|
 | Skill size | ~100 KB (full orchestrator) | ~12 KB (CLI wrapper) |
 | Pipeline orchestration | Inside the skill prompt | Inside the CLI (`run-pipeline.ts`) |
-| Agent spawning | Skill spawns agents directly | CLI emits `agent/spawn` protocol messages |
-| Gate handling | Skill manages gates inline | Skill reads `gate/request` from stdout, calls `lineup gate respond` |
+| Agent spawning | Skill spawns agents directly | CLI owns agent spawning internally |
+| Gate handling | Skill manages gates inline | Skill polls `lineup bridge events` and calls `lineup bridge answer` |
 | Tactic execution | Skill interprets tactic YAML | CLI converts tactics to workflows via `tacticToWorkflow()` |
 
-Skills no longer contain pipeline logic. They launch `lineup run "<user request>" --mode host`, read NDJSON protocol messages from stdout, and handle gates by asking the user and calling `lineup gate respond <run-id> <request-id> --choice <value>`.
+Skills no longer contain pipeline logic. They launch `lineup bridge start "<user request>" --executor-host <host>`, poll `lineup bridge events <run-id> --after <seq> --wait <seconds>`, and handle questions by asking the user and calling `lineup bridge answer <run-id> <request-id> --choice <value>`.
 In fresh projects they should preflight `lineup init` plus git readiness first. `lineup init`
 now initializes git when needed, but native implementation still requires an initial commit.
 
 ### Gate protocol
 
-Gates are now typed. Each `gate/request` message includes a `gateType` field:
+Questions are now typed. Each bridge `question` event includes a `gateType` field:
 
 | gateType | Stage | Purpose |
 |----------|-------|---------|
@@ -69,8 +69,8 @@ Use `lineup tactic convert <name>` to preview the conversion without running.
 
 The triage and research stages are no longer stubs. Triage now reads git diff stats when a
 repository with a HEAD commit is available and otherwise falls back cleanly to file-system
-stats. Research stages emit `agent/spawn` protocol messages for researcher agents. Clarify
-and gate stages continue to use the existing `gate/request` flow.
+stats. Research and plan execution are handled inside the bridge worker, while clarify
+and gate stages surface as bridge questions.
 
 ## New CLI flags
 
@@ -88,7 +88,7 @@ Added to `lineup resume`:
 |------|---------|
 | `--max-retries <n>` | Cap retry attempts per stage (default: 3). Used with `--retry-failed`. |
 
-Interactive gate prompts are used in `--mode human`. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu. Host skills and CI pass `--mode host` to get the JSON-RPC protocol mode instead.
+Interactive gate prompts are used in `--mode human`. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu. Generated skills now use the bridge API; `--mode host` remains for raw protocol consumers and CI.
 
 `--gate-timeout` pairs with `lineup resume` for unattended runs. A blocked pipeline can be resumed later without losing state.
 
@@ -100,6 +100,7 @@ Interactive gate prompts are used in `--mode human`. Gate types map to readline 
 | `lineup replay <run-id>` | Replay a completed run as a chronological narrative with timestamps. |
 | `lineup waves [--run <id>]` | Visualize task execution waves and parallelism from a compiled plan. |
 | `lineup history [--status <s>]` | List past pipeline runs with status, duration, and retry counts. |
+| `lineup bridge start|events|answer` | Thin skill-facing bridge API for detached pipeline runs. |
 
 ## New pipeline features
 
@@ -155,9 +156,12 @@ The plan-to-task compiler now detects cross-cutting changes (a type change touch
 
 Run `lineup update --host all` to force-regenerate skill files for all hosts. If skills were manually modified, the update overwrites them — back up any custom changes first.
 
-**`lineup run` prompts are garbled**
+**Bridge events are garbled**
 
-Interactive prompts require a TTY. They do not work in piped or non-interactive shells. Use `--mode host` in CI environments to emit gate/request JSON instead.
+Bridge sessions should be polled with `lineup bridge events`, not by tailing raw
+NDJSON logs. Use `--wait` for long polling and `lineup bridge answer` for user
+responses. Keep `lineup run --mode host` for advanced integrations and CI that need
+the raw protocol.
 
 **Verification hooks run unwanted commands**
 
