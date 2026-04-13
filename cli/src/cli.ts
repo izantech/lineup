@@ -10,6 +10,7 @@ import { runCompletionCommand, type CompletionCommandOptions } from "./commands/
 import { runDagCommand, type DagCommandOptions } from "./commands/dag";
 import { runGateRespondCommand, type GateRespondOptions } from "./commands/gate";
 import { runWavesCommand, type WavesCommandOptions } from "./commands/waves";
+import { runHistoryCommand, type HistoryCommandOptions } from "./commands/history";
 import { runInitCommand, type InitCommandOptions } from "./commands/init";
 import { runInstallCommand, type InstallCommandOptions } from "./commands/install";
 import { runLogsCommand, type LogsCommandOptions } from "./commands/logs";
@@ -77,6 +78,7 @@ export type CliHandlers = {
   completion: (options: CompletionCommandOptions) => Promise<void>;
   dag: (options: DagCommandOptions) => Promise<void>;
   waves: (options: WavesCommandOptions) => Promise<void>;
+  history: (options: HistoryCommandOptions) => Promise<void>;
 };
 
 function packageVersion(): string {
@@ -116,6 +118,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     completion: runCompletionCommand,
     dag: runDagCommand,
     waves: runWavesCommand,
+    history: runHistoryCommand,
     ...handlers
   };
 
@@ -352,6 +355,14 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--json", "Emit machine-readable JSON output")
     .option("--compact", "Compact output without dependency details")
     .action(commandHandlers.waves);
+
+  program
+    .command("history")
+    .description("Show pipeline execution history")
+    .option("--status <status>", "Filter by status")
+    .option("--limit <n>", "Max entries to show (default: 20)", parseInt)
+    .option("--json", "Emit machine-readable JSON output")
+    .action(commandHandlers.history);
 
   return program;
 }
