@@ -148,8 +148,7 @@ describe("run command", () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["node", "lineup", "run", "--dry-run"]);
     expect(handlers.run).toHaveBeenCalledWith(
-      expect.objectContaining({ dryRun: true }),
-      expect.anything()
+      expect.objectContaining({ dryRun: true })
     );
   });
 
@@ -158,8 +157,7 @@ describe("run command", () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["node", "lineup", "run", "--workflow", "my.yaml"]);
     expect(handlers.run).toHaveBeenCalledWith(
-      expect.objectContaining({ workflow: "my.yaml" }),
-      expect.anything()
+      expect.objectContaining({ workflow: "my.yaml" })
     );
   });
 
@@ -168,8 +166,7 @@ describe("run command", () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["node", "lineup", "run", "--tactic", "quick-fix"]);
     expect(handlers.run).toHaveBeenCalledWith(
-      expect.objectContaining({ tactic: "quick-fix" }),
-      expect.anything()
+      expect.objectContaining({ tactic: "quick-fix" })
     );
   });
 
@@ -178,8 +175,7 @@ describe("run command", () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["node", "lineup", "run", "--from-stage", "plan"]);
     expect(handlers.run).toHaveBeenCalledWith(
-      expect.objectContaining({ fromStage: "plan" }),
-      expect.anything()
+      expect.objectContaining({ fromStage: "plan" })
     );
   });
 
@@ -193,8 +189,16 @@ describe("run command", () => {
         dryRun: true,
         forceRerun: true,
         json: true,
-      }),
-      expect.anything()
+      })
+    );
+  });
+
+  it("parses task positional argument", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "Fix the login bug"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Fix the login bug" })
     );
   });
 });
