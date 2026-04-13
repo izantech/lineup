@@ -33,9 +33,9 @@ a response file appears (atomic write via temp+rename).
 
 ## Interactive Mode
 
-`--interactive`: Gates are handled via stdin prompts instead of file-based polling,
-making Lineup usable without a host skill. Each gate type maps to a readline prompt
-(approval → Y/n, clarify → free text, verify-decision → numbered menu).
+Interactive gate prompts are the default. Each gate type maps to a readline prompt
+(approval → Y/n, clarify → free text, verify-decision → numbered menu). Host skills
+pass `--non-tty` to disable prompts and receive gate/request JSON via stdout instead.
 
 ## Gate Timeout
 

@@ -178,7 +178,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .action(commandHandlers.init);
 
   program
-    .command("run")
+    .command("run [task]")
     .description("Run a Lineup pipeline through the native v3 engine")
     .option("--workflow <path>", "Path to workflow YAML", undefined)
     .option("--tactic <name>", "Run a specific tactic", undefined)
@@ -192,8 +192,10 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
     .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds; on timeout saves state as blocked", parseInt)
     .option("--approve-plan", "Skip interactive plan approval gate", false)
-    .option("-i, --interactive", "Handle gates via stdin prompts")
-    .action(commandHandlers.run);
+    .option("--non-tty", "Disable interactive gate prompts; emit gate/request JSON for host orchestration")
+    .action((task: string | undefined, opts: RunCommandOptions) =>
+      commandHandlers.run({ ...opts, prompt: task ?? opts.prompt })
+    );
 
   program
     .command("runs")

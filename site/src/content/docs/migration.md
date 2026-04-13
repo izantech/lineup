@@ -73,7 +73,7 @@ Added to `lineup run`:
 
 | Flag | Purpose |
 |------|---------|
-| `--interactive` / `-i` | Handle gates via stdin prompts. No host skill needed. |
+| `--non-tty` | Disable interactive gate prompts; emit gate/request JSON for host orchestration. |
 | `--gate-timeout <seconds>` | Save state as `blocked` on timeout instead of waiting indefinitely. |
 | `--implement-method <method>` | Task execution batching: `phase` (default), `task` (per-task isolation), or `single-session`. |
 
@@ -83,7 +83,7 @@ Added to `lineup resume`:
 |------|---------|
 | `--max-retries <n>` | Cap retry attempts per stage (default: 3). Used with `--retry-failed`. |
 
-`--interactive` makes Lineup usable as a standalone terminal tool. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu.
+Interactive gate prompts are now the default. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu. Host skills pass `--non-tty` to get the JSON-RPC protocol mode instead.
 
 `--gate-timeout` pairs with `lineup resume` for unattended runs. A blocked pipeline can be resumed later without losing state.
 
@@ -150,9 +150,9 @@ The plan-to-task compiler now detects cross-cutting changes (a type change touch
 
 Run `lineup update --host all` to force-regenerate skill files for all hosts. If skills were manually modified, the update overwrites them — back up any custom changes first.
 
-**`lineup run --interactive` prompts are garbled**
+**`lineup run` prompts are garbled**
 
-Interactive mode requires a TTY. It does not work in piped or non-interactive shells. Use file-based gates (the default) in CI environments.
+Interactive prompts require a TTY. They do not work in piped or non-interactive shells. Use `--non-tty` in CI environments to emit gate/request JSON instead.
 
 **Verification hooks run unwanted commands**
 

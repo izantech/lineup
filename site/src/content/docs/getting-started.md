@@ -24,10 +24,10 @@ lineup init
 
 ## First pipeline run with the CLI
 
-Pipe a request into the native engine and let Lineup handle approval gates interactively:
+Pass a task description and let Lineup handle approval gates interactively:
 
 ```bash
-printf 'Review the auth middleware in src/auth.ts and identify security gaps\n' | lineup run --interactive
+lineup run "Review the auth middleware in src/auth.ts and identify security gaps"
 ```
 
 Expected output:

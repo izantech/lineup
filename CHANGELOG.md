@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop notifications on pipeline completion and failure
 - Task-level execution isolation via `lineup run --implement-method task`
 - External dogfood fixture corpus for fullstack, library, and monorepo scenarios
-- Interactive mode (`lineup run --interactive`) -- handle gates via stdin prompts without a host skill; maps gate types to readline prompts (approval Y/n, clarify free-text, verify-decision numbered menu)
+- Interactive gates are now the default -- gate types map to readline prompts (approval Y/n, clarify free-text, verify-decision numbered menu); host skills pass `--non-tty` for JSON-RPC protocol mode
 - Gate timeout (`lineup run --gate-timeout <seconds>`) -- saves pipeline state as `blocked` on timeout instead of `failed`, enabling clean resume
 - Real pre-stage logic -- triage stage analyzes `git diff --stat HEAD` and file count; research stage emits `agent/spawn` protocol messages for researcher agents
 - Verification hooks -- auto-detects test/typecheck/lint commands from `package.json` scripts and Makefile targets, runs them before the reviewer agent, feeds structured results (exit code, stdout, stderr, duration) as reviewer context

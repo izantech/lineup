@@ -270,7 +270,7 @@ export type RunOptions = {
   implementMethod?: ImplementMethod;
   approvePlan?: boolean;
   gateTimeout?: number;
-  interactive?: boolean;
+  nonTty?: boolean;
   validateOutputs?: boolean;
   prompt?: string;
 };

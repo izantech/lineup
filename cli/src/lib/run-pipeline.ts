@@ -203,7 +203,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, options.interactive);
+          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, options.nonTty);
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
           if (result.status === "blocked") {
@@ -243,7 +243,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               createdAt: new Date().toISOString()
             };
             let gateResponse;
-            if (options.interactive) {
+            if (!options.nonTty) {
               gateResponse = await handleInteractiveGate(pendingGate);
             } else {
               writePendingGate(runId, pendingGate, projectRoot);
@@ -357,7 +357,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 };
 
                 let gateResponse;
-                if (options.interactive) {
+                if (!options.nonTty) {
                   gateResponse = await handleInteractiveGate(pendingGate);
                 } else {
                   writePendingGate(runId, pendingGate, projectRoot);
@@ -648,18 +648,18 @@ async function executePreStage(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   gateTimeoutMs?: number,
   validateOutputs = true,
-  interactive?: boolean
+  nonTty?: boolean
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, nonTty);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, interactive);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, nonTty);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
@@ -679,7 +679,7 @@ async function executePreStage(
         "Classify this task's complexity and identify affected areas based on the project stats below.",
         ["simple", "moderate", "complex"],
         "moderate", runId, projectRoot, nextRequestId,
-        emitProtocol, emitStatus, true, gateTimeoutMs, interactive,
+        emitProtocol, emitStatus, true, gateTimeoutMs, nonTty,
         contextPayload
       );
 
@@ -867,7 +867,7 @@ async function emitGateAndWait(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   allowFreeText: boolean,
   gateTimeoutMs?: number,
-  interactive?: boolean,
+  nonTty?: boolean,
   context?: string
 ): Promise<StageResult> {
   const reqId = nextRequestId();
@@ -882,7 +882,7 @@ async function emitGateAndWait(
   };
 
   let gateResponse;
-  if (interactive) {
+  if (!nonTty) {
     gateResponse = await handleInteractiveGate(pendingGate);
   } else {
     writePendingGate(runId, pendingGate, projectRoot);
