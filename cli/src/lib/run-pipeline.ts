@@ -8,7 +8,8 @@ import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store
 import {
   executeNativeExecutor,
   prepareExecutionArtifacts,
-  type NativeExecutionDriver
+  type NativeExecutionDriver,
+  waitForResponseFile
 } from "./executor.js";
 import {
   createLineupNotification,
@@ -41,6 +42,7 @@ import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpressionSafe, type ExpressionContext } from "./expression.js";
 import { runVerificationHooks, type VerificationResult } from "./verification.js";
 import { notifyPipelineComplete } from "./notify.js";
+import { repairYamlOutput } from "./llm-output-repair.js";
 
 
 export type PipelineResult = {
@@ -937,6 +939,7 @@ async function executePlannerPhase(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   hooks: RunPipelineHooks
 ): Promise<StageResult> {
+  const planPath = resolve(artifactDir, "plan.yaml");
   emitProtocol(
     createLineupRequest({
       method: "agent/spawn",
@@ -946,15 +949,21 @@ async function executePlannerPhase(
         stageId: stage.id,
         agent: stage.agent ?? "architect",
         prompt: `Generate an implementation plan for the current pipeline run.`,
+        outputs: {
+          schema: "Plan",
+          path: planPath
+        },
         timeoutMs: 300000,
         retryAttempt: 0
       }
     })
   );
 
-  const planPath = resolve(artifactDir, "plan.yaml");
   if (hooks.native?.planContent) {
-    writeFileSync(planPath, hooks.native.planContent, "utf8");
+    writeFileSync(planPath, repairYamlOutput(hooks.native.planContent).content, "utf8");
+  } else {
+    const rawPlan = await waitForResponseFile(planPath, "Plan response", 300_000);
+    writeFileSync(planPath, repairYamlOutput(rawPlan).content, "utf8");
   }
 
   emitStatus(stage.id, `Approved plan artifact path: ${planPath}.`, true);

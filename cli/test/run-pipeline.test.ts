@@ -338,6 +338,89 @@ stages:
     }
   });
 
+  it("waits for a host-written plan artifact in host mode", async () => {
+    const projectRoot = join(tempDir, "project-host-plan");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: test-pipeline
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      setTimeout(() => {
+        writeFileSync(
+          join(projectRoot, ".lineup", ".runs", "host01", "artifacts", "plan.yaml"),
+          [
+            "```json",
+            JSON.stringify({
+              apiVersion: "lineup/v3",
+              kind: "Plan",
+              status: "approved",
+              summary: "Add a host-written plan",
+              approaches: [
+                { name: "Native", strategy: "Write the plan artifact directly" }
+              ],
+              recommendation: {
+                approach: "Native",
+                rationale: "Matches the host protocol contract"
+              },
+              changes: [
+                {
+                  file: "README.md",
+                  change: "Document the host flow",
+                  rationale: "Exercise the planner handoff"
+                }
+              ],
+              acceptance_criteria: [
+                { criterion: "Planner artifact is persisted" }
+              ],
+              risks: [
+                {
+                  risk: "Hosts may emit fenced JSON",
+                  mitigation: "Repair and normalize before validation"
+                }
+              ]
+            }, null, 2),
+            "```"
+          ].join("\n"),
+          "utf8"
+        );
+      }, 50);
+
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "host"
+        },
+        {
+          runId: "host01"
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(readFileSync(join(projectRoot, ".lineup", ".runs", "host01", "artifacts", "plan.yaml"), "utf8")).toContain("kind: Plan");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("rejects workflow with cycle", async () => {
     const workflowDir = join(tempDir, ".lineup-core", "workflows");
     mkdirSync(workflowDir, { recursive: true });

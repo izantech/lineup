@@ -40,6 +40,15 @@ function renderPathTemplate(pathTemplate: string, vars: Record<string, string>):
 
 function withBanner(content: string): string {
   const trimmed = content.replace(/\s+$/u, "");
+  if (trimmed.startsWith("---\n") || trimmed.startsWith("---\r\n")) {
+    const match = trimmed.match(/^---\r?\n[\s\S]*?\r?\n---/);
+    if (match) {
+      const frontmatter = match[0];
+      const remainder = trimmed.slice(frontmatter.length).replace(/^\r?\n/, "");
+      return `${frontmatter}\n\n${GENERATED_BANNER}\n\n${remainder}\n`;
+    }
+  }
+
   return `${GENERATED_BANNER}\n\n${trimmed}\n`;
 }
 

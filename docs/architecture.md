@@ -36,6 +36,7 @@ Key internals:
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
 - `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`
 - `cli/src/lib/interactive-gate.ts` — Interactive stdin gate handler for `lineup run --mode human`
+- `cli/src/lib/executor.ts` — Native task/review driver, host response-file waits, artifact normalization
 - `cli/src/lib/verification.ts` — Auto-detect and run project test/typecheck/lint hooks
 - `cli/src/lib/tactic-convert.ts` — Tactic-to-Workflow auto-converter
 - `cli/src/lib/release.ts` — GitHub release resolution, cache, checksum verification
@@ -46,3 +47,7 @@ Key internals:
 - `cli/src/lib/dag.ts` — Task compilation, cross-cutting detection, read-write dependency analysis
 - `cli/src/commands/replay.ts` — Pipeline run narrative replay
 - `cli/schemas/**` — JSON/YAML schemas
+
+Agent prompt resolution prefers repo-local `agents/*.md` when present, then falls back to
+bundled definitions shipped in `cli/agents/` so freshly initialized projects can execute
+without copying agent files into the repo.

@@ -90,4 +90,14 @@ You are the architect body.
     expect(parsed.frontmatter.name).toBe("developer");
     expect(parsed.body).toContain("Implement the plan.");
   });
+
+  it("falls back to bundled agent prompts when the project file is missing", () => {
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "developer.md"),
+      promptTemplate: "{{AGENT_BODY}}"
+    });
+
+    expect(built.parsed.frontmatter.name).toBe("developer");
+    expect(built.prompt).toContain("You are a developer agent.");
+  });
 });

@@ -32,6 +32,19 @@ The skill reads `gate/request` from stdout, asks the user, then calls
 writes pending gate files to `.lineup/.runs/<id>/gates/` and blocks until
 a response file appears (atomic write via temp+rename).
 
+## Agent Spawn Handoff
+
+In `host` mode, `agent/spawn` messages are also part of the contract:
+
+- `plan` stages include `params.outputs.path` for the plan artifact the host must write
+- native `implement` stages include `params.inputs.task` plus a response file path under
+  `.lineup/.runs/<id>/artifacts/native/responses/`
+- native `verify` stages expect a review artifact at
+  `.lineup/.runs/<id>/artifacts/native/responses/review.yaml`
+
+Hosts should write these files atomically (temp file + rename). The CLI polls for them
+and repairs fenced JSON/YAML payloads before schema validation.
+
 ## Interactive Mode
 
 `lineup run` operates in two modes:

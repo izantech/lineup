@@ -1,8 +1,10 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import { parseDocument } from "yaml";
 
 import { CliError } from "./errors.js";
+import { packageRoot } from "./paths.js";
 
 export type AgentContractInput = {
   name: string;
@@ -84,6 +86,21 @@ export function loadAgentPrompt(filePath: string): ParsedAgentPrompt {
   return parseAgentPrompt(readFileSync(filePath, "utf8"), filePath);
 }
 
+function resolveAgentPromptPath(filePath: string): string {
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+
+  const bundledPath = path.join(packageRoot(), "agents", path.basename(filePath));
+  if (existsSync(bundledPath)) {
+    return bundledPath;
+  }
+
+  throw new CliError(`Agent prompt not found: ${filePath}`, {
+    code: "invalid_path"
+  });
+}
+
 function renderContractSection(frontmatter: AgentPromptFrontmatter): string {
   const lines: string[] = [];
 
@@ -121,7 +138,8 @@ export function buildAgentSystemPrompt(input: {
   promptTemplate: string;
   extraInstructions?: string;
 }): { prompt: string; parsed: ParsedAgentPrompt } {
-  const parsed = loadAgentPrompt(input.agentFilePath);
+  const resolvedPath = resolveAgentPromptPath(input.agentFilePath);
+  const parsed = loadAgentPrompt(resolvedPath);
   const contractSection = renderContractSection(parsed.frontmatter);
   const body = contractSection ? `${parsed.body.trimEnd()}\n\n${contractSection}\n` : parsed.body;
 

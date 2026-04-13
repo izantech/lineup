@@ -27,6 +27,7 @@ import {
   validateReviewYaml,
   validateTasksJson
 } from "./validation.js";
+import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
 
 export type ImplementationChange = {
   file: string;
@@ -64,6 +65,7 @@ export type NativeTaskExecutionInput = {
   wave: number;
   prompt: string;
   attempt: number;
+  timeoutMs?: number;
   previousErrors: Array<{
     code: string;
     message: string;
@@ -88,6 +90,7 @@ export type NativeReviewExecutionInput = {
   approvedPlan: ApprovedPlan;
   tasksArtifact: CompiledTasksArtifact;
   verificationResults?: VerificationResult[];
+  timeoutMs?: number;
 };
 
 export type NativeReviewExecutionResult = {
@@ -195,6 +198,49 @@ function writeExecutorFailureSnapshot(artifactDir: string, payload: unknown): vo
   writeJsonRequest(path.join(artifactDir, "native", "executor-debug.json"), payload);
 }
 
+export async function waitForResponseFile(filePath: string, label: string, timeoutMs = 300_000): Promise<string> {
+  const startedAt = Date.now();
+  const pollIntervalMs = 100;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (existsSync(filePath)) {
+      const raw = readFileSync(filePath, "utf8");
+      if (raw.trim().length > 0) {
+        return raw;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new CliError(`${label} timed out after ${timeoutMs}ms at ${filePath}.`, {
+    code: "timeout"
+  });
+}
+
+function normalizeYamlArtifact(
+  raw: string,
+  source: string,
+  validate: (content: string, source: string) => void
+): string {
+  const yamlRepair = repairYamlOutput(raw);
+  try {
+    validate(yamlRepair.content, source);
+    return yamlRepair.content;
+  } catch (yamlError) {
+    const jsonRepair = repairJsonOutput(raw);
+
+    try {
+      const parsed = JSON.parse(jsonRepair.content);
+      const converted = stringifyYaml(parsed);
+      validate(converted, source);
+      return converted;
+    } catch {
+      throw yamlError;
+    }
+  }
+}
+
 function buildDeveloperPrompt(input: {
   projectRoot: string;
   approvedPlan: ApprovedPlan;
@@ -300,11 +346,12 @@ function defaultDriver(artifactDir: string): NativeExecutionDriver {
       });
 
       const responsePath = path.join(buildResponseDir(artifactDir), `${input.task.id}.json`);
-      const raw = readRequiredTextFile(
+      const raw = await waitForResponseFile(
         responsePath,
-        `Native task response for ${input.task.id}`
+        `Native task response for ${input.task.id}`,
+        input.timeoutMs ?? 600_000
       );
-      const parsed = JSON.parse(raw) as NativeTaskExecutionResult;
+      const parsed = JSON.parse(repairJsonOutput(raw).content) as NativeTaskExecutionResult;
 
       if (parsed.status !== "complete" || !parsed.summary) {
         throw new CliError(`Task response ${responsePath} is invalid.`, {
@@ -325,8 +372,13 @@ function defaultDriver(artifactDir: string): NativeExecutionDriver {
       });
 
       const reviewPath = path.join(buildResponseDir(artifactDir), "review.yaml");
+      const raw = await waitForResponseFile(
+        reviewPath,
+        "Native review response",
+        input.timeoutMs ?? 300_000
+      );
       return {
-        reviewYaml: readRequiredTextFile(reviewPath, "Native review response")
+        reviewYaml: normalizeYamlArtifact(raw, reviewPath, validateReviewYaml)
       };
     }
   };
@@ -371,6 +423,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
   const workspace = await createNativeIsolationWorkspace({
     workspaceRoot: options.projectRoot,
     runId: options.runId,
+    runRoot: path.join(options.runRoot, "native-isolation"),
     mode: options.isolationMode ?? "full",
     sparseEnabled: false
   });
@@ -465,6 +518,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
                 wave,
                 prompt,
                 attempt: retryContext.attempt,
+                timeoutMs: 600_000,
                 previousErrors: retryContext.previousErrors
               });
 
@@ -542,7 +596,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
         implementationState,
         approvedPlan,
         tasksArtifact,
-        verificationResults: options.verificationResults
+        verificationResults: options.verificationResults,
+        timeoutMs: 300_000
       });
     } catch (error) {
       writeExecutorFailureSnapshot(options.artifactDir, {

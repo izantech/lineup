@@ -44,6 +44,19 @@ describe("llm output repair", () => {
     expect(() => validateProtocolJson(JSON.parse(repaired.content), "fixture/protocol.json")).not.toThrow();
   });
 
+  it("converts fenced json into yaml when yaml is expected", () => {
+    const raw = [
+      "```json",
+      '{ "apiVersion": "lineup/v3", "kind": "Constitution", "request": { "summary": "Add native executor" }, "repository": { "root": "/repo" }, "scope": { "areas": ["cli"] } }',
+      "```"
+    ].join("\n");
+
+    const repaired = repairYamlOutput(raw);
+    expect(repaired.content).toContain("apiVersion: lineup/v3");
+    expect(repaired.content).toContain("kind: Constitution");
+    expect(() => validateConstitutionYaml(repaired.content, "fixture/constitution.yaml")).not.toThrow();
+  });
+
   it("keeps invalid repaired output invalid", () => {
     const repaired = repairStructuredOutput(
       [

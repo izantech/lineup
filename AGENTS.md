@@ -11,6 +11,11 @@ Stage 0 (Triage) classifies complexity, identifies affected areas, and produces 
 - `human` — interactive local terminal execution
 - `host` — NDJSON protocol mode for generated skills and automation
 
+In `host` mode, treat artifact handoff files as part of the runtime contract:
+- planner output path from `agent/spawn.params.outputs.path`
+- native task/review response files under `.lineup/.runs/<id>/artifacts/native/responses/`
+- write host-produced files atomically (temp file + rename)
+
 When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
 aligned on that contract.
 

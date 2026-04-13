@@ -50,6 +50,10 @@ skills launch `lineup run "<user request>" --mode host`, consume NDJSON protocol
 messages, and answer gates with `lineup gate respond`. Interactive terminal use stays on
 `lineup run --mode human`.
 
+Repo-local `agents/*.md` files are optional. When a project does not define one, Lineup
+falls back to the bundled definitions shipped in `cli/agents/`. Use repo-local files only
+when the project needs to override the default role instructions.
+
 ## Ollama Integration
 
 Lineup optionally delegates summarization and context gathering to local Ollama models.

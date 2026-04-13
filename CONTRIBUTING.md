@@ -77,6 +77,10 @@ mode contract as part of the public API:
 - `human`: prompts and human-readable progress belong on `stderr`
 - `host`: NDJSON protocol belongs on `stdout`
 
+For `host` mode, artifact handoff files are also part of the public API. If a host writes
+plan, task, or review outputs on behalf of `agent/spawn`, write them atomically
+(temp file + rename) and keep the documented file locations stable.
+
 ## Commit conventions
 
 - Use [conventional commits](https://www.conventionalcommits.org/): `type(scope): subject`

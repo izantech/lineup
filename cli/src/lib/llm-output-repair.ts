@@ -1,3 +1,5 @@
+import { stringify as stringifyYaml } from "yaml";
+
 export type StructuredOutputFormat = "yaml" | "json";
 
 export type RepairResult = {
@@ -111,9 +113,29 @@ function repairJsonText(raw: string): RepairResult {
 
 function repairYamlText(raw: string): RepairResult {
   const normalized = normalizeRawText(raw).trim();
+  const fencedJson = extractFencedBlock(normalized, "json");
+  if (fencedJson) {
+    try {
+      const parsed = JSON.parse(fencedJson.content);
+      return finalize(stringifyYaml(parsed).trim(), normalized, [fencedJson.note, "converted JSON payload to YAML"]);
+    } catch {
+      // Fall through to generic YAML repair heuristics.
+    }
+  }
+
   const fenced = extractFencedBlock(normalized, "yaml") ?? extractFencedBlock(normalized, "yml");
   if (fenced) {
     return finalize(fenced.content, normalized, [fenced.note]);
+  }
+
+  const balancedJson = extractBalancedJsonSnippet(normalized);
+  if (balancedJson) {
+    try {
+      const parsed = JSON.parse(balancedJson.content);
+      return finalize(stringifyYaml(parsed).trim(), normalized, [balancedJson.note, "converted JSON payload to YAML"]);
+    } catch {
+      // Fall through to generic YAML repair heuristics.
+    }
   }
 
   const apiVersionIndex = normalized.search(/^apiVersion:/m);

@@ -41,6 +41,7 @@
   "files": [
     "dist",
     "bin",
+    "agents",
     "schemas",
     "README.md"
   ],

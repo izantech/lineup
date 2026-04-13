@@ -191,4 +191,101 @@ describe("executeNativeExecutor", () => {
     expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("kind: Review");
     expect(emittedMethods.filter((method) => method === "agent/spawn")).toHaveLength(4);
   });
+
+  it("waits for response files and repairs fenced outputs in the default driver", async () => {
+    const artifactDir = join(projectRoot, ".lineup", ".runs", "testrun", "artifacts");
+    const responseDir = join(artifactDir, "native", "responses");
+
+    setTimeout(() => {
+      mkdirSync(responseDir, { recursive: true });
+      writeFileSync(
+        join(responseDir, "CHANGE-001.json"),
+        [
+          "```json",
+          JSON.stringify({
+            status: "complete",
+            summary: "completed CHANGE-001",
+            changes_made: [
+              {
+                file: "cli/src/lib/executor.ts",
+                description: "updated executor",
+                task_id: "CHANGE-001"
+              }
+            ],
+            issues_encountered: []
+          }, null, 2),
+          "```"
+        ].join("\n"),
+        "utf8"
+      );
+
+      writeFileSync(
+        join(responseDir, "CHANGE-002.json"),
+        JSON.stringify({
+          status: "complete",
+          summary: "completed CHANGE-002",
+          changes_made: [
+            {
+              file: "cli/src/lib/run-pipeline.ts",
+              description: "updated pipeline",
+              task_id: "CHANGE-002"
+            }
+          ],
+          issues_encountered: []
+        }, null, 2),
+        "utf8"
+      );
+
+      writeFileSync(
+        join(responseDir, "review.yaml"),
+        [
+          "```json",
+          JSON.stringify({
+            apiVersion: "lineup/v3",
+            kind: "Review",
+            status: "PASS",
+            summary: "Native executor passed verification.",
+            issues: [],
+            test_results: {
+              test_suite: {
+                status: "pass"
+              }
+            }
+          }, null, 2),
+          "```"
+        ].join("\n"),
+        "utf8"
+      );
+    }, 50);
+
+    const result = await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir,
+      planPath: join(artifactDir, "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      }
+    });
+
+    expect(result.implementResult.outputs.task_results).toHaveLength(2);
+    expect(result.verifyResult.outputs.status).toBe("PASS");
+    expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("kind: Review");
+  });
 });

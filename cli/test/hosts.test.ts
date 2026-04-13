@@ -59,9 +59,11 @@ describe.each([
 
   it("keeps generated host packaging valid", () => {
     const files = generateHostFiles(sourceRoot, host);
+    const kickoffFile = files.find((file) => file.target === kickoffTarget);
 
     expect(files.length).toBeGreaterThan(0);
-    expect(files.every((file) => file.content.startsWith("<!-- AUTO-GENERATED."))).toBe(true);
+    expect(files.every((file) => file.content.includes("<!-- AUTO-GENERATED."))).toBe(true);
     expect(files.some((file) => file.target === kickoffTarget)).toBe(true);
+    expect(kickoffFile?.content.startsWith("---")).toBe(true);
   });
 });
