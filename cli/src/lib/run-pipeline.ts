@@ -39,6 +39,7 @@ import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpressionSafe, type ExpressionContext } from "./expression.js";
 import { runVerificationHooks, type VerificationResult } from "./verification.js";
+import { notifyPipelineComplete } from "./notify.js";
 
 
 export type PipelineResult = {
@@ -487,6 +488,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
+    notifyPipelineComplete(runId, "succeeded", "Pipeline completed successfully.");
     // 10. Cleanup on success
     cleanup(artifactDir, cacheDir, true);
   } catch (error) {
@@ -513,6 +515,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
+    notifyPipelineComplete(runId, "failed", error instanceof Error ? error.message : String(error));
     writeDebugBundle(projectRoot, runId, {
       run_id: runId,
       workflow: workflowPath,
