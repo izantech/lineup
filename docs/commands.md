@@ -19,12 +19,12 @@
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
-- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--approve-plan] [--gate-timeout <seconds>] [-i|--interactive] [--json]`
+- `lineup run [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>] [-i|--interactive] [--json]`
 - `lineup runs [--status <status>] [--json]`
 - `lineup show <run-id> [-w|--watch] [--json]`
 - `lineup logs <run-id> [--json]`
 - `lineup replay <run-id> [--json]`
-- `lineup resume <run-id> [--json]`
+- `lineup resume <run-id> [--skip-task <id>] [--retry-failed] [--max-retries <n>] [--json]`
 - `lineup cancel <run-id> [--json]`
 - `lineup validate <file> [--kind <kind>] [--json]`
 - `lineup artifacts show <kind> [--run <id>] [--json]`
@@ -39,3 +39,5 @@
 - `lineup pending [--json]`
 - `lineup completion <bash|zsh|fish>`
 - `lineup dag [--workflow <path>] [--json]`
+- `lineup waves [--run <id>] [--compact] [--json]`
+- `lineup history [--status <status>] [--limit <n>] [--json]`

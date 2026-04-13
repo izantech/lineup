@@ -28,6 +28,11 @@ Template references:
 - `templates/documenter.yaml`
 - `templates/teacher.yaml`
 
+Pipeline state (`pipeline-state.schema.json`) tracks:
+
+- `started_at` / `finished_at` / `duration_ms` — run timing
+- `retry_state` — per-stage retry attempts, max attempts, last error, and timestamps
+
 Status values:
 
 - research: `complete`

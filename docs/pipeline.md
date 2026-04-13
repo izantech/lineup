@@ -44,6 +44,51 @@ The plan-to-task compiler in `dag.ts` converts architect plans into executable t
 - **Read-write dependency edges**: If change A writes to a file that change B reads from, B depends on A (sequential waves). Write-write overlaps go to the same wave (serial).
 - **Wave assignment**: Independent changes with no overlap run in the same wave (parallel). Read-write overlaps produce sequential waves.
 
+## Execution Methods
+
+The `--implement-method` flag controls how developer agents are batched during implementation:
+
+| Method | Behavior | Use case |
+|--------|----------|----------|
+| `phase` (default) | One agent session per wave | Balanced context/cost |
+| `task` | One agent session per task, no prior context | Maximum isolation, lowest context bloat |
+| `single-session` | All tasks in one session with cumulative context | Small specs, fast iteration |
+
+In `single-session` mode, each task prompt includes summaries of all previously completed tasks. In `task` mode, prompts contain only the current task's scope — no cross-task context leaks.
+
+## Retry & Resume
+
+Pipeline runs track retry state per stage. When a stage fails:
+
+- `lineup resume <run-id> --retry-failed` retries the failed stage
+- `--max-retries <n>` caps retry attempts per stage (default: 3)
+- Retry count, last error, and timestamps are persisted in `pipeline-state.json`
+- After exhausting retries, the resume command rejects with a clear message
+
+Runs also track `started_at`, `finished_at`, and `duration_ms` for history reporting.
+
+## Wave Visualization
+
+`lineup waves` displays the compiled task execution plan:
+
+- Shows tasks grouped by parallel execution wave
+- Displays dependency edges and write scopes per task
+- Reports max parallelism and sequential depth
+- `--compact` for minimal output, `--json` for machine consumption
+
+## Desktop Notifications
+
+The pipeline sends native desktop notifications on completion or failure:
+
+- macOS: `osascript` with Glass sound
+- Linux: `notify-send`
+- Auto-disabled in CI environments
+- Best-effort — notification failures never block the pipeline
+
+## Execution History
+
+`lineup history` shows a table of all pipeline runs with status, duration, completed stages, and retry counts. Supports `--status` filtering and `--limit`.
+
 ## Stage Result Caching
 
 Stage outputs can be cached to `.lineup/.cache/<stage>-<hash>.yaml` for re-run and rollback:
