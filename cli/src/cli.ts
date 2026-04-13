@@ -189,6 +189,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
     .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
     .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds; on timeout saves state as blocked", parseInt)
     .option("--approve-plan", "Skip interactive plan approval gate", false)
     .option("-i, --interactive", "Handle gates via stdin prompts")

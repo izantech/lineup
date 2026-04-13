@@ -339,6 +339,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 implementStage,
                 verifyStage,
                 driver: hooks.native?.driver,
+                implementMethod: options.implementMethod,
                 verificationResults
               });
 
@@ -402,6 +403,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     implementStage,
                     verifyStage,
                     driver: hooks.native?.driver,
+                    implementMethod: options.implementMethod,
                     verificationResults,
                     taskFilter: nativeResult.failedTaskIds
                   });

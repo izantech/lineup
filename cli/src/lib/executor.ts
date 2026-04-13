@@ -19,7 +19,7 @@ import {
   type LineupProtocolMessage
 } from "./protocol.js";
 import { retryOperation } from "./retry.js";
-import type { WorkflowStage } from "./types.js";
+import type { ImplementMethod, WorkflowStage } from "./types.js";
 import { buildAgentSystemPrompt } from "./prompt-builder.js";
 import {
   parseRestrictedYaml,
@@ -115,6 +115,7 @@ export type NativeExecutorOptions = {
   verifyStage: WorkflowStage;
   driver?: NativeExecutionDriver;
   isolationMode?: NativeIsolationMode;
+  implementMethod?: ImplementMethod;
   verificationResults?: VerificationResult[];
   taskFilter?: string[];
 };
@@ -200,6 +201,8 @@ function buildDeveloperPrompt(input: {
   task: CompiledTask;
   attempt: number;
   previousErrors: Array<{ code: string; message: string }>;
+  implementMethod?: ImplementMethod;
+  priorTaskSummaries?: Array<{ task_id: string; summary: string }>;
 }): string {
   const extraInstructions = [
     "Native Lineup v3 task contract:",
@@ -226,6 +229,17 @@ function buildDeveloperPrompt(input: {
     if (input.previousErrors.length > 0) {
       extraInstructions.push("Previous errors:", JSON.stringify(input.previousErrors, null, 2));
     }
+  }
+
+  // In single-session mode, include summaries of all prior tasks for full context.
+  // In task mode, omit prior context for maximum isolation.
+  // In phase mode (default), include summaries from current wave only.
+  if (input.implementMethod === "single-session" && input.priorTaskSummaries?.length) {
+    extraInstructions.push(
+      "",
+      "Prior completed tasks in this session:",
+      ...input.priorTaskSummaries.map(t => `- ${t.task_id}: ${t.summary}`)
+    );
   }
 
   return buildAgentSystemPrompt({
@@ -377,7 +391,13 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       tasksByWave.set(task.wave, existing);
     }
 
+    const method = options.implementMethod ?? "phase";
     const orderedWaves = [...tasksByWave.keys()].sort((left, right) => left - right);
+
+    if (method !== "phase") {
+      options.emitStatus("implement", `Execution method: ${method}.`);
+    }
+
     for (const wave of orderedWaves) {
       const waveTasks = (tasksByWave.get(wave) ?? []).sort((left, right) => left.id.localeCompare(right.id));
       options.emitStatus("implement", `Executing native wave ${wave} (${waveTasks.map((task) => task.id).join(", ")}).`);
@@ -405,7 +425,11 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
                 approvedPlan,
                 task,
                 attempt: retryContext.attempt,
-                previousErrors: retryContext.previousErrors
+                previousErrors: retryContext.previousErrors,
+                implementMethod: method,
+                priorTaskSummaries: method === "single-session"
+                  ? implementationState.task_results.map(r => ({ task_id: r.task_id, summary: r.summary }))
+                  : undefined
               });
 
               options.emitProtocol(
