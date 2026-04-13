@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node
 import { dirname, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import process from "node:process";
 import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store.js";
 import {
@@ -68,6 +69,7 @@ export type RunPipelineHooks = {
  * Run the Lineup pipeline: orchestration stages → native execution → post-pipeline stages.
  */
 export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
+  const runMode = options.mode ?? (process.stdin.isTTY && process.stdout.isTTY ? "human" : "host");
   // 1. Load workflow
   let workflow: WorkflowDefinition;
   let workflowPath: string;
@@ -125,24 +127,28 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
   const emitProtocol = (message: LineupProtocolMessage): void => {
     protocolMessages.push(message);
-    process.stdout.write(`${encodeNdjsonMessage(message)}\n`);
+    if (runMode === "host") {
+      process.stdout.write(`${encodeNdjsonMessage(message)}\n`);
+    }
   };
 
   const emitStatus = (stageId: string, chunk: string, final = false): void => {
     protocolSequence += 1;
-    emitProtocol(
-      createLineupNotification({
-        method: "agent/output",
-        params: {
-          runId,
-          stageId,
-          channel: "status",
-          sequence: protocolSequence,
-          chunk,
-          ...(final ? { final: true } : {})
-        }
-      })
-    );
+    const message = createLineupNotification({
+      method: "agent/output",
+      params: {
+        runId,
+        stageId,
+        channel: "status",
+        sequence: protocolSequence,
+        chunk,
+        ...(final ? { final: true } : {})
+      }
+    });
+    emitProtocol(message);
+    if (runMode === "human") {
+      process.stderr.write(`[${stageId}] ${chunk}\n`);
+    }
   };
 
   const persistProtocolArtifact = (): void => {
@@ -203,7 +209,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
         if (preStages.has(stageId)) {
           // Pre-pipeline: output protocol messages for host orchestrator
-          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, options.nonTty);
+          const result = await executePreStage(stage, expressionCtx, projectRoot, runId, () => protocolRequestId++, emitProtocol, emitStatus, options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined, options.validateOutputs !== false, runMode);
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
           if (result.status === "blocked") {
@@ -243,7 +249,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               createdAt: new Date().toISOString()
             };
             let gateResponse;
-            if (!options.nonTty) {
+            if (runMode === "human") {
               gateResponse = await handleInteractiveGate(pendingGate);
             } else {
               writePendingGate(runId, pendingGate, projectRoot);
@@ -357,7 +363,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 };
 
                 let gateResponse;
-                if (!options.nonTty) {
+                if (runMode === "human") {
                   gateResponse = await handleInteractiveGate(pendingGate);
                 } else {
                   writePendingGate(runId, pendingGate, projectRoot);
@@ -468,6 +474,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       }
     }
 
+    const completionSummary = "Pipeline completed successfully.";
     emitProtocol(
       createLineupNotification({
         method: "pipeline/complete",
@@ -475,10 +482,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           runId,
           status,
           completedAt: new Date().toISOString(),
-          summary: "Pipeline completed successfully."
+          summary: completionSummary
         }
       })
     );
+    if (runMode === "human") {
+      process.stderr.write(`${completionSummary}\n`);
+    }
     persistProtocolArtifact();
     pipelineState = savePipelineState(
       markPipelineTimestamps(
@@ -495,6 +505,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     cleanup(artifactDir, cacheDir, true);
   } catch (error) {
     status = "failed";
+    const errorSummary = error instanceof Error ? error.message : String(error);
     emitProtocol(
       createLineupNotification({
         method: "pipeline/complete",
@@ -502,10 +513,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           runId,
           status,
           completedAt: new Date().toISOString(),
-          summary: error instanceof Error ? error.message : String(error)
+          summary: errorSummary
         }
       })
     );
+    if (runMode === "human") {
+      process.stderr.write(`Pipeline failed: ${errorSummary}\n`);
+    }
     persistProtocolArtifact();
     pipelineState = savePipelineState(
       markPipelineTimestamps(
@@ -628,13 +642,13 @@ function resolveGitTreeSha(projectRoot: string): string | undefined {
 }
 
 function printExecutionPlan(waves: string[][], workflow: WorkflowDefinition): void {
-  console.log("LINEUP:pipeline:dry-run");
+  process.stderr.write("LINEUP:pipeline:dry-run\n");
   for (let i = 0; i < waves.length; i++) {
     const stageNames = waves[i].map((id) => {
       const s = workflow.stages.find((st) => st.id === id)!;
       return `${id} (${s.type}${s.agent ? `: ${s.agent}` : ""})`;
     });
-    console.log(`  Wave ${i + 1}: ${stageNames.join(", ")}`);
+    process.stderr.write(`  Wave ${i + 1}: ${stageNames.join(", ")}\n`);
   }
 }
 
@@ -648,18 +662,18 @@ async function executePreStage(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   gateTimeoutMs?: number,
   validateOutputs = true,
-  nonTty?: boolean
+  runMode: "human" | "host" = "human"
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, nonTty);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, nonTty);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
@@ -679,7 +693,7 @@ async function executePreStage(
         "Classify this task's complexity and identify affected areas based on the project stats below.",
         ["simple", "moderate", "complex"],
         "moderate", runId, projectRoot, nextRequestId,
-        emitProtocol, emitStatus, true, gateTimeoutMs, nonTty,
+        emitProtocol, emitStatus, true, gateTimeoutMs, runMode,
         contextPayload
       );
 
@@ -867,7 +881,7 @@ async function emitGateAndWait(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   allowFreeText: boolean,
   gateTimeoutMs?: number,
-  nonTty?: boolean,
+  runMode: "human" | "host" = "human",
   context?: string
 ): Promise<StageResult> {
   const reqId = nextRequestId();
@@ -882,7 +896,7 @@ async function emitGateAndWait(
   };
 
   let gateResponse;
-  if (!nonTty) {
+  if (runMode === "human") {
     gateResponse = await handleInteractiveGate(pendingGate);
   } else {
     writePendingGate(runId, pendingGate, projectRoot);

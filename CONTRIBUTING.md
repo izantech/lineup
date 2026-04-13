@@ -44,7 +44,7 @@ This builds the CLI from source, installs it globally, and installs skills for a
 .lineup-core/hosts/*.json     Host adapter maps (claude, codex, opencode)
 agents/*.md                   Shared agent definitions
 tactics/*.yaml                Built-in tactics
-cli/                          CLI package (install/update/uninstall/status)
+cli/                          Native runtime, command surface, host install/update lifecycle
 site/                         Astro + Starlight website
 ```
 
@@ -54,9 +54,28 @@ Generated host files are **not committed** — they are produced at install time
 
 - **CLI code** lives in `cli/src/`. Run `./dev check` before submitting.
 - **Canonical templates** live in `.lineup-core/skills/`. Changes here affect all hosts on next install/update.
+- **Keep the host contract aligned**. If you change `lineup run` semantics, update:
+  - `.lineup-core/skills/**`
+  - `docs/skills.md`
+  - `docs/gate-protocol.md`
+  - `README.md`
+  - `site/src/content/docs/**` examples and migration docs
 - **Host adapters** live in `.lineup-core/hosts/`. Each JSON file maps template variables to host-specific values.
 - **Agent definitions** live in `agents/`. These are shared across all hosts.
 - **Website** lives in `site/`. Run `./dev web` to preview locally.
+
+### Runtime modes
+
+`lineup run` supports two modes:
+
+- `human` for local interactive terminal use
+- `host` for generated skills, automation, and CI
+
+When changing gate behavior, stdout/stderr behavior, or protocol messages, treat the
+mode contract as part of the public API:
+
+- `human`: prompts and human-readable progress belong on `stderr`
+- `host`: NDJSON protocol belongs on `stdout`
 
 ## Commit conventions
 

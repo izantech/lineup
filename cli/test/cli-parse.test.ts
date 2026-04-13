@@ -182,13 +182,13 @@ describe("run command", () => {
   it("parses all options together", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);
-    await program.parseAsync(["node", "lineup", "run", "--workflow", "w.yaml", "--dry-run", "--force-rerun", "--json"]);
+    await program.parseAsync(["node", "lineup", "run", "--workflow", "w.yaml", "--dry-run", "--force-rerun", "--mode", "host"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({
         workflow: "w.yaml",
         dryRun: true,
         forceRerun: true,
-        json: true,
+        mode: "host",
       })
     );
   });
@@ -199,6 +199,15 @@ describe("run command", () => {
     await program.parseAsync(["node", "lineup", "run", "Fix the login bug"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: "Fix the login bug" })
+    );
+  });
+
+  it("parses explicit host mode", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "Fix the login bug", "--mode", "host"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Fix the login bug", mode: "host" })
     );
   });
 });

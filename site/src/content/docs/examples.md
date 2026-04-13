@@ -193,7 +193,7 @@ lineup run "Regenerate docs for src/routes/v2/ — address review feedback on er
 For CI or batch workflows, skip interactive gates and set a timeout:
 
 ```bash
-lineup run "Run full test suite analysis" --approve-plan --gate-timeout 300 --json
+lineup run "Run full test suite analysis" --approve-plan --gate-timeout 300 --mode host
 ```
 
 The `--approve-plan` flag auto-approves the plan gate. `--gate-timeout 300` marks the run as `blocked` after 5 minutes instead of waiting indefinitely — resume it later with `lineup resume`.
@@ -222,7 +222,7 @@ The resume command re-executes only the failed stage and its dependents. Complet
 For large implementations, `--implement-method task` isolates each developer agent session to a single task. If one task fails, retrying re-runs only that task:
 
 ```bash
-lineup run "Implement the billing module redesign" --implement-method task --json
+lineup run "Implement the billing module redesign" --implement-method task --mode host
 lineup waves --run abc123                   # inspect which wave the failure occurred in
 lineup resume abc123 --retry-failed --skip-task CHANGE-003
 ```

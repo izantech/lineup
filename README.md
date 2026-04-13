@@ -35,7 +35,7 @@ lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
 lineup init [--workflow <name>] [--json]
-lineup run [task] [--workflow <path>] [--tactic <name>] [--dry-run] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--non-tty] [--json]
+lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup runs [--status <status>] [--json]
 lineup show <run-id> [--watch] [--json]
 lineup logs <run-id> [--json]
@@ -56,6 +56,13 @@ lineup history [--status <status>] [--limit <n>] [--json]
 ```
 
 See [docs/commands.md](/Users/izan/Dev/Projects/lineup/docs/commands.md:1) for the full command reference used by the repo and agent docs.
+
+`lineup run` has two execution modes:
+
+- `--mode human` for interactive terminal use. Prompts and progress render for people.
+- `--mode host` for skills and CI. The CLI emits NDJSON protocol messages on stdout and expects gate responses via `lineup gate respond`.
+
+If `--mode` is omitted, Lineup defaults to `human` on a TTY and `host` otherwise.
 
 ### Host behavior
 
@@ -88,6 +95,8 @@ OpenCode:
 - `/lineup-explain`
 - `/lineup-playbook`
 - `/lineup-digest`
+
+These host wrappers call the same native runtime with `lineup run "<user request>" --mode host`.
 
 ## Canonical source model
 

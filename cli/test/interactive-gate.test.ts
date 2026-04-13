@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import process from "node:process";
 
 // Mock readline/promises before importing the module under test
 vi.mock("node:readline/promises", () => {
@@ -45,6 +46,7 @@ describe("handleInteractiveGate", () => {
 
     expect(response.requestId).toBe(1);
     expect(response.choice).toBe("approve");
+    expect(createInterface).toHaveBeenCalledWith(expect.objectContaining({ output: process.stderr }));
     expect(mockRl.close).toHaveBeenCalled();
   });
 

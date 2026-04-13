@@ -19,7 +19,7 @@
 - `lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--from-dir <path>] [--yes]`
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
-- `lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>] [--non-tty] [--json]`
+- `lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--mode human|host] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
 - `lineup runs [--status <status>] [--json]`
 - `lineup show <run-id> [-w|--watch] [--json]`
 - `lineup logs <run-id> [--json]`
@@ -42,3 +42,12 @@
 - `lineup dag [--workflow <path>] [--json]`
 - `lineup waves [--run <id>] [--compact] [--json]`
 - `lineup history [--status <status>] [--limit <n>] [--json]`
+
+## Run Modes
+
+`lineup run` supports two runtime modes:
+
+- `human` — interactive prompts and human-readable progress
+- `host` — NDJSON protocol output for skills, automation, and CI
+
+If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.

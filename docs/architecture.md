@@ -16,7 +16,7 @@ Lineup avoids prompt drift by keeping one canonical source and generating host a
 agents/*.md                   → Shared agent definitions
 tactics/*.yaml                → Built-in tactics
 templates/*.yaml              → YAML format references
-cli/                          → Lineup CLI package (pipeline engine, install/update/uninstall)
+cli/                          → Lineup CLI package (native runtime, command surface, host lifecycle)
 ```
 
 Generated host outputs are **not committed** to git:
@@ -31,11 +31,11 @@ Generated host outputs are **not committed** to git:
 Key internals:
 
 - `cli/src/cli.ts` — Commander command registration and dispatch
-- `cli/src/commands/*.ts` — install/update/uninstall/status/gate handlers
+- `cli/src/commands/*.ts` — CLI command handlers (runtime, inspection, lifecycle, gate operations)
 - `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
 - `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`
-- `cli/src/lib/interactive-gate.ts` — Interactive stdin gate handler (default; disabled by `--non-tty`)
+- `cli/src/lib/interactive-gate.ts` — Interactive stdin gate handler for `lineup run --mode human`
 - `cli/src/lib/verification.ts` — Auto-detect and run project test/typecheck/lint hooks
 - `cli/src/lib/tactic-convert.ts` — Tactic-to-Workflow auto-converter
 - `cli/src/lib/release.ts` — GitHub release resolution, cache, checksum verification

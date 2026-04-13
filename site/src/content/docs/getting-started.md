@@ -57,6 +57,7 @@ If you prefer to stay inside your host UI, Lineup also installs thin host comman
 - OpenCode: `/lineup-kick-off`
 
 These wrappers launch the same native CLI pipeline and handle `gate/request` messages for you.
+Under the hood they invoke `lineup run "<user request>" --mode host`.
 
 ## When a run fails
 

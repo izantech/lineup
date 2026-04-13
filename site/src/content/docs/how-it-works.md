@@ -7,6 +7,11 @@ description: Pipeline architecture, triage, stage caching, tactics, teams mode, 
 
 Lineup decomposes a task into **stages**, each assigned to a typed agent (researcher, architect, developer, reviewer, documenter). Stages execute sequentially by default, with parallel execution where the dependency graph allows it.
 
+`lineup run` supports two public runtime modes:
+
+- `human` for interactive local terminal use
+- `host` for generated skills, automation, and CI via NDJSON protocol
+
 The full pipeline: **Triage → Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document**
 
 Not every task runs all stages. Triage classifies complexity and selects the appropriate pipeline tier:

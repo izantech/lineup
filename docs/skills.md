@@ -4,7 +4,7 @@
 
 Skills are thin CLI wrappers (~12 KB total, down from ~100 KB). The kick-off skill:
 
-1. Runs `lineup run --json` (or `lineup run --tactic <name> --json`)
+1. Runs `lineup run "<user request>" --mode host` (or `lineup run "<user request>" --tactic <name> --mode host`)
 2. Reads NDJSON protocol messages from stdout
 3. Handles `gate/request` messages by asking the user and calling `lineup gate respond`
 4. Presents `pipeline/complete` results

@@ -43,6 +43,13 @@ The orchestrator creates a session-scoped team (`lineup-<session_id>`) and manag
 lifecycle — spawning agents when stages begin, shutting them down when their work completes.
 Teams mode falls back to standard subagents transparently when unavailable.
 
+## Runtime Contract
+
+Agents are orchestrated by the CLI runtime, not by the host skill templates. Generated
+skills launch `lineup run "<user request>" --mode host`, consume NDJSON protocol
+messages, and answer gates with `lineup gate respond`. Interactive terminal use stays on
+`lineup run --mode human`.
+
 ## Ollama Integration
 
 Lineup optionally delegates summarization and context gathering to local Ollama models.

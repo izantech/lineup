@@ -79,7 +79,6 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   const result = await runPipeline({
     workflow: state.workflow,
     fromStage: fromStage ?? undefined,
-    json: options.json,
   });
 
   if (!options.json) {

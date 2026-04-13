@@ -5,7 +5,7 @@ description: Get a clear explanation of any project component, pattern, or decis
 
 This skill runs the built-in `explain` tactic via the CLI.
 
-Run: `lineup run --tactic explain --json`
+Run: `lineup run "<user question>" --tactic explain --mode host`
 
 Handle any `gate/request` messages from the NDJSON output by presenting them
 to the user via **{{QUESTION_PRIMITIVE}}** and responding with

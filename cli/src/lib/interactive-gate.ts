@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+import { stdin as input, stderr as output } from "node:process";
 import type { PendingGate, GateResponse } from "./gate-store.js";
 
 export async function handleInteractiveGate(gate: PendingGate): Promise<GateResponse> {
@@ -18,10 +18,10 @@ export async function handleInteractiveGate(gate: PendingGate): Promise<GateResp
       choice = answer.trim();
 
     } else if (gate.gateType === "verify-decision") {
-      process.stdout.write(`${gate.question}\n`);
-      process.stdout.write("  1) Retry\n");
-      process.stdout.write("  2) Accept with warnings\n");
-      process.stdout.write("  3) Abort\n");
+      output.write(`${gate.question}\n`);
+      output.write("  1) Retry\n");
+      output.write("  2) Accept with warnings\n");
+      output.write("  3) Abort\n");
       const answer = await rl.question("Choice [1/2/3]: ");
       const trimmed = answer.trim();
       if (trimmed === "2") {
@@ -33,9 +33,9 @@ export async function handleInteractiveGate(gate: PendingGate): Promise<GateResp
       }
 
     } else if (gate.gateType === "custom") {
-      process.stdout.write(`${gate.question}\n`);
+      output.write(`${gate.question}\n`);
       gate.choices.forEach((c, i) => {
-        process.stdout.write(`  ${i + 1}) ${c}\n`);
+        output.write(`  ${i + 1}) ${c}\n`);
       });
       const answer = await rl.question(`Choice [1-${gate.choices.length}]: `);
       const idx = parseInt(answer.trim(), 10) - 1;

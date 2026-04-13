@@ -6,6 +6,14 @@ Pipeline: **Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Imple
 
 Stage 0 (Triage) classifies complexity, identifies affected areas, and produces search targets before any agent is spawned. Distributed via a single CLI (`lineup`) across all supported hosts.
 
+`lineup run` has two public modes:
+
+- `human` — interactive local terminal execution
+- `host` — NDJSON protocol mode for generated skills and automation
+
+When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
+aligned on that contract.
+
 ## Documentation
 
 Detailed agent-facing documentation lives in `docs/`:

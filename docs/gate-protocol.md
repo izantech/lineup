@@ -1,6 +1,7 @@
 # Gate Protocol
 
-The CLI emits `gate/request` messages via NDJSON when user interaction is needed.
+In `lineup run --mode host`, the CLI emits `gate/request` messages via NDJSON when
+user interaction is needed.
 Each gate has a typed `gateType` field:
 
 | gateType | Stage | Purpose |
@@ -33,9 +34,14 @@ a response file appears (atomic write via temp+rename).
 
 ## Interactive Mode
 
-Interactive gate prompts are the default. Each gate type maps to a readline prompt
-(approval → Y/n, clarify → free text, verify-decision → numbered menu). Host skills
-pass `--non-tty` to disable prompts and receive gate/request JSON via stdout instead.
+`lineup run` operates in two modes:
+
+- `human` — local readline prompts, human-readable progress, prompts/progress on `stderr`
+- `host` — no local prompts, NDJSON protocol on `stdout`
+
+Interactive gate prompts are used in `human` mode. Each gate type maps to a readline
+prompt (approval → Y/n, clarify → free text, verify-decision → numbered menu). Host
+skills and CI should pass `--mode host` to receive `gate/request` JSON via stdout.
 
 ## Gate Timeout
 

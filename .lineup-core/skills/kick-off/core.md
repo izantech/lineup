@@ -15,9 +15,9 @@ Before launching the pipeline, run the lightweight init in `{{KICKOFF_INIT_PATH}
 
 Determine the CLI command based on the user's request:
 
-- **Default pipeline**: `lineup run --json`
-- **Specific tactic**: `lineup run --tactic <name> --json`
-- **With workflow**: `lineup run --workflow <path> --json`
+- **Default pipeline**: `lineup run "<user request>" --mode host`
+- **Specific tactic**: `lineup run "<user request>" --tactic <name> --mode host`
+- **With workflow**: `lineup run "<user request>" --workflow <path> --mode host`
 - **Dry run** (preview only): add `--dry-run`
 
 Run the command via Bash. The CLI emits NDJSON (one JSON object per line) to
@@ -100,15 +100,15 @@ orchestrator, classify the task to choose the right approach:
 | Complexity | Approach |
 |------------|----------|
 | **Simple** (single file, explicit instructions) | Skip the pipeline. Just do it directly. |
-| **Moderate** (multiple files, clear scope) | `lineup run --json` with default workflow |
-| **Complex** (multiple modules, unclear trade-offs) | `lineup run --json` with default workflow (full pipeline) |
+| **Moderate** (multiple files, clear scope) | `lineup run "<user request>" --mode host` with default workflow |
+| **Complex** (multiple modules, unclear trade-offs) | `lineup run "<user request>" --mode host` with default workflow (full pipeline) |
 
 For simple tasks, do not invoke the CLI — handle directly as the orchestrator.
 
 ## Tactics
 
 If the user names a specific tactic or if project tactics exist in
-`.lineup/tactics/`, use `lineup run --tactic <name> --json`.
+`.lineup/tactics/`, use `lineup run "<user request>" --tactic <name> --mode host`.
 
 To list available tactics: `lineup tactic list --json`.
 

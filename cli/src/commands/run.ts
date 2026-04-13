@@ -1,11 +1,16 @@
 import { readFileSync } from "node:fs";
-import type { RunOptions } from "../lib/types.js";
-import { printJson } from "../lib/output.js";
+import process from "node:process";
+import { CliError } from "../lib/errors.js";
+import { isInteractive } from "../lib/prompts.js";
 import { runPipeline } from "../lib/run-pipeline.js";
+import type { RunMode, RunOptions } from "../lib/types.js";
 
 export type RunCommandOptions = RunOptions;
 
 function readStdinSync(): string {
+  if (process.stdin.isTTY) {
+    return "";
+  }
   try {
     return readFileSync(0, "utf-8").trim();
   } catch {
@@ -13,19 +18,45 @@ function readStdinSync(): string {
   }
 }
 
+function resolveRunMode(mode?: RunMode): RunMode {
+  if (mode === "human" || mode === "host") {
+    return mode;
+  }
+
+  return isInteractive() ? "human" : "host";
+}
+
 export async function runRunCommand(options: RunCommandOptions): Promise<void> {
+  const mode = resolveRunMode(options.mode);
+  if (mode === "human" && !isInteractive()) {
+    throw new CliError("Run mode 'human' requires an interactive TTY. Use --mode host in CI or host wrappers.", {
+      code: "invalid_args"
+    });
+  }
+  if (mode === "host" && options.dryRun) {
+    throw new CliError("Run mode 'host' does not support --dry-run. Use --mode human for preview-only runs.", {
+      code: "invalid_args"
+    });
+  }
+
   if (!options.prompt) {
     options.prompt = readStdinSync();
   }
-  const result = await runPipeline(options);
-
-  if (!options.json) {
-    return;
+  if (!options.prompt) {
+    throw new CliError("Task description required. Pass it as a positional argument or pipe it on stdin.", {
+      code: "invalid_args"
+    });
   }
 
-  printJson({
-    run_id: result.runId,
-    status: result.status,
-    stage_results: Object.fromEntries(result.stageResults.entries())
-  });
+  const result = await runPipeline({ ...options, mode });
+
+  if (mode === "human") {
+    const summary =
+      result.status === "success"
+        ? `Run ${result.runId} completed successfully.`
+        : result.status === "blocked"
+          ? `Run ${result.runId} is blocked and can be resumed later.`
+          : `Run ${result.runId} finished with status: ${result.status}.`;
+    process.stderr.write(`${summary}\n`);
+  }
 }

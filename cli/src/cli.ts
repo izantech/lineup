@@ -185,14 +185,13 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--from-stage <id>", "Resume from a specific stage", undefined)
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
-    .option("--json", "Output state as JSON", false)
     .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
     .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--mode <mode>", "Run mode: human|host")
     .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
     .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds; on timeout saves state as blocked", parseInt)
     .option("--approve-plan", "Skip interactive plan approval gate", false)
-    .option("--non-tty", "Disable interactive gate prompts; emit gate/request JSON for host orchestration")
     .action((task: string | undefined, opts: RunCommandOptions) =>
       commandHandlers.run({ ...opts, prompt: task ?? opts.prompt })
     );

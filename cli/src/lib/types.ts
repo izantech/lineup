@@ -246,6 +246,8 @@ export type IsolationMode = "index" | "full" | "sparse";
 
 export type ImplementMethod = "phase" | "task" | "single-session";
 
+export type RunMode = "human" | "host";
+
 export type PipelineRunStatus = "success" | "failed" | "aborted" | "blocked";
 
 export type PipelineState = {
@@ -263,14 +265,13 @@ export type RunOptions = {
   fromStage?: string;
   dryRun?: boolean;
   forceRerun?: boolean;
-  json?: boolean;
   timeout?: number;
   maxParallel?: number;
   isolation?: IsolationMode;
   implementMethod?: ImplementMethod;
   approvePlan?: boolean;
   gateTimeout?: number;
-  nonTty?: boolean;
+  mode?: RunMode;
   validateOutputs?: boolean;
   prompt?: string;
 };

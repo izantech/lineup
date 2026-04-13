@@ -36,7 +36,7 @@ If you installed from source:
 | Gate handling | Skill manages gates inline | Skill reads `gate/request` from stdout, calls `lineup gate respond` |
 | Tactic execution | Skill interprets tactic YAML | CLI converts tactics to workflows via `tacticToWorkflow()` |
 
-Skills no longer contain pipeline logic. They launch `lineup run --json`, read NDJSON protocol messages from stdout, and handle gates by asking the user and calling `lineup gate respond <run-id> <request-id> --choice <value>`.
+Skills no longer contain pipeline logic. They launch `lineup run "<user request>" --mode host`, read NDJSON protocol messages from stdout, and handle gates by asking the user and calling `lineup gate respond <run-id> <request-id> --choice <value>`.
 
 ### Gate protocol
 
@@ -73,7 +73,7 @@ Added to `lineup run`:
 
 | Flag | Purpose |
 |------|---------|
-| `--non-tty` | Disable interactive gate prompts; emit gate/request JSON for host orchestration. |
+| `--mode human|host` | Select interactive human mode or NDJSON host mode. Defaults to `human` on a TTY and `host` otherwise. |
 | `--gate-timeout <seconds>` | Save state as `blocked` on timeout instead of waiting indefinitely. |
 | `--implement-method <method>` | Task execution batching: `phase` (default), `task` (per-task isolation), or `single-session`. |
 
@@ -83,7 +83,7 @@ Added to `lineup resume`:
 |------|---------|
 | `--max-retries <n>` | Cap retry attempts per stage (default: 3). Used with `--retry-failed`. |
 
-Interactive gate prompts are now the default. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu. Host skills pass `--non-tty` to get the JSON-RPC protocol mode instead.
+Interactive gate prompts are used in `--mode human`. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu. Host skills and CI pass `--mode host` to get the JSON-RPC protocol mode instead.
 
 `--gate-timeout` pairs with `lineup resume` for unattended runs. A blocked pipeline can be resumed later without losing state.
 
@@ -152,7 +152,7 @@ Run `lineup update --host all` to force-regenerate skill files for all hosts. If
 
 **`lineup run` prompts are garbled**
 
-Interactive prompts require a TTY. They do not work in piped or non-interactive shells. Use `--non-tty` in CI environments to emit gate/request JSON instead.
+Interactive prompts require a TTY. They do not work in piped or non-interactive shells. Use `--mode host` in CI environments to emit gate/request JSON instead.
 
 **Verification hooks run unwanted commands**
 
