@@ -75,6 +75,13 @@ Added to `lineup run`:
 |------|---------|
 | `--interactive` / `-i` | Handle gates via stdin prompts. No host skill needed. |
 | `--gate-timeout <seconds>` | Save state as `blocked` on timeout instead of waiting indefinitely. |
+| `--implement-method <method>` | Task execution batching: `phase` (default), `task` (per-task isolation), or `single-session`. |
+
+Added to `lineup resume`:
+
+| Flag | Purpose |
+|------|---------|
+| `--max-retries <n>` | Cap retry attempts per stage (default: 3). Used with `--retry-failed`. |
 
 `--interactive` makes Lineup usable as a standalone terminal tool. Gate types map to readline prompts: approval is Y/n, clarify is free-text, verify-decision is a numbered menu.
 
@@ -86,6 +93,8 @@ Added to `lineup run`:
 |---------|---------|
 | `lineup show --watch` | Poll pipeline state every 2s with a live progress table. |
 | `lineup replay <run-id>` | Replay a completed run as a chronological narrative with timestamps. |
+| `lineup waves [--run <id>]` | Visualize task execution waves and parallelism from a compiled plan. |
+| `lineup history [--status <s>]` | List past pipeline runs with status, duration, and retry counts. |
 
 ## New pipeline features
 
@@ -106,6 +115,22 @@ When verification fails, a `verify-decision` gate presents three options:
 1. **Retry** — re-runs only the failed tasks within the same run (no new run ID)
 2. **Accept with warnings** — marks the stage complete and continues
 3. **Abort** — marks the pipeline as failed
+
+### Persistent retry state
+
+`lineup resume --retry-failed` now tracks retry attempts per stage with configurable limits via `--max-retries`. Retry count, last error, and timestamps persist in `pipeline-state.json`. After exhausting retries, the command rejects with a clear message instead of retrying indefinitely.
+
+### Run timing
+
+Pipeline state records `started_at`, `finished_at`, and `duration_ms`. These are visible in `lineup history` and `lineup show`.
+
+### Desktop notifications
+
+Native desktop notifications fire on pipeline completion or failure. macOS uses `osascript`; Linux uses `notify-send`. Auto-disabled in CI environments. Best-effort — notification failures never block the pipeline.
+
+### Execution isolation
+
+`--implement-method` controls developer agent session batching. `phase` (default) groups by wave. `task` isolates each task into its own session with no prior context. `single-session` runs all tasks in one session with cumulative context from prior tasks.
 
 ### Task compiler improvements
 

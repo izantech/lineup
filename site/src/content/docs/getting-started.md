@@ -51,6 +51,23 @@ Pipeline complete. Results in ./lineup-output/
 
 The triage step drives model selection automatically. Simple tasks (rename a variable) use fast models. Complex tasks (redesign a subsystem) escalate to more capable ones. This is determined by the task scope, not by user configuration.
 
+## When a run fails
+
+Resume a failed run instead of starting over:
+
+```bash
+lineup resume <run-id> --retry-failed
+```
+
+The pipeline restarts from the failed stage, preserving all completed upstream work. Use `--max-retries 5` to cap retry attempts per stage.
+
+To inspect past runs:
+
+```bash
+lineup history               # table of recent runs with status and duration
+lineup waves --run <run-id>  # task execution waves and parallelism
+```
+
 ## Next steps
 
 - [Examples](/examples/) — see Lineup applied to real-world scenarios

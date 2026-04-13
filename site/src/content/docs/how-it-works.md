@@ -35,6 +35,73 @@ Model assignment follows the effort mapping:
 | Developer | Haiku | Haiku | Sonnet |
 | Reviewer | Sonnet | Sonnet | Sonnet |
 
+## Execution methods
+
+The `--implement-method` flag controls how developer agent sessions are batched during implementation:
+
+| Method | Behavior | Use case |
+|--------|----------|----------|
+| `phase` (default) | One agent session per wave | Balanced context and cost |
+| `task` | One agent session per task, no prior context | Maximum isolation, lowest context bloat |
+| `single-session` | All tasks in one session with cumulative context | Small specs, fast iteration |
+
+In `task` mode, each developer agent receives only its own task scope — no cross-task context leaks. In `single-session` mode, summaries of all prior completed tasks are injected into each prompt. `phase` groups tasks by their dependency wave.
+
+## Retry and resume
+
+Pipeline runs persist retry state per stage. When a stage fails:
+
+- `lineup resume <run-id> --retry-failed` retries from the failed stage
+- `--max-retries <n>` caps attempts per stage (default: 3)
+- Retry count, last error, and timestamps are recorded in `pipeline-state.json`
+
+Runs also track `started_at`, `finished_at`, and `duration_ms` for timing analysis.
+
+## Wave visualization
+
+`lineup waves` displays the compiled task execution plan from the latest (or a specific) run:
+
+```
+Execution Waves (6 tasks → 3 waves)
+
+  Wave 1 (3 parallel)
+    CHANGE-001  Add validation schema
+    CHANGE-002  Create error types
+    CHANGE-003  Update config parser
+
+  Wave 2 (2 parallel)
+    CHANGE-004  Implement validator
+    CHANGE-005  Add integration test
+
+  Wave 3
+    CHANGE-006  Wire up to endpoint
+
+  Max parallelism: 3
+  Sequential depth: 3
+```
+
+Use `--json` for machine consumption or `--compact` for minimal output.
+
+## Execution history
+
+`lineup history` lists past pipeline runs with status, duration, stage counts, and retry information:
+
+```
+Pipeline History (5 runs)
+
+  ID       Status       Workflow           Duration   Stages   Started
+  ──────── ──────────── ────────────────── ────────── ──────── ────────────────────
+  0db944   OK           full-pipeline      2m 34s     7        12m ago
+  31a577   FAIL         full-pipeline      1m 12s     4        1h ago
+  114639   CANCEL       full-pipeline      0.8s       1        3h ago
+```
+
+Filter with `--status` or limit with `--limit <n>`.
+
+## Desktop notifications
+
+The pipeline sends native desktop notifications on completion or failure. macOS uses `osascript` with a Glass sound; Linux uses `notify-send`. Notifications are auto-disabled in CI environments and are best-effort — failures never block the pipeline.
+
 ## Stage caching
 
 Each stage writes its output to `.lineup/.cache/`. On re-run with the same task, Lineup detects cached results and offers to skip completed stages. The `--from-stage N` flag restarts execution at stage N using cached upstream outputs.

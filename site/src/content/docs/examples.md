@@ -95,4 +95,24 @@ Re-running with review feedback triggers only the writing stage, not the full an
 
 ---
 
+## Failure recovery and retry
+
+A pipeline run fails at the verify stage because a test assertion is wrong.
+
+```bash
+lineup history                         # identify the failed run
+lineup resume abc123 --retry-failed    # retry from the failed stage
+```
+
+The resume command re-executes only the failed stage and its dependents. Completed stages (research, plan, implementation of passing tasks) are preserved. Retry state is tracked per stage — after 3 failed attempts (configurable with `--max-retries`), the resume command rejects.
+
+For large implementations, `--implement-method task` isolates each developer agent session to a single task. If one task fails, retrying re-runs only that task without accumulated context from other tasks.
+
+```bash
+lineup run --implement-method task --json
+lineup waves --run abc123              # inspect which wave the failure occurred in
+```
+
+---
+
 [How It Works](/how-it-works/) · [Getting Started](/getting-started/)
