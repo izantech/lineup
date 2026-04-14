@@ -1,9 +1,9 @@
 ---
 title: One pipeline. Every AI coding tool.
-description: Lineup is a multi-agent pipeline for Claude Code, Codex CLI, and OpenCode that routes tasks through typed stages with automatic model selection.
+description: Lineup gives Claude Code, Codex CLI, and OpenCode one shared coding workflow with strong defaults and resumable runs.
 template: splash
 hero:
-  tagline: A multi-agent pipeline for Claude Code, Codex CLI, and OpenCode. Typed stages, automatic model selection, resumable execution.
+  tagline: One shared coding workflow for Claude Code, Codex CLI, and OpenCode. Start from the CLI or your host, inspect every run, and resume instead of restarting.
   actions:
     - text: Get Started
       link: /getting-started/
@@ -23,20 +23,20 @@ Claude Code · Codex CLI · OpenCode
 ## Core design
 
 <CardGrid>
-  <Card title="Triage-first">
-    Stage 0 classifies task complexity and selects models per role. Simple tasks run on Haiku, complex ones on Opus. No manual configuration.
+  <Card title="Start anywhere">
+    Run Lineup directly in your terminal or from an installed host command. The engine stays the same either way.
   </Card>
-  <Card title="Resumable">
-    Each stage caches its output. Interrupted runs restart from the last completed stage, not from scratch.
+  <Card title="Resume instead of restart">
+    Every run keeps its state and artifacts, so blocked or failed work can be inspected and resumed without redoing completed stages.
   </Card>
-  <Card title="Token-efficient">
-    Staged prompt loading, lazy agent instantiation, and ephemeral file references keep context windows lean.
+  <Card title="Thin host integrations">
+    Claude Code, Codex CLI, and OpenCode stay lightweight. Lineup keeps the orchestration inside the CLI so behavior stays consistent.
   </Card>
 </CardGrid>
 
 ---
 
-**Native engine, shipped.** Lineup now runs deterministic orchestration in the CLI: typed stages, artifact validation, task compilation, retry state, gates, and resumable runs all execute natively. Skills stay thin and host-specific while the runtime stays shared.
+**Built for everyday terminal use.** Lineup helps with feature work, bug fixes, security reviews, refactors, explanations, and docs. The site focuses on install and usage. Deep runtime details live in the repository docs for contributors and advanced integrations.
 
 ---
 
@@ -46,5 +46,13 @@ Claude Code · Codex CLI · OpenCode
 npm install -g @izantech/lineup-cli
 lineup install
 ```
+
+## First run
+
+```bash
+lineup start "Review the auth middleware in src/auth.ts and identify security gaps"
+```
+
+`lineup start` is the easiest first-run path. It scaffolds Lineup if needed, checks git readiness, and only starts the pipeline once the repo is ready.
 
 [Get started →](/getting-started/)

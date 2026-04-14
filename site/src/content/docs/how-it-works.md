@@ -1,167 +1,69 @@
 ---
 title: How It Works
-description: Pipeline architecture, triage, stage caching, tactics, teams mode, and Ollama integration.
+description: The simple mental model for using Lineup day to day.
 ---
 
-## How users enter Lineup
+## One engine, two entrypoints
 
-There are two normal entrypoints:
+You can start Lineup in two normal ways:
 
-- **CLI**: `lineup run "<task>"`
-- **Host skills**: `/lineup:kick-off`, `$lineup-kick-off`, or `/lineup-kick-off`
+- **CLI** with `lineup start` or `lineup run`
+- **Host commands** from Claude Code, Codex CLI, or OpenCode
 
-Both use the same Lineup engine. The difference is only where the user starts:
-their own terminal or their host assistant session.
+Both paths use the same underlying engine. The host commands are just thin entrypoints into the CLI runtime.
 
-## Pipeline
+## The basic flow
 
-Lineup decomposes a task into **stages**, each assigned to a typed agent (researcher, architect, developer, reviewer, documenter). Stages execute sequentially by default, with parallel execution where the dependency graph allows it.
+Lineup moves work through a consistent sequence:
 
-`lineup run` supports two public runtime modes:
+**Triage → Clarify → Research → Plan → Implement → Verify**
 
-- `human` for interactive local terminal use
-- `host` for automation and advanced protocol consumers
+Not every task needs every step. Small, obvious changes stay lighter. Larger or less certain work gets more research and planning.
 
-The full pipeline: **Triage → Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document**
+## What Lineup decides for you
 
-Not every task runs all stages. Triage classifies complexity and selects the appropriate pipeline tier:
+Lineup handles the operational parts that are easy to get wrong by hand:
 
-| Tier | Stages | When used |
-|------|--------|-----------|
-| Full | 0–7 | Multi-module changes, unclear requirements, unfamiliar code |
-| Lightweight | 0, 4–6 | Single-module changes with understood scope |
-| Direct | Inline | Single-file fixes with explicit instructions |
+- it scopes the work before implementation starts
+- it keeps plan and implementation stages inspectable
+- it organizes independent changes into execution waves
+- it preserves state so blocked or failed runs can resume later
 
-## Triage
+The goal is simple: spend less time orchestrating and more time reviewing useful output.
 
-Stage 0 runs before any agent is spawned. It produces:
+## What you do during a run
 
-- **Complexity classification** (`simple`, `moderate`, `complex`) — drives model selection per role
-- **Affected areas** — scopes downstream research
-- **Search targets** — concrete file patterns and questions for researchers
-- **Independent areas** — enables parallel architect spawns when 2+ areas have no coupling
+Most runs look like this:
 
-Model assignment follows the effort mapping:
+1. Start with `lineup start` or `lineup run`.
+2. Approve or answer questions when the pipeline asks.
+3. Inspect the result with `lineup show <run-id>`.
+4. Resume with `lineup resume <run-id>` if the run blocks or fails.
 
-| Role | Simple | Moderate | Complex |
-|------|--------|----------|---------|
-| Researcher | Haiku | Sonnet | Sonnet |
-| Architect | Sonnet | Sonnet | Opus |
-| Developer | Haiku | Haiku | Sonnet |
-| Reviewer | Sonnet | Sonnet | Sonnet |
+For implementation-heavy work, `lineup waves --run <run-id>` shows how the plan was split into parallel task waves.
 
-## Execution methods
+## Host usage stays simple
 
-The `--implement-method` flag controls how developer agent sessions are batched during implementation:
+From the user side, host usage should feel just as direct as CLI usage:
 
-| Method | Behavior | Use case |
-|--------|----------|----------|
-| `phase` (default) | One agent session per wave | Balanced context and cost |
-| `task` | One agent session per task, no prior context | Maximum isolation, lowest context bloat |
-| `single-session` | All tasks in one session with cumulative context | Small specs, fast iteration |
+- start the task from the installed host command
+- answer questions when they appear
+- inspect the final run if you want more detail
 
-In `task` mode, each developer agent receives only its own task scope — no cross-task context leaks. In `single-session` mode, summaries of all prior completed tasks are injected into each prompt. `phase` groups tasks by their dependency wave.
+You do not need to think about bridge sessions or protocol events to use Lineup successfully.
 
-## Retry and resume
+## Tactics are optional
 
-Pipeline runs persist retry state per stage. When a stage fails:
+The default workflow is enough for most work. Use a tactic only when you want a more specific path, such as an explanation flow or a security-focused review.
 
-- `lineup resume <run-id> --retry-failed` retries from the failed stage
-- `--max-retries <n>` caps attempts per stage (default: 3)
-- Retry count, last error, and timestamps are recorded in `pipeline-state.json`
+## Need the deeper internals?
 
-Runs also track `started_at`, `finished_at`, and `duration_ms` for timing analysis.
+The public site intentionally stays lightweight. Contributor and integration detail lives in the repository docs:
 
-## Wave visualization
-
-`lineup waves` displays the compiled task execution plan from the latest (or a specific) run:
-
-```
-Execution Waves (6 tasks → 3 waves)
-
-  Wave 1 (3 parallel)
-    CHANGE-001  Add validation schema
-    CHANGE-002  Create error types
-    CHANGE-003  Update config parser
-
-  Wave 2 (2 parallel)
-    CHANGE-004  Implement validator
-    CHANGE-005  Add integration test
-
-  Wave 3
-    CHANGE-006  Wire up to endpoint
-
-  Max parallelism: 3
-  Sequential depth: 3
-```
-
-Use `--json` for machine consumption or `--compact` for minimal output.
-
-## Execution history
-
-`lineup history` lists past pipeline runs with status, duration, stage counts, and retry information:
-
-```
-Pipeline History (5 runs)
-
-  ID       Status       Workflow           Duration   Stages   Started
-  ──────── ──────────── ────────────────── ────────── ──────── ────────────────────
-  0db944   OK           full-pipeline      2m 34s     7        12m ago
-  31a577   FAIL         full-pipeline      1m 12s     4        1h ago
-  114639   CANCEL       full-pipeline      0.8s       1        3h ago
-```
-
-Filter with `--status` or limit with `--limit <n>`.
-
-## Desktop notifications
-
-The pipeline sends native desktop notifications on completion or failure. macOS uses `osascript` with a Glass sound; Linux uses `notify-send`. Notifications are auto-disabled in CI environments and are best-effort — failures never block the pipeline.
-
-## Stage caching
-
-Each stage writes its output to `.lineup/.cache/`. On re-run with the same task, Lineup detects cached results and offers to skip completed stages. The `--from-stage N` flag restarts execution at stage N using cached upstream outputs.
-
-This makes long pipelines practical. A 5-stage run that fails at stage 4 can be fixed and resumed without re-running stages 1–3. Token cost scales with the work that actually needs to be redone.
-
-## Tactics
-
-Tactics are YAML workflow templates that replace or extend the default pipeline. A tactic defines a sequence of stages, each mapped to an agent type, with optional approval gates and variables.
-
-```yaml
-name: security-review
-description: Security-focused audit pipeline
-stages:
-  - type: research
-    agent: researcher
-    prompt: "Identify attack surface in ${target}"
-  - type: plan
-    agent: architect
-    gate: approval
-  - type: implement
-    agent: developer
-variables:
-  target:
-    description: File or module to audit
-    default: "src/"
-```
-
-Tactics compose — a stage can reference another tactic, which is inlined recursively with cycle detection. Project tactics in `.lineup/tactics/` override built-in tactics by name.
-
-## Teams mode
-
-When Claude Code's experimental teams feature is enabled, Lineup spawns agents as visible tmux panes instead of background subagents. Each agent appears as a named pane with its role and status.
-
-The orchestrator creates a session-scoped team (`lineup-<session_id>`) and manages teammate lifecycle — spawning agents when stages begin, shutting them down when their work completes. Teams mode falls back to standard subagents transparently when unavailable.
-
-## Ollama
-
-Lineup optionally delegates summarization and context gathering to local Ollama models. Code generation and architectural decisions always use the primary model.
-
-Configuration is in `~/.claude/lineup/ollama.yaml`. When enabled, researchers use Ollama for pre-digesting large files and web fetch results. When unavailable, all features degrade cleanly — Ollama is never required for correctness.
-
-Contributor- and agent-facing integration details live in the repository docs.
-The public site keeps the model intentionally simple: use the CLI directly, or use
-the installed Lineup skill inside your host.
+- [Architecture](https://github.com/izantech/lineup/blob/main/docs/architecture.md)
+- [Pipeline](https://github.com/izantech/lineup/blob/main/docs/pipeline.md)
+- [Gate protocol](https://github.com/izantech/lineup/blob/main/docs/gate-protocol.md)
+- [Skills and host integrations](https://github.com/izantech/lineup/blob/main/docs/skills.md)
 
 ---
 

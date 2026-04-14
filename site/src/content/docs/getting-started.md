@@ -1,11 +1,11 @@
 ---
 title: Getting Started
-description: Install Lineup and run your first pipeline.
+description: Install Lineup and run your first task from the CLI or your host.
 ---
 
 ## Prerequisites
 
-One of the following AI coding hosts, already installed and configured:
+Install and configure at least one supported host:
 
 - **Claude Code**
 - **Codex CLI**
@@ -16,78 +16,60 @@ One of the following AI coding hosts, already installed and configured:
 ```bash
 npm install -g @izantech/lineup-cli
 lineup install
-lineup init
-git add -A
-git commit -m "Initial commit"
 ```
 
-`lineup install` detects available hosts and installs skill files for each one.
-`lineup init` scaffolds the local `.lineup/` runtime directories, a default workflow,
-and initializes a git repository if one does not already exist. The initial git commit
-is still required because native implementation uses isolated git worktrees.
+`lineup install` detects the hosts available on your machine and installs the matching Lineup commands for them.
 
-## Use Lineup from the CLI
+## First run from the CLI
 
-Pass a task description and let Lineup handle approval gates interactively:
+Use `lineup start` for your first task in a repo:
 
 ```bash
-lineup run "Review the auth middleware in src/auth.ts and identify security gaps"
+lineup start "Review the auth middleware in src/auth.ts and identify security gaps"
 ```
 
-Expected output:
+`lineup start` is the opinionated onboarding path. It will:
 
-```
-[triage] Collecting project stats...
-[plan] Waiting for approval...
-[implement] Executing native wave 1...
-[verify] Running verification hooks...
-Pipeline completed successfully.
-```
+1. Scaffold Lineup files if the repo has not been initialized yet.
+2. Check git readiness.
+3. Stop with the exact next command if the repo still needs its first commit.
+4. Start the pipeline once the project is ready.
 
-This is the direct path: you are talking to the Lineup engine in your terminal.
+After the first run, you can use `lineup run "<task>"` directly whenever you want.
 
-## Use Lineup from Claude, Codex, or OpenCode
+## Start from Claude, Codex, or OpenCode
 
-If you prefer to stay inside your host UI, Lineup also installs thin host commands:
+If you prefer to stay inside your host UI, use the installed host command instead:
 
 - Claude Code: `/lineup:kick-off`
 - Codex CLI: `$lineup-kick-off`
 - OpenCode: `/lineup-kick-off`
 
-From the user's point of view, these host commands do the same kind of work as
-`lineup run`, but inside the host session instead of a standalone terminal flow.
-The CLI still owns the engine; the skill is just the host-native entrypoint.
+Those commands call the same Lineup engine. The only difference is where you start the task.
 
-## What happens behind the scenes
+## Inspect and resume runs
 
-1. **Triage** classified the task, identified affected areas, and selected the right model tier per role.
-2. The CLI evaluated the workflow DAG, compiled the approved plan into execution waves, and drove the run through typed stages.
-3. Stage outputs and protocol events were persisted under `.lineup/.runs/` and `.lineup/.artifacts/`, so the run can be inspected or resumed later.
-
-The triage step drives model selection automatically. Simple tasks use faster
-models; complex tasks escalate to more capable ones. This is determined by task
-scope, not by user configuration.
-
-## When a run fails
-
-Resume a failed run instead of starting over:
+Lineup keeps run state and artifacts so you can inspect work or continue later:
 
 ```bash
+lineup runs
+lineup show <run-id>
 lineup resume <run-id> --retry-failed
+lineup waves --run <run-id>
 ```
 
-The pipeline restarts from the failed stage, preserving all completed upstream work. Use `--max-retries 5` to cap retry attempts per stage.
+Use `lineup show` for a quick run summary, `lineup waves` to inspect task parallelism, and `lineup resume` when a run fails or blocks.
 
-To inspect past runs:
+## When you want more detail
 
-```bash
-lineup runs                  # recent runs with status
-lineup show <run-id>         # stage details and artifact hashes
-lineup history               # table of recent runs with status and duration
-lineup waves --run <run-id>  # task execution waves and parallelism
-```
+The public site stays focused on setup and usage. If you need workflow, bridge, or architecture detail, use the repository docs:
+
+- [CLI commands](https://github.com/izantech/lineup/blob/main/docs/commands.md)
+- [Pipeline overview](https://github.com/izantech/lineup/blob/main/docs/pipeline.md)
+- [Skills and host integrations](https://github.com/izantech/lineup/blob/main/docs/skills.md)
 
 ## Next steps
 
-- [Examples](/examples/) — see Lineup applied to real-world scenarios
-- [How It Works](/how-it-works/) — pipeline architecture, tactics, teams mode
+- [How It Works](/how-it-works/) for the high-level mental model
+- [Examples](/examples/) for common task patterns
+- [Migrating from V2](/migration/) if you already use an older Lineup install
