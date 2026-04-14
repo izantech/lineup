@@ -126,6 +126,32 @@ You are the architect body.
     expect(built.prompt).toContain("This run may be using a smaller local Ollama-backed model");
   });
 
+  it("uses the compact researcher body for Ollama host integration runs", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:
+  enabled: true
+  model: local-qwen
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "researcher.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "claude"
+      }
+    });
+
+    expect(built.prompt).toContain("Inspect only the minimum code and config needed to answer the task");
+    expect(built.prompt).not.toContain("## Context-Efficient Research Protocol");
+  });
+
   it("adds full-pipeline Ollama runtime guidance for agents without appendices", () => {
     writeProjectConfig(
       tempDir,

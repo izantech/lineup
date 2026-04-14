@@ -47,6 +47,16 @@ function uniqueDirs(input: string[]): string[] {
   return [...new Set(input.filter((value) => value.trim().length > 0))];
 }
 
+function createNeutralWorkingDirectory(): { cwd: string; cleanup: () => void } {
+  const cwd = mkdtempSync(path.join(os.tmpdir(), "lineup-claude-cwd-"));
+  return {
+    cwd,
+    cleanup: () => {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  };
+}
+
 function readFileIfPresent(filePath?: string): string | null {
   if (!filePath) {
     return null;
@@ -73,6 +83,7 @@ type HostInvocationTrace = {
   cwd: string;
   timeoutMs?: number;
   expectedOutputPath?: string;
+  outputWatchPaths?: string[];
   startedAt: string;
   completedAt?: string;
   durationMs?: number;
@@ -369,45 +380,52 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       schemaContent: attempt.schemaContent
     });
 
-    const result = await runSpawnedCommand({
-      host: launchPlan.host,
-      command: launchPlan.command,
-      args: launchPlan.args,
-      cwd: input.workingDirectory,
-      env: launchPlan.env,
-      timeoutMs: input.timeoutMs,
-      stopOnExpectedOutputPath: input.expectedOutputPath,
-      tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
-    });
-    const fileOutput = readFileIfPresent(input.expectedOutputPath);
-    if (fileOutput && !attempt.schemaContent) {
+    const useNeutralCwd = launchPlan.integration === "ollama-launch" || launchPlan.integration === "ollama-env";
+    const neutralCwd = useNeutralCwd ? createNeutralWorkingDirectory() : null;
+
+    try {
+      const result = await runSpawnedCommand({
+        host: launchPlan.host,
+        command: launchPlan.command,
+        args: launchPlan.args,
+        cwd: neutralCwd?.cwd ?? input.workingDirectory,
+        env: launchPlan.env,
+        timeoutMs: input.timeoutMs,
+        stopOnExpectedOutputPath: input.expectedOutputPath,
+        tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
+      });
+      const fileOutput = readFileIfPresent(input.expectedOutputPath);
+      if (fileOutput && !attempt.schemaContent) {
+        return {
+          host: result.host,
+          stderr: result.stderr,
+          content: fileOutput
+        };
+      }
+      if (!attempt.schemaContent) {
+        return result;
+      }
+
+      const structured =
+        parseLocalAgentStructuredOutput(fileOutput ?? result.content) ??
+        (await formatStructuredOutputWithClaude({
+          projectRoot: input.projectRoot,
+          workingDirectory: input.workingDirectory,
+          agent: input.agent,
+          rawDraft: fileOutput ?? result.content,
+          schemaContent: attempt.schemaContent,
+          timeoutMs: input.timeoutMs,
+          tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
+        }));
+
       return {
         host: result.host,
         stderr: result.stderr,
-        content: fileOutput
+        content: `${JSON.stringify(structured, null, 2)}\n`
       };
+    } finally {
+      neutralCwd?.cleanup();
     }
-    if (!attempt.schemaContent) {
-      return result;
-    }
-
-    const structured =
-      parseLocalAgentStructuredOutput(fileOutput ?? result.content) ??
-      (await formatStructuredOutputWithClaude({
-        projectRoot: input.projectRoot,
-        workingDirectory: input.workingDirectory,
-        agent: input.agent,
-        rawDraft: fileOutput ?? result.content,
-        schemaContent: attempt.schemaContent,
-        timeoutMs: input.timeoutMs,
-        tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
-      }));
-
-    return {
-      host: result.host,
-      stderr: result.stderr,
-      content: `${JSON.stringify(structured, null, 2)}\n`
-    };
   };
 
   if (!schemaContent) {
@@ -465,29 +483,36 @@ async function formatStructuredOutputWithClaude(input: {
     schemaContent: input.schemaContent
   });
 
-  const result = await runSpawnedCommand({
-    host: launchPlan.host,
-    command: launchPlan.command,
-    args: launchPlan.args,
-    cwd: input.workingDirectory,
-    env: launchPlan.env,
-    timeoutMs: input.timeoutMs,
-    tracePrefixPath: input.tracePrefixPath
-  });
+  const useNeutralCwd = launchPlan.integration === "ollama-launch" || launchPlan.integration === "ollama-env";
+  const neutralCwd = useNeutralCwd ? createNeutralWorkingDirectory() : null;
 
-  const structured = extractStructuredPayload(result.content);
-  if (structured !== undefined) {
-    return structured;
-  }
+  try {
+    const result = await runSpawnedCommand({
+      host: launchPlan.host,
+      command: launchPlan.command,
+      args: launchPlan.args,
+      cwd: neutralCwd?.cwd ?? input.workingDirectory,
+      env: launchPlan.env,
+      timeoutMs: input.timeoutMs,
+      tracePrefixPath: input.tracePrefixPath
+    });
 
-  const repaired = parseLocalAgentStructuredOutput(result.content);
-  if (repaired !== undefined) {
-    return repaired;
-  }
+    const structured = extractStructuredPayload(result.content);
+    if (structured !== undefined) {
+      return structured;
+    }
 
-  throw new CliError("Claude did not return structured output that could be parsed.", {
+    const repaired = parseLocalAgentStructuredOutput(result.content);
+    if (repaired !== undefined) {
+      return repaired;
+    }
+
+    throw new CliError("Claude did not return structured output that could be parsed.", {
       code: "malformed_output"
     });
+  } finally {
+    neutralCwd?.cleanup();
+  }
 }
 
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
@@ -521,7 +546,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       cwd: input.workingDirectory,
       env: launchPlan.env,
       timeoutMs: input.timeoutMs,
-      stopOnExpectedOutputPath: input.expectedOutputPath,
+      stopOnOutputPaths: uniqueDirs([input.expectedOutputPath ?? "", outputPath]),
       tracePrefixPath: input.tracePrefixPath
     });
     const fileOutput = readFileIfPresent(input.expectedOutputPath);
@@ -583,10 +608,15 @@ async function runSpawnedCommand(input: {
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   stopOnExpectedOutputPath?: string;
+  stopOnOutputPaths?: string[];
   tracePrefixPath?: string;
 }): Promise<LocalAgentInvocationResult> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
+    const outputWatchPaths = uniqueDirs([
+      ...(input.stopOnOutputPaths ?? []),
+      ...(input.stopOnExpectedOutputPath ? [input.stopOnExpectedOutputPath] : [])
+    ]);
     const trace: HostInvocationTrace = {
       host: input.host,
       command: input.command,
@@ -594,6 +624,7 @@ async function runSpawnedCommand(input: {
       cwd: input.cwd,
       ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
       ...(input.stopOnExpectedOutputPath ? { expectedOutputPath: input.stopOnExpectedOutputPath } : {}),
+      ...(outputWatchPaths.length > 0 ? { outputWatchPaths } : {}),
       startedAt: new Date(startedAt).toISOString(),
       env: tracedEnvSubset(input.env),
       events: []
@@ -687,15 +718,28 @@ async function runSpawnedCommand(input: {
       }, input.timeoutMs);
     }
 
-    if (input.stopOnExpectedOutputPath) {
+    if (outputWatchPaths.length > 0) {
       expectedOutputPoller = setInterval(() => {
-        const fileOutput = readFileIfPresent(input.stopOnExpectedOutputPath);
-        if (!fileOutput || fileOutput.trim().length === 0 || completedFromExpectedOutput) {
+        if (completedFromExpectedOutput) {
+          return;
+        }
+
+        const detectedPath = outputWatchPaths.find((filePath) => {
+          const fileOutput = readFileIfPresent(filePath);
+          return Boolean(fileOutput && fileOutput.trim().length > 0);
+        });
+        if (!detectedPath) {
+          return;
+        }
+
+        const fileOutput = readFileIfPresent(detectedPath);
+        if (!fileOutput || fileOutput.trim().length === 0) {
           return;
         }
 
         completedFromExpectedOutput = true;
-        recordTraceEvent(trace, input.tracePrefixPath, "artifact_detected", `Detected expected output at ${input.stopOnExpectedOutputPath}.`, {
+        recordTraceEvent(trace, input.tracePrefixPath, "artifact_detected", `Detected output at ${detectedPath}.`, {
+          path: detectedPath,
           bytes: Buffer.byteLength(fileOutput, "utf8")
         });
         if (expectedOutputPoller) {
@@ -708,9 +752,9 @@ async function runSpawnedCommand(input: {
           stderr
         });
         child.kill("SIGTERM");
-        recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGTERM after expected output was detected.", { signal: "SIGTERM" });
+        recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGTERM after output was detected.", { signal: "SIGTERM" });
         expectedOutputKillTimer = setTimeout(() => {
-          recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGKILL after expected-output grace period.", { signal: "SIGKILL" });
+          recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGKILL after output-detection grace period.", { signal: "SIGKILL" });
           child.kill("SIGKILL");
         }, 1_000);
         expectedOutputKillTimer.unref();

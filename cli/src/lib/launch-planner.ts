@@ -144,6 +144,8 @@ function buildOpencodeDirectArgs(input: HostLaunchPlanInput, model: string): str
     "--pure",
     "--format",
     "json",
+    "--title",
+    buildOpencodeTitle(input),
     "--dangerously-skip-permissions",
     input.prompt
   ]
@@ -167,6 +169,11 @@ function buildCodexOllamaLaunchArgs(input: HostLaunchPlanInput, model: string): 
 
 function qualifyOpencodeModel(providerName: string, model: string): string {
   return `${providerName}/${model}`
+}
+
+function buildOpencodeTitle(input: HostLaunchPlanInput): string {
+  const titleBase = input.prompt.trim().split(/\s+/).slice(0, 12).join(" ")
+  return titleBase.length > 0 ? `Lineup ${input.agent}: ${titleBase}` : `Lineup ${input.agent}`
 }
 
 function planDirectLaunch(input: HostLaunchPlanInput, effectiveModel: string, env: NodeJS.ProcessEnv): HostLaunchPlan {

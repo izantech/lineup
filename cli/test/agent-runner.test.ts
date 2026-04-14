@@ -204,6 +204,67 @@ setTimeout(() => process.exit(0), 5_000)
     expect(result.content).toContain("how_it_works: artifact was written before codex exited");
   });
 
+  it("returns as soon as Codex writes its direct output file even when the stage artifact is never written", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-direct-output-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+
+    const fakeCodexPath = join(binDir, "codex");
+    writeFileSync(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+
+let output = ''
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index]
+  if (arg === '-o') {
+    output = process.argv[index + 1] ?? ''
+    index += 1
+  }
+}
+
+if (output) {
+  writeFileSync(output, \`type: research
+agent: researcher
+date: 2026-04-14
+topic: test
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: codex wrote its direct output file before shutdown
+constraints:
+  host: codex
+gaps:
+  pending: []
+\`)
+}
+
+process.on('SIGTERM', () => {})
+setTimeout(() => process.exit(0), 10_000)
+`,
+      "utf8"
+    );
+    chmodSync(fakeCodexPath, 0o755);
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    const runner = createLocalAgentRunner("codex");
+    const startedAt = Date.now();
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "researcher",
+      prompt: "Return a valid research artifact.",
+      timeoutMs: 3_000
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(2_500);
+    expect(result.content).toContain("how_it_works: codex wrote its direct output file before shutdown");
+  });
+
   it("does not wait for Codex shutdown once the expected artifact file exists", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-fast-return-"));
     const binDir = join(tempDir, "bin");
@@ -516,6 +577,98 @@ process.exit(0)
 
     expect(Date.now() - startedAt).toBeLessThan(2_500);
     expect(result.content).toContain("how_it_works: the runner returned before this process exited");
+  });
+
+  it("uses a neutral cwd for Ollama-backed Claude launches", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-neutral-cwd-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const cwdFile = join(tempDir, "captured-cwd.txt");
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+
+const commandArgs = process.argv.slice(2)
+const separatorIndex = commandArgs.indexOf('--')
+const childArgs = separatorIndex >= 0 ? commandArgs.slice(separatorIndex + 1) : []
+const child = spawnSync('claude', childArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  env: process.env
+})
+
+if (child.stdout) {
+  process.stdout.write(child.stdout)
+}
+if (child.stderr) {
+  process.stderr.write(child.stderr)
+}
+process.exit(child.status ?? 0)
+`
+    );
+
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+
+const cwdFile = process.env.LINEUP_TEST_CWD_FILE
+if (cwdFile) {
+  writeFileSync(cwdFile, process.cwd(), 'utf8')
+}
+
+const promptParts = process.argv.slice(2).join(' ')
+const match = promptParts.match(/Create or overwrite (\\S+) with the final structured payload\\./)
+if (match) {
+  writeFileSync(match[1], \`type: research
+agent: researcher
+date: 2026-04-14
+topic: neutral-cwd
+status: complete
+pipeline_stage: research
+how_it_works: Claude ran from a neutral cwd
+\`)
+}
+
+process.exit(0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalCwdFile = process.env.LINEUP_TEST_CWD_FILE;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.LINEUP_TEST_CWD_FILE = cwdFile;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const expectedOutputPath = join(tempDir, "research.yaml");
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "researcher",
+        prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
+        expectedOutputPath,
+        timeoutMs: 2_000
+      });
+
+      expect(result.content).toContain("how_it_works: Claude ran from a neutral cwd");
+      const capturedCwd = readFileSync(cwdFile, "utf8");
+      expect(capturedCwd).not.toBe(tempDir);
+      expect(capturedCwd).toContain(join(tmpdir(), "lineup-claude-cwd-"));
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.LINEUP_TEST_CWD_FILE = originalCwdFile;
+    }
   });
 
   it("returns as soon as OpenCode writes the expected artifact file even if a background process lingers", async () => {

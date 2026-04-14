@@ -121,6 +121,20 @@ function resolveOllamaAppendixPath(agentName: AgentName, resolvedPromptPath: str
   return null;
 }
 
+function resolveOllamaCompactPromptPath(agentName: AgentName, resolvedPromptPath: string): string | null {
+  const localCandidate = path.join(path.dirname(resolvedPromptPath), `${agentName}-ollama-compact.md`);
+  if (existsSync(localCandidate)) {
+    return localCandidate;
+  }
+
+  const bundledCandidate = path.join(packageRoot(), "agents", `${agentName}-ollama-compact.md`);
+  if (existsSync(bundledCandidate)) {
+    return bundledCandidate;
+  }
+
+  return null;
+}
+
 function buildOllamaSections(agentName: AgentName | null, resolvedPromptPath: string, options?: ResolveConfigOptions): string[] {
   if (!options) {
     return [];
@@ -152,6 +166,32 @@ function buildOllamaSections(agentName: AgentName | null, resolvedPromptPath: st
   }
 
   return sections;
+}
+
+function resolveAgentBody(
+  parsed: ParsedAgentPrompt,
+  agentName: AgentName | null,
+  resolvedPromptPath: string,
+  options?: ResolveConfigOptions
+): { body: string; usedCompactPrompt: boolean } {
+  if (!agentName || !options) {
+    return { body: parsed.body.trimEnd(), usedCompactPrompt: false };
+  }
+
+  const ollama = readOllamaConfig(options);
+  if (!ollama?.hostIntegration?.enabled) {
+    return { body: parsed.body.trimEnd(), usedCompactPrompt: false };
+  }
+
+  const compactPromptPath = resolveOllamaCompactPromptPath(agentName, resolvedPromptPath);
+  if (!compactPromptPath) {
+    return { body: parsed.body.trimEnd(), usedCompactPrompt: false };
+  }
+
+  return {
+    body: readFileSync(compactPromptPath, "utf8").trim(),
+    usedCompactPrompt: true
+  };
 }
 
 function renderContractSection(frontmatter: AgentPromptFrontmatter): string {
@@ -196,8 +236,11 @@ export function buildAgentSystemPrompt(input: {
   const parsed = loadAgentPrompt(resolvedPath);
   const contractSection = renderContractSection(parsed.frontmatter);
   const agentName = parseAgentName(resolvedPath);
-  const ollamaSections = buildOllamaSections(agentName, resolvedPath, input.configOptions);
-  const bodySections = [parsed.body.trimEnd()];
+  const resolvedBody = resolveAgentBody(parsed, agentName, resolvedPath, input.configOptions);
+  const ollamaSections = resolvedBody.usedCompactPrompt
+    ? []
+    : buildOllamaSections(agentName, resolvedPath, input.configOptions);
+  const bodySections = [resolvedBody.body];
   if (contractSection) {
     bodySections.push(contractSection);
   }

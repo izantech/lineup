@@ -209,16 +209,31 @@ Current instrumentation:
   - host stdout/stderr logs
 - runner traces now flush at spawn time instead of only on process settlement,
   so hung hosts still leave a `.trace.json`
+- smoke progress classification now also watches host trace/log/artifact file
+  growth instead of relying only on bridge events
+- Ollama-backed Claude strict passes now run from a neutral temporary cwd while
+  still receiving repo access through explicit `--add-dir`
+- Ollama-backed researcher stages can use a compact host-specific prompt body,
+  and the local smoke lane now uses a deterministic tiny-repo task instead of a
+  generic freeform smoke request
+- pre-stage structured artifacts are now stricter:
+  - malformed/non-object YAML gets one stricter retry
+  - researcher stages without explicit workflow outputs receive default required
+    fields (`what_found`, `how_it_works`, `constraints`, `gaps`)
+  - outputs are checked for required fields before the stage is accepted
 
 Comprehensive fix plan:
 
 1. Shared smoke/progress hardening
-   - treat host trace/log growth as progress in the smoke runner, not only
-     bridge events
-   - keep the current no-progress timeout for truly silent hosts, but stop
-     classifying actively logging hosts as stalled
-   - add deterministic coverage for trace-file emission and smoke progress
-     classification
+   - completed:
+     - treat host trace/log/artifact growth as progress in the smoke runner,
+       not only bridge events
+     - keep the current no-progress timeout for truly silent hosts without
+       classifying actively logging hosts as stalled
+     - add deterministic coverage for file-activity-based progress tracking
+   - remaining:
+     - preserve the same classification model in any future direct-repro helper
+       commands so host-specific debugging stays consistent
 2. Claude stabilization
    - create a direct minimal repro for the Ollama-backed strict
      `claude --json-schema` path outside the full pipeline
@@ -240,12 +255,15 @@ Comprehensive fix plan:
      add a deterministic regression around that exact contract
 4. Codex stabilization
    - keep `codex exec --oss --local-provider ollama` as the live provider path
-   - tighten the research artifact contract so the local model actually writes
-     the expected file instead of free-running in tool/reasoning mode
+   - completed:
+     - watch both the final artifact path and the Codex `-o` output path
+     - tighten the smoke task and researcher prompt so the host sees a small,
+       deterministic target
+   - remaining:
+     - tighten the research artifact contract so the local model actually writes
+       the expected file instead of free-running in tool/reasoning mode
    - if needed, add a Codex-specific completion helper that can recover a valid
      research artifact from returned output when the file is not written
-   - update smoke classification so active Codex stderr/log activity extends the
-     progress window
 5. Final acceptance
    - green deterministic suite
    - green per-host live smoke for `claude`, `opencode`, and `codex`

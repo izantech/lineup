@@ -115,6 +115,55 @@ describe("launch planner", () => {
     }))
   })
 
+  it("adds a non-interactive title in OpenCode direct mode", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3-coder\n  scope: research\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "opencode",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "researcher",
+      prompt: "Inspect the repository and report findings"
+    })
+
+    expect(plan.command).toBe("opencode")
+    expect(plan.integration).toBe("direct")
+    expect(plan.args).toContain("--title")
+    expect(plan.args).toContain("Lineup researcher: Inspect the repository and report findings")
+    expect(plan.args[plan.args.length - 1]).toBe("Inspect the repository and report findings")
+  })
+
+  it("adds a non-interactive title in OpenCode managed mode", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3-coder\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: managed\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "opencode",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "Build the feature"
+    })
+
+    expect(plan.command).toBe("opencode")
+    expect(plan.integration).toBe("ollama-managed")
+    expect(plan.args).toContain("--title")
+    expect(plan.args).toContain("Lineup developer: Build the feature")
+    expect(plan.args).toContain("--model")
+    expect(plan.args).toContain(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
+  })
+
   it("launches Codex with the OSS local-provider contract when strategy resolves to launch", () => {
     root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
     home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))

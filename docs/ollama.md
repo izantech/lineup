@@ -74,7 +74,7 @@ Supported values:
 `auto` resolves per host:
 
 - Claude -> `launch`
-- Codex -> `managed`
+- Codex -> `launch`
 - OpenCode -> `managed`
 
 ## Host behavior
@@ -98,12 +98,15 @@ User config file:
 
 ### Codex
 
-Codex prefers the official local-OSS launch path when that is the active
-implementation. Managed integration writes a Lineup-owned provider/profile into:
+Codex defaults to the local OSS launch path:
+
+- `codex exec --oss --local-provider ollama ...`
+
+Managed integration still writes a Lineup-owned provider/profile into:
 
 - `~/.codex/config.toml`
 
-Lineup uses the dedicated profile:
+The managed profile remains available as an explicit strategy:
 
 - `lineup-ollama`
 
@@ -167,8 +170,10 @@ This command:
 - writes host-specific Ollama configuration
 - runs `lineup doctor --json`
 - runs one full pipeline task and one bundled `explain` tactic task per selected host
+- uses a deterministic tiny-repo pipeline prompt instead of a generic freeform smoke request
 - drives bridge questions through the bridge contract
 - asserts terminal success and captures artifacts/config output
+- treats bridge events plus host trace/log/artifact growth as progress
 - preserves the temp workspace on failure or stall so host-specific debugging
   data stays available after a bad run
 - prints the preserved run roots, bridge logs, and host trace files for the
@@ -196,6 +201,19 @@ The local smoke lane now records per-invocation trace data under each run root:
 The smoke summary prints these paths when a host fails or stalls. Use them before
 guessing about where the hang occurred.
 
+## Prompt Shaping
+
+When true host integration is enabled, Lineup can load a compact host-specific
+agent body such as `cli/agents/researcher-ollama-compact.md` instead of the
+full bundled researcher prompt. This keeps local Ollama runs tighter without
+changing the final output schema or validation rules.
+
+The local smoke lane also uses a deterministic tiny-repo task:
+
+- append a second sentence to `README.md`
+- inspect only `README.md`, `.lineup-core/workflows/full-pipeline.yaml`, and `.lineup/tactics/example.yaml` during research unless later stages truly require more
+- avoid host/service/config/runtime-log exploration during research
+
 ## Current Live Findings
 
 Current live validation status on `qwen3.5:9b` is not green yet. The hosts are
@@ -207,6 +225,8 @@ failing in different ways:
   the strict research invocation and then hang
 - the trace file records only the `spawn` event
 - there is no stdout, no stderr, no `close` event, and no research artifact
+- neutral temporary cwd isolation and the compact researcher prompt did not
+  change this outcome in the latest bounded smoke pass
 
 Implication:
 
@@ -216,8 +236,11 @@ Implication:
 ### OpenCode
 
 - the process starts and writes one-time migration logs to stderr
-- after migration it produces no stdout, no artifact, and no process exit
+- after migration it either produces no stdout at all or reads the tiny smoke
+  repo files but still never writes the research artifact or exits cleanly
 - the bridge remains parked in `research`
+- adding the provider-qualified model identifier, lower-case tool dialect, and
+  deterministic smoke prompt moved the failure forward but did not clear it
 
 Implication:
 
@@ -229,13 +252,14 @@ Implication:
 
 - the process starts on `provider: ollama`
 - the stderr log shows active reasoning/progress, so the host is not dead
-- no research artifact is written, and the bridge sees no stage progress
+- no research artifact is written, and the bridge sees no stage progress even
+  after watching both the expected artifact path and Codex's direct `-o` output
+- tighter researcher prompts and stricter pre-stage artifact validation did not
+  eliminate the completion failure
 
 Implication:
 
 - Codex is now a contract/completion problem, not a provider-selection problem
-- the smoke runner must distinguish "active host with no artifact yet" from a
-  true silent stall
 
 ## Recommended configs
 

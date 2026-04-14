@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { CliError, asErrorMessage } from "../lib/errors";
+import { captureFileActivity, hasFileActivity, listImmediateFiles } from "../lib/file-activity.js";
 import { planHostLaunch } from "../lib/launch-planner.js";
 import {
   lineupRunBridgeEventsFile,
@@ -71,6 +72,7 @@ type HostSmokeSummary = {
 
 type RunDebugPaths = {
   runRoot: string;
+  artifactRoot: string;
   hostTraceRoot: string;
   bridgeEventsPath: string;
   bridgeStdoutPath: string;
@@ -134,6 +136,15 @@ type BridgeEventsPayload = {
 };
 
 const SUPPORTED_HOSTS: HostName[] = ["claude", "codex", "opencode"];
+
+const PIPELINE_SMOKE_PROMPT = [
+  "Run the full Lineup smoke pipeline on this tiny repository.",
+  "Make one deterministic change: append a second sentence to README.md stating that this repo validates Ollama host execution.",
+  "For research, inspect only README.md, .lineup-core/workflows/full-pipeline.yaml, and .lineup/tactics/example.yaml unless a later stage truly requires more.",
+  "Do not inspect Ollama service health, host CLI configuration, runtime logs, bridge files, or network endpoints.",
+  "Keep every artifact concise, structured, and scoped to this tiny repo.",
+  "Auto-answer any bridge questions."
+].join(" ");
 
 function parseArgs(argv: string[]): SmokeOptions {
   const result: SmokeOptions = {
@@ -398,6 +409,7 @@ function resolveRunDebugPaths(repoDir: string, runId: string): RunDebugPaths {
 
   return {
     runRoot,
+    artifactRoot: path.join(runRoot, "artifacts"),
     hostTraceRoot: path.join(runRoot, "host"),
     bridgeEventsPath: lineupRunBridgeEventsFile(runId, repoDir),
     bridgeStdoutPath: lineupRunBridgeStdoutLogFile(runId, repoDir),
@@ -437,14 +449,16 @@ function detectNewestNewRunId(repoDir: string, before: string[]): string | null 
 }
 
 function listHostTraceFiles(hostTraceRoot: string | undefined): string[] {
-  if (!hostTraceRoot || !existsSync(hostTraceRoot)) {
-    return [];
-  }
+  return listImmediateFiles(hostTraceRoot);
+}
 
-  return readdirSync(hostTraceRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(hostTraceRoot, entry.name))
-    .sort();
+function trackedRunFiles(debugPaths: RunDebugPaths): string[] {
+  return [
+    debugPaths.bridgeStdoutPath,
+    debugPaths.bridgeStderrPath,
+    ...listImmediateFiles(debugPaths.hostTraceRoot),
+    ...listImmediateFiles(debugPaths.artifactRoot)
+  ];
 }
 
 function failIfHostUnavailable(report: DoctorReport, host: HostName): void {
@@ -474,7 +488,7 @@ function resolvePlannedCommand(
     projectRoot: repoDir,
     workingDirectory: repoDir,
     agent: "researcher",
-    prompt: "Smoke the full pipeline and auto-answer any bridge questions.",
+    prompt: PIPELINE_SMOKE_PROMPT,
     homeDir,
     env: envOverrides
   });
@@ -555,6 +569,8 @@ function waitForBridgeCompletion(repoDir: string, homeDir: string, runId: string
   const deadline = Date.now() + 10 * 60 * 1000;
   const noProgressDeadlineMs = 90 * 1000;
   let lastProgressAt = Date.now();
+  const debugPaths = resolveRunDebugPaths(repoDir, runId);
+  let lastFileActivity = captureFileActivity(trackedRunFiles(debugPaths));
 
   while (Date.now() < deadline) {
     const result = runDistCli(
@@ -591,6 +607,12 @@ function waitForBridgeCompletion(repoDir: string, homeDir: string, runId: string
 
     if (sawProgress) {
       lastProgressAt = Date.now();
+    }
+
+    const currentFileActivity = captureFileActivity(trackedRunFiles(debugPaths));
+    if (hasFileActivity(lastFileActivity, currentFileActivity)) {
+      lastProgressAt = Date.now();
+      lastFileActivity = currentFileActivity;
     }
 
     if (Date.now() - lastProgressAt > noProgressDeadlineMs) {
@@ -659,7 +681,7 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
         [
           "bridge",
           "start",
-          "Smoke the full pipeline and auto-answer any bridge questions.",
+          PIPELINE_SMOKE_PROMPT,
           "--executor-host",
           host,
           "--workflow",

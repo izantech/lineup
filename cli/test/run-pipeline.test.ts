@@ -508,7 +508,7 @@ stages:
     }
   });
 
-  it("waits for a host-written research artifact and uses its structured outputs", async () => {
+  it("uses default researcher outputs when the workflow omits an explicit output schema", async () => {
     const projectRoot = join(tempDir, "project-host-research");
     writeTemplatesTo(projectRoot);
     initGitRepo(projectRoot);
@@ -524,11 +524,6 @@ stages:
   - id: research
     type: agent
     agent: researcher
-    outputs:
-      what_found: { type: object }
-      how_it_works: { type: string }
-      constraints: { type: object }
-      gaps: { type: object }
 `);
 
     const { runPipeline } = await import("../src/lib/run-pipeline.js");
@@ -806,6 +801,307 @@ further_exploration: []
       expect(explainYaml).toContain("learning_objectives:");
       expect(explainYaml).toContain("further_exploration:");
       expect(explainYaml).not.toContain("raw_output:");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("rewrites OpenCode stage prompts to use lower-case tool names", async () => {
+    const projectRoot = join(tempDir, "project-opencode-prompt");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: opencode-pipeline
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+  - id: review
+    type: agent
+    agent: reviewer
+    depends_on: [research]
+`);
+
+    const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "opencode",
+      async invoke(input) {
+        capturedPrompts.push({ agent: input.agent, prompt: input.prompt });
+        if (input.agent === "researcher") {
+          return {
+            host: "opencode",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-13
+topic: prompt-dialect
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Captured by the OpenCode runner.
+constraints:
+  tooling: local
+gaps:
+  pending: []
+`
+          };
+        }
+
+        return {
+          host: "opencode",
+          stderr: "",
+          content: `type: review
+agent: reviewer
+date: 2026-04-13
+topic: prompt-dialect
+status: PASS
+pipeline_stage: review
+plan_ref: none
+summary: Prompt dialect normalization succeeded.
+issues: []
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "opn001",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      const researchPrompt = capturedPrompts.find((entry) => entry.agent === "researcher")?.prompt ?? "";
+      const reviewPrompt = capturedPrompts.find((entry) => entry.agent === "reviewer")?.prompt ?? "";
+      for (const prompt of [researchPrompt, reviewPrompt]) {
+        expect(prompt).toContain("bash");
+        expect(prompt).toContain("glob");
+        expect(prompt).toContain("read");
+        expect(prompt).toContain("grep");
+        expect(prompt).toContain("webfetch");
+        expect(prompt).not.toMatch(/\bLS\b/);
+        expect(prompt).not.toMatch(/\bRead\b/);
+        expect(prompt).not.toMatch(/\bGrep\b/);
+        expect(prompt).not.toMatch(/\bGlob\b/);
+        expect(prompt).not.toMatch(/\bWebSearch\b/);
+        expect(prompt).not.toMatch(/\bBash\b/);
+      }
+      expect(researchPrompt).toContain("Gather files with `bash` and `glob`");
+      expect(reviewPrompt).toContain("Review changes by inspecting the relevant files with `read`");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("retries researcher stages when the first response is non-structured", async () => {
+    const projectRoot = join(tempDir, "project-research-retry");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-retry
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const prompts: string[] = [];
+    let attempt = 0;
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "opencode",
+      async invoke(input) {
+        prompts.push(input.prompt);
+        attempt += 1;
+        if (attempt === 1) {
+          return {
+            host: "opencode",
+            stderr: "",
+            content: `---
+# Research Findings
+
+## Overview
+This is useful context, but it is not valid lineup YAML.
+`
+          };
+        }
+
+        return {
+          host: "opencode",
+          stderr: "",
+          content: `type: research
+agent: researcher
+date: 2026-04-14
+topic: retry
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Retry converted the draft into valid YAML.
+constraints:
+  host: opencode
+gaps:
+  pending: []
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsrch1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("Previous output was invalid because it was not a valid structured Research payload.");
+      expect(prompts[1]).toContain("Rewrite the same facts into the exact structured payload only.");
+      expect(String(result.stageResults.get("research")?.outputs.artifactPath)).toContain("/.lineup/.runs/rsrch1/artifacts/research.yaml");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("retries researcher stages when the first response fails schema validation", async () => {
+    const projectRoot = join(tempDir, "project-research-schema-retry");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-schema-retry
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const prompts: string[] = [];
+    let attempt = 0;
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "opencode",
+      async invoke(input) {
+        prompts.push(input.prompt);
+        attempt += 1;
+        if (attempt === 1) {
+          return {
+            host: "opencode",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-14
+topic: retry
+status: complete
+pipeline_stage: research
+summary: This is still the wrong artifact shape.
+`
+          };
+        }
+
+        return {
+          host: "opencode",
+          stderr: "",
+          content: `type: research
+agent: researcher
+date: 2026-04-14
+topic: retry
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Retry converted the invalid draft into the required schema.
+constraints:
+  host: opencode
+gaps:
+  pending: []
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rssch1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("Previous output was invalid because it was not a valid structured Research payload.");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        how_it_works: "Retry converted the invalid draft into the required schema."
+      });
     } finally {
       process.chdir(origCwd);
     }

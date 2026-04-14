@@ -33,6 +33,12 @@ appendix file containing all Ollama-specific instructions. The orchestrator appe
 these to the spawn prompt only when `OLLAMA_AVAILABLE = true`, saving ~3.6 KB per
 agent spawn when Ollama is disabled.
 
+When true host integration is enabled, Lineup can also swap the normal bundled
+agent body for a host-specific compact prompt variant such as
+`cli/agents/researcher-ollama-compact.md`. That path keeps local Ollama host
+runs short and deterministic without changing the final structured artifact
+contract.
+
 ## Teams Mode
 
 When Claude Code's experimental teams feature is enabled, Lineup spawns agents as visible
@@ -70,7 +76,7 @@ Lineup optionally uses local Ollama-backed models. It supports three modes:
 
 - **Research assist**: `scope: research`. Researchers and architects get the Ollama appendix for summarization and compression help only. Host routing does not change.
 - **Legacy full routing**: `scope: full`. Compatibility mode that preserves the existing full-stage Ollama model-target routing without enabling host-native integration.
-- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex prefers the official local-OSS launch path when that is the active implementation, and OpenCode uses a managed Ollama provider with a provider-qualified model identifier. `lineup doctor` verifies model availability for every configured host integration before native runs start.
+- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex defaults to the local OSS launch path (`codex exec --oss --local-provider ollama`) unless explicitly pinned to managed mode, and OpenCode uses a managed Ollama provider with a provider-qualified model identifier. `lineup doctor` verifies model availability for every configured host integration before native runs start.
 
 The implementation is validated in three layers:
 
@@ -84,7 +90,11 @@ The smoke command is:
 npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]
 ```
 
-It uses the bridge contract for progress, questions, and completion, preserves temp workspaces on failure or stall, and it is not part of CI. Until all hosts are green, run per-host smoke lanes instead of `--host all`.
+It uses the bridge contract for progress, questions, and completion. The live
+runner also tracks host trace/log/artifact file activity so active local-model
+runs are not misclassified as silent stalls. It preserves temp workspaces on
+failure or stall, and it is not part of CI. Until all hosts are green, run
+per-host smoke lanes instead of `--host all`.
 
 Configuration is host-specific:
 

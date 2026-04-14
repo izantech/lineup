@@ -899,7 +899,7 @@ function formatStageContext(stage: WorkflowStage, ctx: ExpressionContext): strin
 }
 
 function describeStageOutputs(stage: WorkflowStage): string {
-  const entries = Object.entries(stage.outputs ?? {});
+  const entries = Object.entries(resolveEffectiveStageOutputs(stage));
   if (entries.length === 0) {
     return "- Return structured output only.";
   }
@@ -907,6 +907,23 @@ function describeStageOutputs(stage: WorkflowStage): string {
   return entries
     .map(([name, def]) => `- ${name}: ${def.type}${def.max_length ? ` (max ${def.max_length})` : ""}`)
     .join("\n");
+}
+
+function resolveEffectiveStageOutputs(stage: WorkflowStage): Record<string, { type: string; max_length?: number }> {
+  if (stage.outputs && Object.keys(stage.outputs).length > 0) {
+    return stage.outputs;
+  }
+
+  if (stage.agent === "researcher") {
+    return {
+      what_found: { type: "object" },
+      how_it_works: { type: "string" },
+      constraints: { type: "object" },
+      gaps: { type: "object" }
+    };
+  }
+
+  return {};
 }
 
 function loadOutputTemplate(projectRoot: string, agentName: string): string | null {
@@ -976,11 +993,53 @@ function buildStageAgentPrompt(input: {
         : []),
       "",
       "Stage context:",
-      formatStageContext(input.stage, input.ctx) || "(none)"
+      formatStageContext(input.stage, input.ctx) || "(none)",
+      ...(input.host === "opencode" ? ["", buildOpenCodeStageToolInstructions(input.stage)] : [])
     ].join("\n")
   });
 
-  return prompt.prompt;
+  return input.host === "opencode" ? normalizeOpenCodeStagePrompt(prompt.prompt) : prompt.prompt;
+}
+
+function buildOpenCodeStageToolInstructions(stage: WorkflowStage): string {
+  const lines = [
+    "OpenCode tool dialect:",
+    "- Use lower-case OpenCode tool names only: `bash`, `read`, `grep`, `glob`, `edit`, `write`, `webfetch`, `task`, `skill`.",
+    "- There is no dedicated `ls` tool. For file discovery, prefer `glob` and use `bash` for directory listing when needed.",
+    "- For file reading, use `read`.",
+    "- For text search, use `grep`.",
+    "- Use `webfetch` only when you already have a URL. Do not request a separate web-search tool."
+  ];
+
+  if (stage.agent === "researcher") {
+    lines.push(
+      "- Keep research output concise and evidence-driven.",
+      "- Gather files with `bash` and `glob`, then inspect only the relevant paths with `read`."
+    );
+  }
+
+  if (stage.agent === "reviewer") {
+    lines.push(
+      "- Review changes by inspecting the relevant files with `read` and corroborating with `grep` when needed.",
+      "- Avoid requesting unavailable uppercase tools."
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function normalizeOpenCodeStagePrompt(prompt: string): string {
+  return prompt
+    .replace(/\bLS\b/g, "bash")
+    .replace(/\bRead\b/g, "read")
+    .replace(/\bGrep\b/g, "grep")
+    .replace(/\bGlob\b/g, "glob")
+    .replace(/\bBash\b/g, "bash")
+    .replace(/\bEdit\b/g, "edit")
+    .replace(/\bWrite\b/g, "write")
+    .replace(/\bWebFetch\b/g, "webfetch")
+    .replace(/\bWebSearch\b/g, "webfetch")
+    .replace(/\bNotebookEdit\b/g, "edit");
 }
 
 function slugifyTopic(input: string): string {
@@ -1103,6 +1162,86 @@ function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string):
   ].join("\n");
 }
 
+function buildStructuredArtifactRetryPrompt(
+  originalPrompt: string,
+  invalidOutput: string,
+  schemaLabel: string
+): string {
+  return [
+    originalPrompt.trimEnd(),
+    "",
+    `Previous output was invalid because it was not a valid structured ${schemaLabel} payload.`,
+    "Rewrite the same facts into the exact structured payload only.",
+    "Do not add markdown headings, tables, commentary, or wrapper prose.",
+    "If the previous draft included extra narrative, strip it and keep only the final structured artifact.",
+    "",
+    "Previous invalid output:",
+    invalidOutput.trim()
+  ].join("\n");
+}
+
+function parseStructuredStageArtifact(
+  kind: AgentOutputKind,
+  content: string,
+  source: string,
+  validateOutputs: boolean
+): Record<string, unknown> {
+  const parsed = parseRestrictedYaml(content, source);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new CliError(`Structured ${kind} output at ${source} must be a YAML object.`, {
+      code: "malformed_output"
+    });
+  }
+
+  if (validateOutputs) {
+    validateAgentOutputYaml(kind, content, source);
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
+function matchesStageOutputType(value: unknown, type: string): boolean {
+  switch (type) {
+    case "string":
+      return typeof value === "string";
+    case "object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    case "array":
+      return Array.isArray(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "number":
+      return typeof value === "number";
+    default:
+      return true;
+  }
+}
+
+function assertDeclaredStageOutputs(
+  stage: WorkflowStage,
+  parsed: Record<string, unknown>,
+  source: string
+): void {
+  for (const [field, definition] of Object.entries(resolveEffectiveStageOutputs(stage))) {
+    if (!(field in parsed)) {
+      throw new CliError(`Structured ${stage.agent ?? "agent"} output at ${source} is missing required field '${field}'.`, {
+        code: "schema_validation_failed"
+      });
+    }
+
+    if (!matchesStageOutputType(parsed[field], definition.type)) {
+      throw new CliError(
+        `Structured ${stage.agent ?? "agent"} output at ${source} has invalid field '${field}': expected ${definition.type}.`,
+        {
+          code: "schema_validation_failed"
+        }
+      );
+    }
+  }
+}
+
 async function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
@@ -1168,78 +1307,90 @@ async function executePreStage(
   if (stage.type === "agent" && stage.agent) {
     emitStatus(stage.id, `Spawning ${stage.agent} for stage '${stage.id}'.`);
     const outputPath = resolve(artifactDir, `${stage.id}.yaml`);
-    const prompt = buildStageAgentPrompt({
+    const basePrompt = buildStageAgentPrompt({
       stage,
       projectRoot,
       host,
       taskPrompt,
       ctx,
       outputSchema: stage.agent === "researcher" ? "Research" : stage.agent,
-    outputPath: runMode === "host" ? outputPath : undefined
-  });
+      outputPath: runMode === "host" ? outputPath : undefined
+    });
 
-    let rawOutput: string;
-    if (localAgentRunner) {
-      if (!localAgentRunner) {
-        throw new CliError(`No local agent runner configured for stage '${stage.id}'.`, {
-          code: "agent_spawn_failed"
-        });
-      }
-      rawOutput = (
-        await localAgentRunner.invoke({
-          projectRoot,
-          workingDirectory: projectRoot,
-          agent: stage.agent,
-          prompt,
-          timeoutMs: 300_000,
-          addDirs: [artifactDir],
-          outputSchemaPath: resolveArtifactSchemaPath(stage.agent, stage.agent === "researcher" ? "Research" : stage.agent),
-          expectedOutputPath: outputPath,
-          tracePrefixPath: resolve(dirname(artifactDir), "host", `${stage.id}-${localAgentRunner.host}`)
-        })
-      ).content;
-    } else {
-      const reqId = nextRequestId();
-      emitProtocol(
-        createLineupRequest({
-          method: "agent/spawn",
-          id: reqId,
-          params: {
-            runId,
-            stageId: stage.id,
+    const schemaLabel = stage.agent === "researcher" ? "Research" : stage.agent;
+    let prompt = basePrompt;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let rawOutput: string;
+      if (localAgentRunner) {
+        rawOutput = (
+          await localAgentRunner.invoke({
+            projectRoot,
+            workingDirectory: projectRoot,
             agent: stage.agent,
             prompt,
-            inputs: selectStageInput(stage, ctx),
-            outputs: {
-              schema: stage.agent === "researcher" ? "Research" : stage.agent,
-              path: outputPath
-            },
             timeoutMs: 300_000,
-            retryAttempt: 0
-          }
-        })
-      );
-      rawOutput = await waitForResponseFile(outputPath, `${stage.id} response`, 300_000);
-    }
+            addDirs: [artifactDir],
+            outputSchemaPath: resolveArtifactSchemaPath(stage.agent, schemaLabel),
+            expectedOutputPath: outputPath,
+            tracePrefixPath: resolve(dirname(artifactDir), "host", `${stage.id}-${localAgentRunner.host}`)
+          })
+        ).content;
+      } else {
+        const reqId = nextRequestId();
+        emitProtocol(
+          createLineupRequest({
+            method: "agent/spawn",
+            id: reqId,
+            params: {
+              runId,
+              stageId: stage.id,
+              agent: stage.agent,
+              prompt,
+              inputs: selectStageInput(stage, ctx),
+              outputs: {
+                schema: schemaLabel,
+                path: outputPath
+              },
+              timeoutMs: 300_000,
+              retryAttempt: attempt
+            }
+          })
+        );
+        rawOutput = await waitForResponseFile(outputPath, `${stage.id} response`, 300_000);
+      }
 
-    let repaired = repairYamlOutput(rawOutput).content;
-    if (stage.agent === "researcher") {
-      repaired = normalizeResearchArtifact(repaired, taskPrompt, outputPath);
-    }
-    if (stage.agent === "teacher") {
-      repaired = coerceTeacherAgentOutput(repaired, stage.id);
-    }
-    writeFileSync(outputPath, repaired, "utf8");
-    validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, repaired, emitStatus, validateOutputs);
+      try {
+        let repaired = repairYamlOutput(rawOutput).content;
+        if (stage.agent === "researcher") {
+          repaired = normalizeResearchArtifact(repaired, taskPrompt, outputPath);
+        }
+        if (stage.agent === "teacher") {
+          repaired = coerceTeacherAgentOutput(repaired, stage.id);
+        }
+        writeFileSync(outputPath, repaired, "utf8");
+        const parsed = parseStructuredStageArtifact(
+          stage.agent as AgentOutputKind,
+          repaired,
+          outputPath,
+          validateOutputs
+        );
+        assertDeclaredStageOutputs(stage, parsed, outputPath);
+        const outputs = {
+          ...Object.fromEntries(Object.keys(resolveEffectiveStageOutputs(stage)).map((key) => [key, parsed[key]])),
+          artifactPath: outputPath
+        };
 
-    const parsed = parseRestrictedYaml(repaired, outputPath) as Record<string, unknown>;
-    const outputs = {
-      ...Object.fromEntries(Object.keys(stage.outputs ?? {}).map((key) => [key, parsed[key]])),
-      artifactPath: outputPath
-    };
+        emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
+        return { id: stage.id, status: "complete", outputs };
+      } catch (error) {
+        if (stage.agent === "teacher" || attempt === 1) {
+          throw error;
+        }
 
-    emitStatus(stage.id, `Completed stage '${stage.id}'.`, true);
-    return { id: stage.id, status: "complete", outputs };
+        emitStatus(stage.id, "Agent returned non-structured output. Retrying with stricter instructions.");
+        prompt = buildStructuredArtifactRetryPrompt(basePrompt, rawOutput, schemaLabel);
+      }
+    }
   }
 
   if (stage.type === "reasoning") {
