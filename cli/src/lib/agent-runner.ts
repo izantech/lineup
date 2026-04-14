@@ -467,6 +467,7 @@ async function runSpawnedCommand(input: {
     let stderr = "";
     let timedOut = false;
     let completedFromExpectedOutput = false;
+    let settled = false;
     let timer: NodeJS.Timeout | undefined;
     let expectedOutputPoller: NodeJS.Timeout | undefined;
     let expectedOutputKillTimer: NodeJS.Timeout | undefined;
@@ -483,8 +484,36 @@ async function runSpawnedCommand(input: {
       }
     };
 
+    const settleResolve = (result: LocalAgentInvocationResult): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      if (expectedOutputPoller) {
+        clearInterval(expectedOutputPoller);
+        expectedOutputPoller = undefined;
+      }
+      resolve(result);
+    };
+
+    const settleReject = (error: Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearPendingTimers();
+      reject(error);
+    };
+
     if (input.timeoutMs && input.timeoutMs > 0) {
       timer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
         timedOut = true;
         child.kill("SIGTERM");
         setTimeout(() => child.kill("SIGKILL"), 1_000).unref();
@@ -503,6 +532,11 @@ async function runSpawnedCommand(input: {
           clearInterval(expectedOutputPoller);
           expectedOutputPoller = undefined;
         }
+        settleResolve({
+          host: input.host,
+          content: stdout,
+          stderr
+        });
         child.kill("SIGTERM");
         expectedOutputKillTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
         expectedOutputKillTimer.unref();
@@ -519,23 +553,30 @@ async function runSpawnedCommand(input: {
     });
 
     child.on("error", (error: NodeJS.ErrnoException) => {
-      clearPendingTimers();
+      if (settled) {
+        clearPendingTimers();
+        return;
+      }
       if (error.code === "ENOENT") {
-        reject(
+        settleReject(
           new CliError(`Required command not found: ${input.command}`, {
             code: "command_not_found"
           })
         );
         return;
       }
-      reject(error);
+      settleReject(error);
     });
 
     child.on("close", (code) => {
       clearPendingTimers();
 
+      if (settled) {
+        return;
+      }
+
       if (timedOut) {
-        reject(
+        settleReject(
           new CliError(`${input.host} ${input.command} invocation timed out after ${input.timeoutMs}ms.`, {
             code: "timeout"
           })
@@ -544,7 +585,7 @@ async function runSpawnedCommand(input: {
       }
 
       if (completedFromExpectedOutput) {
-        resolve({
+        settleResolve({
           host: input.host,
           content: stdout,
           stderr
@@ -553,7 +594,7 @@ async function runSpawnedCommand(input: {
       }
 
       if ((code ?? 1) !== 0) {
-        reject(
+        settleReject(
           new CliError(
             [
               `${input.host} agent invocation failed with exit code ${code ?? 1}.`,
@@ -568,7 +609,7 @@ async function runSpawnedCommand(input: {
         return;
       }
 
-      resolve({
+      settleResolve({
         host: input.host,
         content: stdout,
         stderr

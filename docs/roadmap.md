@@ -175,9 +175,11 @@ Status:
 - mostly complete
 - installed explain coverage is now in place on Claude, Codex, and OpenCode
 - real timeout/recovery behavior is confirmed on the Lineup repo
-- remaining practical follow-up is a real Codex multi-file implementation regression found during host smoke:
-  - installed `$lineup-kick-off` on a disposable repo launched the bridge correctly, completed triage, then stalled in research with no new bridge events after seq 6 (`run_id: a1db54`)
-  - the blocked disposable run was canceled cleanly with `lineup cancel a1db54 --json`
+- the Codex-side research handoff regression found during host smoke is now fixed:
+  - prior host smoke showed a disposable run that launched the bridge correctly, completed triage, then stalled in research with no new bridge events after seq 6 (`run_id: a1db54`)
+  - the local Codex runner now resolves as soon as the expected artifact exists instead of waiting for the Codex subprocess to exit
+  - a deterministic regression test now covers the artifact-written-but-process-still-alive case
+- remaining practical follow-up is a fresh real Codex multi-file implementation rerun to confirm the original `a1db54` scenario stays green under live quota
 
 ## 5. Run And Artifact Inspection Polish
 
@@ -238,19 +240,21 @@ Status:
 - clean local install-from-source now succeeds on machines that only have a subset of supported host CLIs installed
 - package/plugin metadata and migration-facing docs are aligned with the bridge-first runtime
 - fresh local rebuild, dist smoke, and website build are green
-- remaining environment-limited follow-up is end-to-end Claude host verification on a machine with the `claude` CLI installed
+- end-to-end Claude bridge verification is now complete on a machine with the `claude` CLI installed
+- the Codex artifact handoff bug behind the research-stage bridge stall is now fixed and covered by regression test plus bridge-level shim validation
+- remaining environment-limited follow-up is a fresh live Codex multi-file rerun once quota allows it
 
 ## Recommended Next Session
 
 Start here:
 
-1. Investigate the live Codex research-stage stall on bridge-backed multi-file implementation runs
-2. Re-run full Claude host verification on a machine with the `claude` CLI installed
-3. Optional broader real-host coverage after the Codex stall is fixed
+1. Re-run the original-style live Codex multi-file bridge scenario now that artifact handoff resolves on file creation
+2. Optional broader real-host coverage after the Codex rerun is green
+3. Move on to the next roadmap item if no further Codex drift appears
 
 Concrete first step:
 
-- inspect run `a1db54`-style Codex bridge stalls in research and convert the failure mode into a reproducible test if possible
+- re-run an `a1db54`-style Codex bridge-backed multi-file implementation task and confirm research no longer stalls after the artifact is written
 
 ## Verification Checklist
 

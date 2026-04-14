@@ -194,4 +194,68 @@ setTimeout(() => process.exit(0), 5_000)
     expect(Date.now() - startedAt).toBeLessThan(4_500);
     expect(result.content).toContain("how_it_works: artifact was written before codex exited");
   });
+
+  it("does not wait for Codex shutdown once the expected artifact file exists", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-fast-return-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+
+    const fakeCodexPath = join(binDir, "codex");
+    writeFileSync(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+
+let output = ''
+const promptParts = []
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index]
+  if (arg === '-o') {
+    output = process.argv[index + 1] ?? ''
+    index += 1
+    continue
+  }
+  promptParts.push(arg)
+}
+
+const prompt = promptParts.join(' ')
+const match = prompt.match(/Create or overwrite (\\S+) with the final structured payload\\./)
+if (match) {
+  writeFileSync(match[1], \`type: research
+agent: researcher
+date: 2026-04-14
+topic: test
+status: complete
+pipeline_stage: 2
+how_it_works: artifact was written before codex shutdown
+\`)
+}
+if (output) {
+  writeFileSync(output, 'placeholder\\n')
+}
+
+process.on('SIGTERM', () => {})
+setTimeout(() => process.exit(0), 10_000)
+`,
+      "utf8"
+    );
+    chmodSync(fakeCodexPath, 0o755);
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    const runner = createLocalAgentRunner("codex");
+    const expectedOutputPath = join(tempDir, "research.yaml");
+    const startedAt = Date.now();
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "researcher",
+      prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
+      expectedOutputPath,
+      timeoutMs: 3_000
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(result.content).toContain("how_it_works: artifact was written before codex shutdown");
+  });
 });
