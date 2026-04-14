@@ -11,7 +11,7 @@ Distributed through a single CLI: `lineup`.
 
 Users typically enter Lineup in one of two ways:
 
-- directly in a terminal with `lineup run "<task>"`
+- directly in a terminal with `lineup start "<task>"` or `lineup run "<task>"`
 - from Claude/Codex/OpenCode through the installed Lineup skill
 
 In both cases, the CLI is the engine. Skills are host-native entrypoints layered on
@@ -24,8 +24,14 @@ npm install -g @izantech/lineup-cli
 ```
 
 For native implementation runs, Lineup expects the current project to have at least
-one git commit. In a new directory, `lineup init` will initialize git for you, then
-you should run `git add -A && git commit -m "Initial commit"` before the first full pipeline.
+one git commit. In a new repo, start with:
+
+```bash
+lineup start "Explain the scheduler module for onboarding"
+```
+
+`lineup start` scaffolds Lineup if needed, checks git readiness, and stops with the
+exact next command if the repo still needs its first commit.
 
 ## Manage hosts
 
@@ -46,6 +52,7 @@ lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup doctor [--json]
+lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup init [--workflow <name>] [--json]
 lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup bridge start <task> --executor-host <host> [--workflow <path>] [--tactic <name>] [--approve-plan] [--gate-timeout <seconds>] [--json]
@@ -88,15 +95,16 @@ Generated skills should prefer the bridge API:
 Keep `lineup run --mode host` for advanced/custom integrations that need the raw protocol.
 Use `lineup gate respond` only for raw host-mode consumers; generated skills should answer via `lineup bridge answer`.
 
-`lineup init` scaffolds the workflow and runtime directories and initializes a git
-repository if one does not already exist. You still need an initial commit before
-native implementation can run. Use `lineup doctor --json` to check workflow and git
-readiness before the first run.
+For first-run local usage, prefer `lineup start "<task>"`. It runs `init`-style
+scaffolding automatically, checks workflow and git readiness, and only hands off to
+the pipeline when the repo is ready. `lineup init` remains available when you want
+manual control over scaffolding.
 
 `./dev install local` is a clean replace flow: it removes the previously installed
 global CLI, clears managed host installs, installs missing CLI build dependencies if
 needed, rebuilds the CLI from source, reinstalls the global package, and regenerates
-host skills from the current working tree.
+host skills from the current working tree for detected hosts. Use `./dev install local --host all`
+to force every supported host, or `./dev install local --host codex` to target one explicitly.
 
 ### Host behavior
 
@@ -157,7 +165,7 @@ Lineup uses canonical templates plus host adapters:
 ./dev build                     # Build CLI
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
-./dev install local             # Build from source and install CLI + all host skills
+./dev install local             # Build from source and install CLI + detected host skills
 ./dev install remote            # Install latest from npm
 ./dev install clean [--purge]   # Remove CLI and host skills
 ./dev web                       # Start website dev server

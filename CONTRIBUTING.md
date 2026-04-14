@@ -35,7 +35,9 @@ To test the full install flow with your local changes:
 ./dev install local
 ```
 
-This builds the CLI from source, installs it globally, and installs skills for all hosts.
+This builds the CLI from source, installs it globally, and installs skills for the
+hosts detected on your machine. Use `./dev install local --host all` to force every
+supported host, or `./dev install local --host codex` to target one explicitly.
 It also removes the previous managed CLI/host installation first, so you are always
 testing the current source tree instead of a stale local install.
 

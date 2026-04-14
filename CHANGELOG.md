@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- First-run native entrypoint `lineup start "<task>"`, which scaffolds Lineup automatically, checks readiness, and stops with exact initial-commit guidance when needed
+- Richer bridge session UX for generated skills, including higher-signal `status` and `complete` events, reconnect-safe `session` / `pendingQuestion` / `recovery` fields, and explicit late-answer recovery guidance
+- Clearer inspection output in `lineup show`, including timing, task-wave summaries, run-to-run artifact change reporting, and concrete next-step commands
+
+### Changed
+- Generated skills now use the detached bridge API instead of supervising raw `lineup run --mode host` output directly
+- Public site copy now stays user-facing and points advanced readers to the repository docs for bridge, architecture, and integration detail
+- Local dev install flows now default to detected hosts instead of failing when one supported host CLI is missing
+
+### Fixed
+- `lineup resume --json` no longer leaks raw host-mode NDJSON before its final JSON payload
+- Resumed blocked runs now preserve `gate_timeout_seconds` so timeout recovery behaves the same after resume
+- Artifact diff inspection now includes compared hashes and paths in JSON output and clearer headers in text output
+
 ## [3.0.0] - 2026-04-13
 
 ### Added

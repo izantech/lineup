@@ -32,8 +32,8 @@ ${GREEN}${BOLD}Lineup Dev Script${NC}
 Usage: ./dev <command> [args...]
 
 ${GREEN}Install:${NC}
-  install local           Build from source and install CLI + all host skills
-  install remote          Install latest version from npm
+  install local [--host <host>|all]   Build from source and install CLI + detected host skills
+  install remote [--host <host>|all]  Install latest version from npm
   install clean           Remove CLI and host skills
   install clean --purge   Also remove custom agent config and memory
 
@@ -66,7 +66,57 @@ ${GREEN}Other:${NC}
 EOF
 }
 
+collect_install_hosts() {
+    local requested="${1:-available}"
+    local hosts=()
+
+    case "$requested" in
+        all)
+            hosts=(claude codex opencode)
+            ;;
+        claude|codex|opencode)
+            hosts=("$requested")
+            ;;
+        available|"")
+            command -v claude >/dev/null 2>&1 && hosts+=(claude)
+            command -v codex >/dev/null 2>&1 && hosts+=(codex)
+            command -v opencode >/dev/null 2>&1 && hosts+=(opencode)
+            ;;
+        *)
+            die "unknown host '$requested' — use claude, codex, opencode, or all"
+            ;;
+    esac
+
+    printf '%s\n' "${hosts[@]}"
+}
+
+install_selected_hosts() {
+    local mode="$1"
+    local root_flag=()
+    local requested_host="${2:-available}"
+    local hosts=()
+
+    while IFS= read -r host; do
+        [[ -n "$host" ]] && hosts+=("$host")
+    done < <(collect_install_hosts "$requested_host")
+
+    if [[ "$mode" == "local" ]]; then
+        root_flag=(--from-dir "$ROOT_DIR")
+    fi
+
+    if [[ ${#hosts[@]} -eq 0 ]]; then
+        echo -e "${BOLD}No supported host commands detected. Skipping host skill installation.${NC}"
+        return
+    fi
+
+    echo -e "${BOLD}Installing host skills for:${NC} ${hosts[*]}"
+    for host in "${hosts[@]}"; do
+        lineup install --host "$host" "${root_flag[@]}" --yes
+    done
+}
+
 install_local() {
+    local requested_host="${1:-available}"
     echo -e "${BOLD}Uninstalling remote CLI (keeping config)...${NC}"
     npm uninstall -g "$PKG" 2>/dev/null || true
     lineup uninstall --host all --yes 2>/dev/null || true
@@ -78,13 +128,13 @@ install_local() {
     echo -e "${BOLD}Installing CLI globally from local build...${NC}"
     npm install -g "$ROOT_DIR/cli"
 
-    echo -e "${BOLD}Installing host skills from source...${NC}"
-    lineup install --host all --from-dir "$ROOT_DIR" --yes
+    install_selected_hosts local "$requested_host"
 
     echo -e "\n${GREEN}Done (local). Version: $(lineup --cli-version)${NC}"
 }
 
 install_remote() {
+    local requested_host="${1:-available}"
     echo -e "${BOLD}Uninstalling local CLI (keeping config)...${NC}"
     npm uninstall -g "$PKG" 2>/dev/null || true
     lineup uninstall --host all --yes 2>/dev/null || true
@@ -92,8 +142,7 @@ install_remote() {
     echo -e "${BOLD}Installing latest CLI from npm...${NC}"
     npm install -g "$PKG@latest"
 
-    echo -e "${BOLD}Installing host skills...${NC}"
-    lineup install --host all --yes
+    install_selected_hosts remote "$requested_host"
 
     echo -e "\n${GREEN}Done (remote). Version: $(lineup --cli-version)${NC}"
 }
@@ -207,8 +256,27 @@ main() {
             local subcmd="${1:-}"
             shift || true
             case "$subcmd" in
-                local)  install_local ;;
-                remote) install_remote ;;
+                local|remote)
+                    local install_host="available"
+                    while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                            --host)
+                                [[ $# -ge 2 ]] || die "--host requires a value"
+                                install_host="$2"
+                                shift 2
+                                ;;
+                            *)
+                                die "unknown install option '$1' — use --host <host>|all"
+                                ;;
+                        esac
+                    done
+
+                    if [[ "$subcmd" == "local" ]]; then
+                        install_local "$install_host"
+                    else
+                        install_remote "$install_host"
+                    fi
+                    ;;
                 clean)  install_clean "$@" ;;
                 *)      die "unknown install command '$subcmd' — use local, remote, or clean" ;;
             esac

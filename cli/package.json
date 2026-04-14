@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/izantech/lineup"
   },
-  "homepage": "https://github.com/izantech/lineup",
+  "homepage": "https://lineup.izantech.app",
   "bugs": {
     "url": "https://github.com/izantech/lineup/issues"
   },
@@ -21,6 +21,7 @@
     "cli",
     "claude",
     "codex",
+    "opencode",
     "agentic"
   ],
   "main": "./dist/index.js",
