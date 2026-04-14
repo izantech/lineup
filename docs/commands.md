@@ -142,3 +142,9 @@ For native recovery:
 - failed native runs now surface the run id together with `lineup show`, `lineup logs`, and `lineup resume <run-id> --retry-failed`
 - stale runtime lock conflicts now identify the active run and suggest `lineup show <active-run>` and `lineup cancel <active-run>` before telling you to remove `.lineup/runtime.lock`
 - `lineup resume` now explains whether you are resuming a blocked run, retrying a failed stage, or continuing a canceled run, and preserves gate-timeout context when a run blocked waiting for an answer
+
+Inspection polish:
+
+- `lineup show` now prints a compact inspection summary in text mode: timings, task-wave summary when a `tasks` artifact exists, a `what changed in this run?` section, concrete `next:` commands, and artifact-specific inspection commands
+- `lineup show --watch` exits as soon as a run becomes blocked and prints the next concrete action instead of looping forever
+- `lineup artifacts diff` now prints a short diff header with run ids and artifact hashes in text mode, and JSON output now includes the compared hashes and paths as additive metadata

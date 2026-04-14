@@ -127,7 +127,9 @@ describe("artifacts diff", () => {
     ]);
 
     await runArtifactsDiffCommand({ kind: "plan" });
-    expect(stdout.join("")).toContain("No differences");
+    const output = stdout.join("");
+    expect(output).toContain("plan diff: run-1 (abc) -> run-2 (abc)");
+    expect(output).toContain("No differences found.");
   });
 
   it("shows diff when content differs", async () => {
@@ -151,7 +153,36 @@ describe("artifacts diff", () => {
 
     await runArtifactsDiffCommand({ kind: "plan" });
     const output = stdout.join("");
+    expect(output).toContain("plan diff: run-1 (abc) -> run-2 (def)");
     expect(output).toContain("old content");
     expect(output).toContain("new content");
+  });
+
+  it("includes artifact metadata in json mode", async () => {
+    const path1 = join(tempDir, "a", "artifact.yaml");
+    mkdirSync(join(tempDir, "a"), { recursive: true });
+    writeFileSync(path1, "old content\n");
+    const path2 = join(tempDir, "b", "artifact.yaml");
+    mkdirSync(join(tempDir, "b"), { recursive: true });
+    writeFileSync(path2, "new content\n");
+
+    vi.spyOn(observer, "observePipelineRuns").mockReturnValue([
+      makeRun({
+        run_id: "run-2",
+        artifacts: [{ kind: "plan", format: "yaml", sha256: "def", path: path2, exists: true }],
+      }),
+      makeRun({
+        run_id: "run-1",
+        artifacts: [{ kind: "plan", format: "yaml", sha256: "abc", path: path1, exists: true }],
+      }),
+    ]);
+
+    await runArtifactsDiffCommand({ kind: "plan", json: true });
+    const output = JSON.parse(stdout.join(""));
+    expect(output.from_sha256).toBe("abc");
+    expect(output.to_sha256).toBe("def");
+    expect(output.from_path).toBe(path1);
+    expect(output.to_path).toBe(path2);
+    expect(output.changed).toBe(true);
   });
 });

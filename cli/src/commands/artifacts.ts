@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { CliError } from "../lib/errors.js";
 import { createArtifactStore } from "../lib/artifact-store.js";
+import { formatArtifactDiffHeader } from "../lib/inspection.js";
 import { observePipelineRuns } from "../lib/observer.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import type { ArtifactKind, ObservedPipelineRun } from "../lib/types.js";
@@ -107,10 +108,21 @@ export async function runArtifactsDiffCommand(options: ArtifactsDiffOptions): Pr
 
   if (fromContent === toContent) {
     if (options.json) {
-      printJson({ from: fromRun.run_id, to: toRun.run_id, kind: options.kind, changed: false, diff: "" });
+      printJson({
+        from: fromRun.run_id,
+        to: toRun.run_id,
+        kind: options.kind,
+        changed: false,
+        from_sha256: fromArtifact.sha256,
+        to_sha256: toArtifact.sha256,
+        from_path: fromArtifact.path,
+        to_path: toArtifact.path,
+        diff: ""
+      });
       return;
     }
-    printTableLine(`No differences in "${options.kind}" between runs ${fromRun.run_id} and ${toRun.run_id}.`);
+    printTableLine(formatArtifactDiffHeader(options.kind, fromRun.run_id, toRun.run_id, fromArtifact.sha256, toArtifact.sha256));
+    printTableLine("No differences found.");
     return;
   }
 
@@ -140,9 +152,21 @@ export async function runArtifactsDiffCommand(options: ArtifactsDiffOptions): Pr
   }
 
   if (options.json) {
-    printJson({ from: fromRun.run_id, to: toRun.run_id, kind: options.kind, changed: true, diff });
+    printJson({
+      from: fromRun.run_id,
+      to: toRun.run_id,
+      kind: options.kind,
+      changed: true,
+      from_sha256: fromArtifact.sha256,
+      to_sha256: toArtifact.sha256,
+      from_path: fromArtifact.path,
+      to_path: toArtifact.path,
+      diff
+    });
     return;
   }
 
+  printTableLine(formatArtifactDiffHeader(options.kind, fromRun.run_id, toRun.run_id, fromArtifact.sha256, toArtifact.sha256));
+  printTableLine("");
   printTableLine(diff.trimEnd());
 }
