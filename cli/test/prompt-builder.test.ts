@@ -150,6 +150,8 @@ You are the architect body.
 
     expect(built.prompt).toContain("Inspect only the minimum code and config needed to answer the task");
     expect(built.prompt).toContain("This stage is read-only. Do not edit files, do not call write/edit tools, and do not run mutating shell commands.");
+    expect(built.prompt).toContain("Treat the task as a tiny smoke run, not a workspace-wide investigation.");
+    expect(built.prompt).toContain("Prefer direct inspection of the likely source files over repeated search loops or broad workspace globbing.");
     expect(built.prompt).not.toContain("## Context-Efficient Research Protocol");
   });
 

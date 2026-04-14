@@ -821,17 +821,18 @@ process.exit(0)
 import { existsSync, appendFileSync, writeFileSync } from 'node:fs'
 
 const prompt = process.argv.slice(2).join(' ')
+const hasJsonOutputFormat = process.argv.includes('--output-format') && process.argv.includes('json')
 const logPath = process.env.LINEUP_TEST_PROMPT_LOG
 if (logPath) {
-  appendFileSync(logPath, \`PROMPT: \${prompt}\\n\`)
+  appendFileSync(logPath, \`PROMPT: \${prompt}\\nOUTPUT_FORMAT_JSON: \${hasJsonOutputFormat}\\n\`)
 }
 
 const isFormatter = prompt.includes('Convert the following draft into a JSON value that matches the provided schema.')
 const markerPath = process.env.HOME ? \`\${process.env.HOME}/.claude-ollama-draft-first\` : '.claude-ollama-draft-first'
 
 if (!existsSync(markerPath)) {
-  if (isFormatter) {
-    process.stderr.write('formatter should not be first\\n')
+  if (!hasJsonOutputFormat) {
+    process.stderr.write('draft pass should use JSON output mode\\n')
     process.exit(1)
   }
 
@@ -962,6 +963,63 @@ process.exit(child.status ?? 0)
       process.env.HOME = originalHome;
       process.env.USERPROFILE = originalUserProfile;
       process.env.LINEUP_TEST_PROMPT_LOG = originalPromptLog;
+    }
+  });
+
+  it("falls back to the Claude env transport when the Ollama wrapper exits without output", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-empty-wrapper-"));
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: qwen3-coder:30b\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+if (process.env.ANTHROPIC_AUTH_TOKEN === 'ollama') {
+  process.stdout.write('hi\\n')
+}
+process.exit(0)
+`
+    );
+
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+process.exit(0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "researcher",
+        prompt: "Reply with just hi",
+        timeoutMs: 2_000
+      });
+
+      expect(result.content.trim()).toBe("hi");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
     }
   });
 });

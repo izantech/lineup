@@ -1007,15 +1007,20 @@ function buildStageAgentPrompt(input: {
 function buildOpenCodeResearchPromptInstructions(stage: WorkflowStage): string {
   const lines = [
     "OpenCode research contract:",
+    "- Stay bounded to the tiny smoke task or the explicitly requested feature.",
+    "- Do not perform broad workspace globbing or repeated search sweeps.",
     "- Emit exactly one YAML Research document.",
     "- Do not wrap the response in markdown, prose, code fences, or commentary.",
     "- This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.",
+    "- Do not make the requested code change during research. Only inspect and report.",
     "- Keep the document structurally complete and directly usable.",
     "- Return only the final YAML payload."
   ];
 
   if (stage.outputs && Object.keys(stage.outputs).length > 0) {
     lines.push("- Fill every declared output field exactly once.");
+  } else {
+    lines.push("- If no outputs are declared, still return a single valid Research document with the standard fields.");
   }
 
   return lines.join("\n");
@@ -1027,6 +1032,7 @@ function buildOpenCodeStageToolInstructions(stage: WorkflowStage): string {
     "- Use lower-case OpenCode tool names only: `bash`, `read`, `grep`, `glob`, `edit`, `write`, `webfetch`, `task`, `skill`.",
     "- There is no dedicated `ls` tool. For file discovery, prefer `glob` and use `bash` for directory listing when needed.",
     "- For file reading, use `read`.",
+    "- `read` output is rendered for display. When reusing file contents in a later `edit`, copy only the raw file text and never include line numbers or `(End of file ...)` wrappers in `oldString`.",
     "- For text search, use `grep`.",
     "- Use `webfetch` only when you already have a URL. Do not request a separate web-search tool."
   ];
@@ -1068,6 +1074,7 @@ function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput:
     "",
     "Previous output was invalid because it did not produce exactly one YAML Research document.",
     "Rewrite the same facts into one YAML document only.",
+    "Stay bounded to the requested task and do not expand into repository-wide exploration.",
     "Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.",
     "Do not call edit, write, or mutating bash commands while retrying this research stage.",
     "Use the declared Research schema fields exactly once and keep the payload directly parseable.",
@@ -1175,6 +1182,13 @@ function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record
   }
 
   const doc = { ...(payload as Record<string, unknown>) };
+  const normalizedWhatFound = normalizeResearchWhatFound(doc.what_found);
+  if (normalizedWhatFound === null) {
+    return null;
+  }
+  if (normalizedWhatFound) {
+    doc.what_found = normalizedWhatFound;
+  }
   const today = new Date().toISOString().slice(0, 10);
   doc.type = "research";
   doc.agent = "researcher";
@@ -1183,6 +1197,42 @@ function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record
   doc.status = "complete";
   doc.pipeline_stage = doc.pipeline_stage ?? 2;
   return doc;
+}
+
+function normalizeResearchWhatFound(value: unknown): Record<string, unknown> | null | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  if (value.length === 0) {
+    return null;
+  }
+
+  const keyFiles = value.map((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return null;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const path = typeof record.path === "string" ? record.path.trim() : "";
+    const content = typeof record.content === "string" ? record.content.trim() : "";
+    if (!path || !content) {
+      return null;
+    }
+
+    return {
+      path,
+      description: content
+    };
+  });
+
+  if (keyFiles.some((entry) => entry === null)) {
+    return null;
+  }
+
+  return {
+    key_files: keyFiles
+  };
 }
 
 function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string): string {

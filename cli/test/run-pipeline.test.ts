@@ -573,6 +573,92 @@ gaps:
     }
   });
 
+  it("normalizes array-shaped research findings into a structured what_found object", async () => {
+    const projectRoot = join(tempDir, "project-host-research-array");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-array
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      setTimeout(() => {
+        writeFileSync(
+          join(projectRoot, ".lineup", ".runs", "hostra", "artifacts", "research.yaml"),
+          `type: research
+agent: researcher
+date: 2026-04-15
+topic: host research handoff
+status: complete
+pipeline_stage: research
+what_found:
+  - path: cli/src/lib/run-pipeline.ts
+    content: Normalizes malformed research artifacts into structured objects.
+  - path: cli/test/run-pipeline.test.ts
+    content: Proves array-shaped findings recover into key_files entries.
+how_it_works: Reads the generated artifact.
+constraints:
+  git: required
+gaps:
+  follow_up: []
+`,
+          "utf8"
+        );
+      }, 50);
+
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "host"
+        },
+        {
+          runId: "hostra"
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        what_found: {
+          key_files: [
+            {
+              path: "cli/src/lib/run-pipeline.ts",
+              description: "Normalizes malformed research artifacts into structured objects."
+            },
+            {
+              path: "cli/test/run-pipeline.test.ts",
+              description: "Proves array-shaped findings recover into key_files entries."
+            }
+          ]
+        },
+        how_it_works: "Reads the generated artifact."
+      });
+      const artifact = String(result.stageResults.get("research")?.outputs.artifactPath);
+      expect(readFileSync(artifact, "utf8")).toContain("key_files:");
+      expect(readFileSync(artifact, "utf8")).not.toContain("content:");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("runs plan, implement, and verify through the local human agent runner", async () => {
     const projectRoot = join(tempDir, "project-human-runner");
     writeTemplatesTo(projectRoot);
@@ -1002,6 +1088,8 @@ gaps:
       expect(prompts[0]).toContain("Emit exactly one YAML Research document.");
       expect(prompts[0]).toContain("Do not wrap the response in markdown, prose, code fences, or commentary.");
       expect(prompts[0]).toContain("This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.");
+      expect(prompts[0]).toContain("Do not make the requested code change during research. Only inspect and report.");
+      expect(prompts[0]).toContain("When reusing file contents in a later `edit`, copy only the raw file text");
       expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
       expect(prompts[1]).toContain("Rewrite the same facts into one YAML document only.");
       expect(prompts[1]).toContain("Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.");
@@ -1099,6 +1187,7 @@ gaps:
       expect(prompts).toHaveLength(2);
       expect(prompts[1]).toContain("OpenCode research contract:");
       expect(prompts[1]).toContain("Emit exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Do not make the requested code change during research. Only inspect and report.");
       expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
       expect(prompts[1]).toContain("Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.");
       expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
@@ -1297,6 +1386,7 @@ gaps:
       expect(prompts).toHaveLength(2);
       expect(prompts[1]).toContain("OpenCode research contract:");
       expect(prompts[1]).toContain("Emit exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Do not make the requested code change during research. Only inspect and report.");
       expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
       expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
       expect(result.stageResults.get("research")?.outputs).toMatchObject({

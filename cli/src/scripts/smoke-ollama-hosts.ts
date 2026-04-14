@@ -567,7 +567,7 @@ function waitForBridgeCompletion(repoDir: string, homeDir: string, runId: string
   let cursor = 0;
   let lastPayload: BridgeEventsPayload | null = null;
   const deadline = Date.now() + 10 * 60 * 1000;
-  const noProgressDeadlineMs = 90 * 1000;
+  const noProgressDeadlineMs = 5 * 60 * 1000;
   let lastProgressAt = Date.now();
   const debugPaths = resolveRunDebugPaths(repoDir, runId);
   let lastFileActivity = captureFileActivity(trackedRunFiles(debugPaths));

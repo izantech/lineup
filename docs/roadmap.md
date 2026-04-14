@@ -183,22 +183,37 @@ Status:
 
 ### Ollama Host Stabilization
 
-Latest live Ollama validation on `qwen3.5:9b` is still failing, but the failure
-classes are now instrumented and no longer conflated:
+Latest live Ollama validation is split into two layers:
+
+- `qwen3.5:9b` is not a reliable validation model for the compatibility
+  endpoints exercised by Claude/OpenCode in this setup, so it should not be
+  treated as the primary real-host acceptance target right now
+- `qwen3-coder:30b` is the current viable local validation model and is the
+  right baseline for ongoing smoke work
+
+Failure classes are now instrumented and no longer conflated:
 
 - Claude:
-  - both the `ollama launch claude` lane and the Anthropic-compatible env
-    fallback lane stall inside the strict research invocation
-  - the host trace records only a `spawn` event
-  - there is no stdout, no stderr, no close event, and no research artifact
+  - structured runs now go draft-first, then strict formatter
+  - if the headless `ollama launch claude` wrapper exits with empty output, the
+    runner now retries automatically through the Anthropic-compatible env lane
+  - a preserved `qwen3-coder:30b` run (`4ebd39`) proves the env lane can
+    produce a valid `research.yaml`
+  - the latest `0868fe` rerun still times out at the 300000ms invocation
+    boundary, so the blocker is now env-lane completion time/reliability
 - OpenCode:
   - the process starts and logs its one-time SQLite migration
-  - after startup it produces no stdout, no artifact, and no process exit
+  - it is past the old provider-selection error, but still drifts or emits
+    malformed research output on some runs
+  - prompt/tool guidance is now tighter about read-only research, bounded file
+    inspection, and not pasting rendered `read` output back into edits
 - Codex:
   - the process starts on `provider: ollama`
   - stderr shows active reasoning and tool planning
-  - no research artifact is written, so the bridge sees no stage progress even
-    though the host is active
+  - the runner watches both the final artifact path and Codex's direct `-o`
+    output path
+  - research normalization now repairs the array-shaped `what_found` form that
+    local models can emit
 
 Current instrumentation:
 
@@ -219,6 +234,8 @@ Current instrumentation:
 - Ollama-backed researcher stages can use a compact host-specific prompt body,
   and the local smoke lane now uses a deterministic tiny-repo task instead of a
   generic freeform smoke request
+- the smoke runner no-progress deadline is now 5 minutes so slow local-model
+  turns are not cut off immediately after the env fallback
 - pre-stage structured artifacts are now stricter:
   - malformed/non-object YAML gets one stricter retry
   - researcher stages without explicit workflow outputs receive default required
@@ -228,6 +245,9 @@ Current instrumentation:
     malformed first artifact cannot satisfy the retry with stale output
 - OpenCode research prompts now explicitly mark the stage as read-only and
   require exactly one YAML Research document
+- OpenCode research guidance now explicitly forbids making the requested code
+  change during research and warns that `read` output is display-rendered, not
+  edit-ready raw text
 
 Comprehensive fix plan:
 
@@ -245,14 +265,18 @@ Comprehensive fix plan:
    - completed:
      - replace strict-schema-first execution with a draft-first plus strict
        formatter flow for Ollama-backed Claude structured runs
+     - fall back automatically to the Anthropic-compatible env lane when the
+       headless wrapper returns empty output
    - remaining:
-     - build a direct repro for the current draft-mode hang
-     - try a narrower draft transport such as JSON-mode draft output before
-       changing the final validation contract again
+     - decide whether the env lane needs a longer per-invocation timeout or a
+       narrower direct repro that proves where the draft call spends time on
+       `qwen3-coder:30b`
 3. OpenCode stabilization
    - completed:
      - tighten the research prompt to require exactly one YAML Research document
      - make the research contract explicitly read-only
+     - forbid performing the requested code change during research
+     - warn against reusing rendered `read` output inside `edit.oldString`
      - fix retry-path stale artifact reuse before host reinvocation
    - remaining:
      - reproduce the current `opencode run --pure --format json --model lineup-ollama/<model>`
@@ -267,6 +291,8 @@ Comprehensive fix plan:
      - watch both the final artifact path and the Codex `-o` output path
      - tighten the smoke task and researcher prompt so the host sees a small,
        deterministic target
+     - normalize array-shaped `what_found` entries into structured `key_files`
+       so one common local-model artifact shape no longer fails validation
    - remaining:
      - rerun Codex on top of the current Claude/OpenCode retry-hardening branch
      - tighten the research artifact contract so the local model actually writes

@@ -92,9 +92,12 @@ npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --mo
 
 It uses the bridge contract for progress, questions, and completion. The live
 runner also tracks host trace/log/artifact file activity so active local-model
-runs are not misclassified as silent stalls. It preserves temp workspaces on
-failure or stall, and it is not part of CI. Until all hosts are green, run
-per-host smoke lanes instead of `--host all`.
+runs are not misclassified as silent stalls, and Claude can automatically fall
+back from the headless `ollama launch claude` wrapper path to the Anthropic-
+compatible env path when the wrapper exits without emitting a draft. It
+preserves temp workspaces on failure or stall, and it is not part of CI. Until
+all hosts are green, run per-host smoke lanes instead of `--host all`. For
+current real-host validation, prefer `qwen3-coder:30b`.
 
 Configuration is host-specific:
 

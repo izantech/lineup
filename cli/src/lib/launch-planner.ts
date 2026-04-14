@@ -20,6 +20,8 @@ export type HostLaunchPlanInput = {
   outputPath?: string
   schemaContent?: string | null
   schemaPath?: string | null
+  claudeDraftJsonOutput?: boolean
+  claudeForceEnvFallback?: boolean
   env?: NodeJS.ProcessEnv
   homeDir?: string
   ollama?: OllamaConfig | null
@@ -106,7 +108,7 @@ function buildClaudeDirectArgs(input: HostLaunchPlanInput, model: string): strin
     "-p",
     "--bare",
     "--output-format",
-    input.schemaContent ? "json" : "text",
+    input.schemaContent || input.claudeDraftJsonOutput ? "json" : "text",
     "--permission-mode",
     "bypassPermissions",
     ...uniqueDirs([input.projectRoot, input.workingDirectory, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
@@ -238,7 +240,7 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
   if (input.host === "claude") {
     const directArgs = buildClaudeDirectArgs(input, "")
 
-    if (strategy === "launch" && commandExists("ollama", env)) {
+    if (!input.claudeForceEnvFallback && strategy === "launch" && commandExists("ollama", env)) {
       return {
         host: input.host,
         strategy,

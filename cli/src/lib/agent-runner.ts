@@ -372,6 +372,8 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
     prompt: string;
     schemaContent: string | null;
     traceSuffix: string;
+    claudeDraftJsonOutput?: boolean;
+    claudeForceEnvFallback?: boolean;
   }): Promise<LocalAgentInvocationResult> => {
     const launchPlan = planHostLaunch({
       host,
@@ -381,7 +383,9 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       prompt: attempt.prompt,
       timeoutMs: input.timeoutMs,
       addDirs: input.addDirs,
-      schemaContent: attempt.schemaContent
+      schemaContent: attempt.schemaContent,
+      claudeDraftJsonOutput: attempt.claudeDraftJsonOutput ?? false,
+      claudeForceEnvFallback: attempt.claudeForceEnvFallback ?? false
     });
 
     const useNeutralCwd = launchPlan.integration === "ollama-launch" || launchPlan.integration === "ollama-env";
@@ -399,6 +403,19 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
         tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
       });
       const fileOutput = readFileIfPresent(input.expectedOutputPath);
+      const emittedContent = fileOutput ?? result.content;
+      const isEmptyEmission = emittedContent.trim().length === 0;
+      if (
+        isEmptyEmission &&
+        launchPlan.integration === "ollama-launch" &&
+        !attempt.claudeForceEnvFallback
+      ) {
+        return runClaudeAttempt({
+          ...attempt,
+          traceSuffix: `${attempt.traceSuffix}-env`,
+          claudeForceEnvFallback: true
+        });
+      }
       if (fileOutput && !attempt.schemaContent) {
         return {
           host: result.host,
@@ -411,12 +428,12 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       }
 
       const structured =
-        parseLocalAgentStructuredOutput(fileOutput ?? result.content) ??
+        parseLocalAgentStructuredOutput(emittedContent) ??
         (await formatStructuredOutputWithClaude({
           projectRoot: input.projectRoot,
           workingDirectory: input.workingDirectory,
           agent: input.agent,
-          rawDraft: fileOutput ?? result.content,
+          rawDraft: emittedContent,
           schemaContent: attempt.schemaContent,
           timeoutMs: input.timeoutMs,
           tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
@@ -444,7 +461,8 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
     const draftResult = await runClaudeAttempt({
       prompt: input.prompt,
       schemaContent: null,
-      traceSuffix: "draft"
+      traceSuffix: "draft",
+      claudeDraftJsonOutput: true
     });
     const rawDraft = readFileIfPresent(input.expectedOutputPath) ?? draftResult.content;
     const structured = await formatStructuredOutputWithClaude({
@@ -492,7 +510,8 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
     return runClaudeAttempt({
       prompt: input.prompt,
       schemaContent: null,
-      traceSuffix: "draft-fallback"
+      traceSuffix: "draft-fallback",
+      claudeDraftJsonOutput: true
     });
   }
 }

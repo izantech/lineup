@@ -48,7 +48,7 @@
 - `lineup dag [--workflow <path>] [--json]`
 - `lineup waves [--run <id>] [--compact] [--json]`
 - `lineup history [--status <status>] [--limit <n>] [--json]`
-- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]` — local-only smoke lane that validates Ollama-backed Claude, Codex, and OpenCode host integrations end to end against a real local Ollama daemon; it creates an isolated temp home and repo, runs `lineup init`, `lineup doctor --json`, a deterministic tiny-repo pipeline task, and a bundled `explain` tactic task, then drives bridge questions through the bridge contract; it preserves the temp workspace on failure or stall for debugging, treats host trace/log/artifact growth as progress, and prints the exact bridge/host trace files to inspect
+- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]` — local-only smoke lane that validates Ollama-backed Claude, Codex, and OpenCode host integrations end to end against a real local Ollama daemon; it creates an isolated temp home and repo, runs `lineup init`, `lineup doctor --json`, a deterministic tiny-repo pipeline task, and a bundled `explain` tactic task, then drives bridge questions through the bridge contract; it preserves the temp workspace on failure or stall for debugging, treats host trace/log/artifact growth as progress, and prints the exact bridge/host trace files to inspect. For current local validation, prefer `qwen3-coder:30b` over `qwen3.5:9b`.
 
 ## Entry Points
 
@@ -65,7 +65,7 @@ Practical split:
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
-- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it now uses a bounded deterministic smoke task and file-activity-aware progress detection, and until all hosts are green, run it per host instead of `--host all`
+- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it now uses a bounded deterministic smoke task and file-activity-aware progress detection, automatically retries Claude through the env transport when the headless wrapper returns empty output, and until all hosts are green, run it per host instead of `--host all`
 
 ## Run Modes
 

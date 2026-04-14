@@ -217,25 +217,37 @@ The local smoke lane also uses a deterministic tiny-repo task:
 
 ## Current Live Findings
 
-Current live validation status on `qwen3.5:9b` is not green yet. The hosts are
-failing in different ways:
+Current live validation status is split by model family:
+
+- `qwen3.5:9b` is not a reliable host-validation target for Claude/OpenCode in
+  this setup because it does not consistently answer the Anthropic-compatible
+  or OpenAI-compatible compatibility endpoints that those hosts rely on.
+- `qwen3-coder:30b` is the current viable local validation target and should be
+  used for real host smoke until a smaller model proves stable on the same
+  endpoints.
+
+The hosts are still failing in different ways on the current branch state:
 
 ### Claude
 
 - the old strict-schema-first hang is no longer the current failure
 - Ollama-backed Claude research now goes draft-first, then strict formatter
-- the latest preserved run (`6c4e45` under the `QF4TIN` smoke root) shows the
-  draft pass itself stalling in env mode
-- the strict formatter pass is no longer the first blocking step
-- neutral temporary cwd isolation and the compact researcher prompt are in
-  place, but the draft host invocation still does not complete
+- headless `ollama launch claude` can return immediately with no output, so the
+  runner now retries automatically through the Anthropic-compatible env path
+- on `qwen3-coder:30b`, that env fallback can produce a valid `research.yaml`
+  after a long local-model turn; the preserved `4ebd39` run under the
+  `vm2S2E` smoke root is the current proof point
+- the latest `0868fe` run under the `ZmPYGb` smoke root still timed out at the
+  300000ms host invocation boundary, so the remaining blocker is not wrapper
+  detection anymore but draft completion time/reliability on the env lane
 
 Implication:
 
 - the remaining Claude blocker is the Ollama-backed draft invocation itself,
   not the strict schema pass
-- the next probe should change Claude draft transport mechanics, not revert the
-  strict final validation contract again
+- the runtime now has the right fallback mechanics, so the next Claude work
+  should focus on the env transport and timeout/completion profile, not on
+  reverting the strict final validation contract again
 
 ### OpenCode
 
@@ -246,6 +258,10 @@ Implication:
   drifting back into broad workspace exploration during research
 - the research prompt now explicitly says the stage is read-only and must emit
   exactly one YAML Research document
+- the prompt now also explicitly says not to perform the requested code change
+  during research and not to expand into repository-wide exploration
+- OpenCode tool guidance now warns that `read` output is display-rendered and
+  must not be pasted back into `edit.oldString`
 - the pre-stage retry loop now clears stale artifacts before retrying, so a bad
   first write cannot immediately satisfy the second attempt with old output
 
@@ -260,8 +276,12 @@ Implication:
 
 - the process starts on `provider: ollama`
 - the stderr log shows active reasoning/progress, so the host is not dead
-- no research artifact is written, and the bridge sees no stage progress even
-  after watching both the expected artifact path and Codex's direct `-o` output
+- the runner already watches both the expected artifact path and Codex's direct
+  `-o` output path
+- research normalization now repairs one common local-model artifact shape:
+  `what_found` may arrive as an array of `{ path, content }` entries and is
+  rewritten into the structured `key_files` object that the Research schema
+  expects
 - tighter researcher prompts and stricter pre-stage artifact validation did not
   eliminate the completion failure
 - Codex has not been rerun yet after the latest Claude/OpenCode-specific retry
@@ -278,7 +298,7 @@ Research assist only:
 ```yaml
 ollama:
   enabled: true
-  model: qwen3-coder
+  model: qwen3-coder:30b
   scope: research
 ```
 
@@ -287,7 +307,7 @@ True host integration with defaults:
 ```yaml
 ollama:
   enabled: true
-  model: qwen3-coder
+  model: qwen3-coder:30b
   scope: research
   host_integration:
     enabled: true
@@ -299,7 +319,7 @@ True host integration with explicit launch strategy:
 ```yaml
 ollama:
   enabled: true
-  model: qwen3-coder
+  model: qwen3-coder:30b
   scope: research
   host_integration:
     enabled: true
