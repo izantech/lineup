@@ -918,6 +918,100 @@ issues: []
     }
   });
 
+  it("makes OpenCode researcher retries demand exactly one YAML Research document", async () => {
+    const projectRoot = join(tempDir, "project-opencode-research-retry");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: opencode-research-retry
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const prompts: string[] = [];
+    let attempt = 0;
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "opencode",
+      async invoke(input) {
+        prompts.push(input.prompt);
+        attempt += 1;
+        if (attempt === 1) {
+          return {
+            host: "opencode",
+            stderr: "",
+            content: `Here is the research result.\n\`\`\`yaml\ntype: research\nagent: researcher\n\`\`\``
+          };
+        }
+
+        return {
+          host: "opencode",
+          stderr: "",
+          content: `type: research
+agent: researcher
+date: 2026-04-14
+topic: retry
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: The retry prompt produced one clean YAML Research document.
+constraints:
+  host: opencode
+gaps:
+  pending: []
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "opn002",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain("OpenCode research contract:");
+      expect(prompts[0]).toContain("Emit exactly one YAML Research document.");
+      expect(prompts[0]).toContain("Do not wrap the response in markdown, prose, code fences, or commentary.");
+      expect(prompts[0]).toContain("This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.");
+      expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Rewrite the same facts into one YAML document only.");
+      expect(prompts[1]).toContain("Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.");
+      expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
+      expect(prompts[1]).toContain("Use the declared Research schema fields exactly once and keep the payload directly parseable.");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("retries researcher stages when the first response is non-structured", async () => {
     const projectRoot = join(tempDir, "project-research-retry");
     writeTemplatesTo(projectRoot);
@@ -1003,9 +1097,112 @@ gaps:
 
       expect(result.status).toBe("success");
       expect(prompts).toHaveLength(2);
-      expect(prompts[1]).toContain("Previous output was invalid because it was not a valid structured Research payload.");
-      expect(prompts[1]).toContain("Rewrite the same facts into the exact structured payload only.");
+      expect(prompts[1]).toContain("OpenCode research contract:");
+      expect(prompts[1]).toContain("Emit exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.");
+      expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
       expect(String(result.stageResults.get("research")?.outputs.artifactPath)).toContain("/.lineup/.runs/rsrch1/artifacts/research.yaml");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("removes the previous stage artifact before retrying a malformed researcher response", async () => {
+    const projectRoot = join(tempDir, "project-research-retry-artifact-cleanup");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-retry-artifact-cleanup
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    let attempt = 0;
+    let secondAttemptSawStaleArtifact = false;
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "opencode",
+      async invoke(input) {
+        attempt += 1;
+        if (attempt === 2 && input.expectedOutputPath) {
+          secondAttemptSawStaleArtifact = existsSync(input.expectedOutputPath);
+        }
+
+        if (attempt === 1) {
+          const invalid = `what_found:\n  - README.md\nhow_it_works: invalid\nconstraints:\n  missing_value\n`;
+          if (input.expectedOutputPath) {
+            writeFileSync(input.expectedOutputPath, invalid, "utf8");
+          }
+          return {
+            host: "opencode",
+            stderr: "",
+            content: invalid
+          };
+        }
+
+        const valid = `type: research
+agent: researcher
+date: 2026-04-14
+topic: retry-cleanup
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Retry succeeded after clearing the stale artifact path.
+constraints:
+  host: opencode
+gaps:
+  pending: []
+`;
+        if (input.expectedOutputPath) {
+          writeFileSync(input.expectedOutputPath, valid, "utf8");
+        }
+        return {
+          host: "opencode",
+          stderr: "",
+          content: valid
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsrch-cleanup",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(attempt).toBe(2);
+      expect(secondAttemptSawStaleArtifact).toBe(false);
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        how_it_works: "Retry succeeded after clearing the stale artifact path."
+      });
     } finally {
       process.chdir(origCwd);
     }
@@ -1098,7 +1295,10 @@ gaps:
 
       expect(result.status).toBe("success");
       expect(prompts).toHaveLength(2);
-      expect(prompts[1]).toContain("Previous output was invalid because it was not a valid structured Research payload.");
+      expect(prompts[1]).toContain("OpenCode research contract:");
+      expect(prompts[1]).toContain("Emit exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
+      expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
       expect(result.stageResults.get("research")?.outputs).toMatchObject({
         how_it_works: "Retry converted the invalid draft into the required schema."
       });

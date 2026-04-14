@@ -799,4 +799,169 @@ process.exit(0)
       ]
     });
   });
+
+  it("uses a draft-first sequence for Ollama-backed Claude structured output runs", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-draft-first-"));
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const promptLog = join(tempDir, "claude-prompts.log");
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+import { existsSync, appendFileSync, writeFileSync } from 'node:fs'
+
+const prompt = process.argv.slice(2).join(' ')
+const logPath = process.env.LINEUP_TEST_PROMPT_LOG
+if (logPath) {
+  appendFileSync(logPath, \`PROMPT: \${prompt}\\n\`)
+}
+
+const isFormatter = prompt.includes('Convert the following draft into a JSON value that matches the provided schema.')
+const markerPath = process.env.HOME ? \`\${process.env.HOME}/.claude-ollama-draft-first\` : '.claude-ollama-draft-first'
+
+if (!existsSync(markerPath)) {
+  if (isFormatter) {
+    process.stderr.write('formatter should not be first\\n')
+    process.exit(1)
+  }
+
+  writeFileSync(markerPath, '1')
+  const match = prompt.match(/Create or overwrite (\\S+) with the final structured payload\\./)
+  if (match) {
+    writeFileSync(match[1], \`summary: draft first
+changes:
+  - file: README.md
+    action: append sentence
+    reason: Draft content was captured before strict formatting
+\`)
+  }
+  process.exit(0)
+}
+
+if (!isFormatter) {
+  process.stderr.write('strict formatter was not used after the draft pass\\n')
+  process.exit(1)
+}
+
+process.stdout.write(JSON.stringify({
+  summary: 'Claude formatted the draft after the Ollama-backed draft pass',
+  changes: [{ file: 'README.md', action: 'append sentence', reason: 'Final strict formatter preserved the contract' }]
+}))
+process.exit(0)
+`
+    );
+
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+
+const args = process.argv.slice(2)
+const separatorIndex = args.indexOf('--')
+const childArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : []
+const child = spawnSync('claude', childArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  env: process.env
+})
+
+if (child.stdout) {
+  process.stdout.write(child.stdout)
+}
+if (child.stderr) {
+  process.stderr.write(child.stderr)
+}
+process.exit(child.status ?? 0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const originalPromptLog = process.env.LINEUP_TEST_PROMPT_LOG;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    process.env.LINEUP_TEST_PROMPT_LOG = promptLog;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const expectedOutputPath = join(tempDir, "research.yaml");
+      const schemaPath = join(tempDir, "output.schema.json");
+      writeFileSync(
+        schemaPath,
+        JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              summary: { type: "string" },
+              changes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    file: { type: "string" },
+                    action: { type: "string" },
+                    reason: { type: "string" }
+                  },
+                  required: ["file", "action", "reason"]
+                }
+              }
+            },
+            required: ["summary", "changes"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "researcher",
+        prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
+        expectedOutputPath,
+        outputSchemaPath: schemaPath,
+        timeoutMs: 2_000
+      });
+
+      expect(JSON.parse(result.content)).toEqual({
+        summary: "Claude formatted the draft after the Ollama-backed draft pass",
+        changes: [
+          {
+            file: "README.md",
+            action: "append sentence",
+            reason: "Final strict formatter preserved the contract"
+          }
+        ]
+      });
+
+      const prompts = readFileSync(promptLog, "utf8");
+      expect(prompts).toContain("Create or overwrite");
+      expect(prompts).toContain("Convert the following draft into a JSON value that matches the provided schema.");
+      expect(prompts.indexOf("Create or overwrite")).toBeGreaterThanOrEqual(0);
+      expect(prompts.indexOf("Convert the following draft into a JSON value that matches the provided schema.")).toBeGreaterThan(
+        prompts.indexOf("Create or overwrite")
+      );
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      process.env.LINEUP_TEST_PROMPT_LOG = originalPromptLog;
+    }
+  });
 });

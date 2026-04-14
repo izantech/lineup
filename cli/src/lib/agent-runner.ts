@@ -256,6 +256,10 @@ export function normalizeCodexOutputSchema(schemaContent: string): string | null
   }
 }
 
+function isOllamaBackedClaudeIntegration(integration: string): boolean {
+  return integration === "ollama-launch" || integration === "ollama-env";
+}
+
 function extractStructuredPayload(raw: string): unknown {
   let parsed: { structured_output?: unknown; result?: unknown } | unknown;
   try {
@@ -434,6 +438,43 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       schemaContent: null,
       traceSuffix: "draft"
     });
+  }
+
+  const draftFirst = async (): Promise<LocalAgentInvocationResult> => {
+    const draftResult = await runClaudeAttempt({
+      prompt: input.prompt,
+      schemaContent: null,
+      traceSuffix: "draft"
+    });
+    const rawDraft = readFileIfPresent(input.expectedOutputPath) ?? draftResult.content;
+    const structured = await formatStructuredOutputWithClaude({
+      projectRoot: input.projectRoot,
+      workingDirectory: input.workingDirectory,
+      agent: input.agent,
+      rawDraft,
+      schemaContent,
+      timeoutMs: input.timeoutMs,
+      tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-draft-format` : undefined
+    });
+
+    return {
+      host: draftResult.host,
+      stderr: draftResult.stderr,
+      content: `${JSON.stringify(structured, null, 2)}\n`
+    };
+  };
+
+  if (isOllamaBackedClaudeIntegration(planHostLaunch({
+    host,
+    projectRoot: input.projectRoot,
+    workingDirectory: input.workingDirectory,
+    agent: input.agent,
+    prompt: input.prompt,
+    timeoutMs: input.timeoutMs,
+    addDirs: input.addDirs,
+    schemaContent
+  }).integration)) {
+    return draftFirst();
   }
 
   try {

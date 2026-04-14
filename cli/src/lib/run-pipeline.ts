@@ -994,11 +994,31 @@ function buildStageAgentPrompt(input: {
       "",
       "Stage context:",
       formatStageContext(input.stage, input.ctx) || "(none)",
-      ...(input.host === "opencode" ? ["", buildOpenCodeStageToolInstructions(input.stage)] : [])
+      ...(input.host === "opencode" ? ["", buildOpenCodeStageToolInstructions(input.stage)] : []),
+      ...(input.host === "opencode" && input.stage.agent === "researcher"
+        ? ["", buildOpenCodeResearchPromptInstructions(input.stage)]
+        : [])
     ].join("\n")
   });
 
   return input.host === "opencode" ? normalizeOpenCodeStagePrompt(prompt.prompt) : prompt.prompt;
+}
+
+function buildOpenCodeResearchPromptInstructions(stage: WorkflowStage): string {
+  const lines = [
+    "OpenCode research contract:",
+    "- Emit exactly one YAML Research document.",
+    "- Do not wrap the response in markdown, prose, code fences, or commentary.",
+    "- This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.",
+    "- Keep the document structurally complete and directly usable.",
+    "- Return only the final YAML payload."
+  ];
+
+  if (stage.outputs && Object.keys(stage.outputs).length > 0) {
+    lines.push("- Fill every declared output field exactly once.");
+  }
+
+  return lines.join("\n");
 }
 
 function buildOpenCodeStageToolInstructions(stage: WorkflowStage): string {
@@ -1040,6 +1060,21 @@ function normalizeOpenCodeStagePrompt(prompt: string): string {
     .replace(/\bWebFetch\b/g, "webfetch")
     .replace(/\bWebSearch\b/g, "webfetch")
     .replace(/\bNotebookEdit\b/g, "edit");
+}
+
+function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput: string): string {
+  return [
+    originalPrompt.trimEnd(),
+    "",
+    "Previous output was invalid because it did not produce exactly one YAML Research document.",
+    "Rewrite the same facts into one YAML document only.",
+    "Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.",
+    "Do not call edit, write, or mutating bash commands while retrying this research stage.",
+    "Use the declared Research schema fields exactly once and keep the payload directly parseable.",
+    "",
+    "Previous invalid output:",
+    invalidOutput.trim()
+  ].join("\n");
 }
 
 function slugifyTopic(input: string): string {
@@ -1320,6 +1355,7 @@ async function executePreStage(
     const schemaLabel = stage.agent === "researcher" ? "Research" : stage.agent;
     let prompt = basePrompt;
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      rmSync(outputPath, { force: true });
       let rawOutput: string;
       if (localAgentRunner) {
         rawOutput = (
@@ -1388,7 +1424,10 @@ async function executePreStage(
         }
 
         emitStatus(stage.id, "Agent returned non-structured output. Retrying with stricter instructions.");
-        prompt = buildStructuredArtifactRetryPrompt(basePrompt, rawOutput, schemaLabel);
+        prompt =
+          host === "opencode" && stage.agent === "researcher"
+            ? buildOpenCodeResearchRetryPrompt(basePrompt, rawOutput)
+            : buildStructuredArtifactRetryPrompt(basePrompt, rawOutput, schemaLabel);
       }
     }
   }

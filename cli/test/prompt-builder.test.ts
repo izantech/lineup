@@ -149,6 +149,7 @@ You are the architect body.
     });
 
     expect(built.prompt).toContain("Inspect only the minimum code and config needed to answer the task");
+    expect(built.prompt).toContain("This stage is read-only. Do not edit files, do not call write/edit tools, and do not run mutating shell commands.");
     expect(built.prompt).not.toContain("## Context-Efficient Research Protocol");
   });
 
