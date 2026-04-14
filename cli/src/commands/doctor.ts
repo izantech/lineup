@@ -76,7 +76,24 @@ function checkCommand(command: string): DoctorCheck {
   }
 }
 
-function buildRecommendations(workflow: DoctorCheck, gitProject: ReturnType<typeof inspectGitProject>): DoctorRecommendation[] {
+function checkHostCommand(host: string): DoctorCheck {
+  const commandCheck = checkCommand(host);
+
+  if (commandCheck.ok) {
+    return commandCheck;
+  }
+
+  return {
+    ok: false,
+    detail: `missing (install ${host} or use another supported host)`
+  };
+}
+
+function buildRecommendations(
+  workflow: DoctorCheck,
+  gitProject: ReturnType<typeof inspectGitProject>,
+  hostCommands: Record<string, DoctorCheck>
+): DoctorRecommendation[] {
   const recommendations: DoctorRecommendation[] = [];
 
   if (!workflow.ok) {
@@ -101,6 +118,18 @@ function buildRecommendations(workflow: DoctorCheck, gitProject: ReturnType<type
     });
   }
 
+  const availableHosts = Object.entries(hostCommands)
+    .filter(([, check]) => check.ok)
+    .map(([host]) => host);
+
+  if (availableHosts.length === 0) {
+    recommendations.push({
+      label: "install and configure a supported host CLI",
+      command: "install Claude Code, Codex CLI, or OpenCode, then run lineup install --host <host>",
+      detail: "Lineup needs at least one local host binary before native runs can execute"
+    });
+  }
+
   const uniqueRecommendations: DoctorRecommendation[] = [];
   const seenCommands = new Set<string>();
 
@@ -121,9 +150,9 @@ export function createDoctorReport(cwd = process.cwd()): DoctorReport {
   const workflow = resolveWorkflowCheck(cwd);
   const gitProject = inspectGitProject(cwd);
   const hostCommands = {
-    claude: checkCommand("claude"),
-    codex: checkCommand("codex"),
-    opencode: checkCommand("opencode")
+    claude: checkHostCommand("claude"),
+    codex: checkHostCommand("codex"),
+    opencode: checkHostCommand("opencode")
   };
 
   const gitRepository: DoctorCheck = gitProject.isRepository
@@ -136,7 +165,7 @@ export function createDoctorReport(cwd = process.cwd()): DoctorReport {
         ok: false,
         detail: gitProject.isRepository ? "repository has no commits yet" : "unavailable"
       };
-  const recommendations = buildRecommendations(workflow, gitProject);
+  const recommendations = buildRecommendations(workflow, gitProject, hostCommands);
 
   return {
     healthy:

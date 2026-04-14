@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -11,6 +11,7 @@ import { runInitCommand } from "../../src/commands/init.js";
 let tempDir: string;
 let stdout: string[];
 let originalCwd: string;
+let originalPath: string | undefined;
 
 beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), "lineup-doctor-"));
@@ -20,11 +21,13 @@ beforeEach(() => {
     return true;
   });
   originalCwd = process.cwd();
+  originalPath = process.env.PATH;
   process.chdir(tempDir);
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
+  process.env.PATH = originalPath;
   rmSync(tempDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -117,5 +120,35 @@ describe("doctor command", () => {
         detail: "native Lineup runs require at least one commit"
       }
     ]);
+  });
+
+  it("recommends installing a supported host when none are available", async () => {
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(join(binDir, "git"), "#!/bin/sh\nexit 0\n", "utf8");
+    writeFileSync(join(binDir, "node"), "#!/bin/sh\nexit 0\n", "utf8");
+    chmodSync(join(binDir, "git"), 0o755);
+    chmodSync(join(binDir, "node"), 0o755);
+    process.env.PATH = binDir;
+
+    await runDoctorCommand({ json: true });
+
+    const report = JSON.parse(stdout.join("")) as {
+      checks: {
+        hosts: Record<string, { ok: boolean; detail: string }>;
+        project: {
+          next_commands: Array<{ label: string; command: string; detail: string }>;
+        };
+      };
+    };
+
+    expect(report.checks.hosts.claude.detail).toContain("install claude");
+    expect(report.checks.hosts.codex.detail).toContain("install codex");
+    expect(report.checks.hosts.opencode.detail).toContain("install opencode");
+    expect(report.checks.project.next_commands).toContainEqual({
+      label: "install and configure a supported host CLI",
+      command: "install Claude Code, Codex CLI, or OpenCode, then run lineup install --host <host>",
+      detail: "Lineup needs at least one local host binary before native runs can execute"
+    });
   });
 });
