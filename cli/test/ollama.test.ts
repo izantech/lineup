@@ -51,7 +51,8 @@ describe("ollama bridge", () => {
       enabled: true,
       model: "llama3.1:8b",
       scope: "research",
-      baseUrl: "http://127.0.0.1:11434/v1"
+      baseUrl: "http://127.0.0.1:11434/v1",
+      hostIntegration: null
     };
 
     const client = createOllamaClient(config, { fetchImpl });
@@ -59,4 +60,3 @@ describe("ollama bridge", () => {
     await expect(client.chat([{ role: "user", content: "summarize" }])).resolves.toBe("summary");
   });
 });
-

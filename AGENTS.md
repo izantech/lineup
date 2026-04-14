@@ -43,6 +43,7 @@ Detailed agent-facing documentation lives in `docs/`:
 - [Architecture](docs/architecture.md) — canonical+adapter model, CLI package internals
 - [Pipeline](docs/pipeline.md) — triage optimizations, task compilation, caching, snapshots
 - [Agents](docs/agents.md) — agent definitions, Ollama appendices, config overrides, memory
+- [Ollama](docs/ollama.md) — research assist, legacy full routing, and true host integration
 - [Skills](docs/skills.md) — lean skill architecture, host command surface
 - [Tactics](docs/tactics.md) — project tactics, auto-conversion, composition
 - [Gate Protocol](docs/gate-protocol.md) — gate types, interactive mode, retry UX

@@ -33,11 +33,14 @@ Use **{{QUESTION_PRIMITIVE}}** to present categories:
 ## Ollama setup
 
 If the user chooses **Enable Ollama**:
-1. Check `ollama --version` via Bash
-2. If the user wants research-assist tool access through an Ollama MCP server, check host MCP config and offer to add it when missing; otherwise skip this step
-3. Run `ollama list` to show available models
-4. Write `{{OLLAMA_CONFIG_PATH}}` with `enabled: true`, selected model, and `scope: research` or `scope: full`
-   based on whether the user wants research-only or full runtime coverage
+1. Ask whether they want **Research assist**, **Legacy full routing**, or **True host integration**
+2. Check `ollama --version` via Bash
+3. If the user wants research-assist tool access through an Ollama MCP server, check host MCP config and offer to add it when missing; otherwise skip this step
+4. Run `ollama list` to show available models
+5. For **Research assist**, write `enabled: true`, the selected model, and `scope: research`
+6. For **Legacy full routing**, write `enabled: true`, the selected model, and `scope: full`
+7. For **True host integration**, write `enabled: true`, the selected model, keep `scope` at the user's desired appendix behavior, and also write `host_integration.enabled: true` with a strategy of `auto`, `launch`, or `managed`
+8. Remind them to run `lineup doctor --json` so host-specific Ollama readiness can be verified before the bridge starts
 
 ## Apply changes
 

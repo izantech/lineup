@@ -1,9 +1,13 @@
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import os from "node:os";
 
-import { SUPPORTED_HOSTS } from "../lib/constants.js";
+import { SUPPORTED_HOSTS, type HostName } from "../lib/constants.js";
+import { readOllamaConfig } from "../lib/config.js";
+import { LINEUP_CODEX_OLLAMA_PROFILE, codexConfigPath } from "../lib/codex-config.js";
 import { inspectGitProject } from "../lib/git.js";
 import { observeRuntimeStatus } from "../lib/observer.js";
+import { LINEUP_OPENCODE_OLLAMA_PROVIDER, opencodeConfigPath } from "../lib/opencode-config.js";
 import { printJson, printTableLine } from "../lib/output.js";
 
 export type DoctorCommandOptions = {
@@ -21,12 +25,22 @@ type DoctorRecommendation = {
   detail: string;
 };
 
+type OllamaHostCheck = {
+  mode: DoctorCheck;
+  binary: DoctorCheck;
+  readiness: DoctorCheck;
+  integration: DoctorCheck;
+};
+
+type OllamaCheck = Record<HostName, OllamaHostCheck>;
+
 export type DoctorReport = {
   healthy: boolean;
   checks: {
     git: DoctorCheck;
     node: DoctorCheck;
     hosts: Record<string, DoctorCheck>;
+    ollama: OllamaCheck;
     project: {
       workflow: DoctorCheck;
       git_repository: DoctorCheck;
@@ -40,6 +54,10 @@ export type DoctorReport = {
     };
   };
 };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function resolveWorkflowCheck(cwd = process.cwd()): DoctorCheck {
   const workflowCandidates = [
@@ -89,10 +107,124 @@ function checkHostCommand(host: string): DoctorCheck {
   };
 }
 
+function stripApiSuffix(baseUrl: string): string {
+  return baseUrl.replace(/\/$/, "").replace(/\/v1$/, "");
+}
+
+function resolveOllamaIntegrationDetail(host: HostName, strategy: "launch" | "managed", homeDir: string): DoctorCheck {
+  if (strategy === "launch") {
+    return {
+      ok: true,
+      detail: host === "claude" ? "launch wrapper with Claude env fallback" : "launch wrapper"
+    };
+  }
+
+  if (host === "codex") {
+    return {
+      ok: true,
+      detail: `managed profile '${LINEUP_CODEX_OLLAMA_PROFILE}' in ${codexConfigPath(homeDir)}`
+    };
+  }
+
+  return {
+    ok: true,
+    detail: `managed provider '${LINEUP_OPENCODE_OLLAMA_PROVIDER}' in ${opencodeConfigPath(homeDir)}`
+  };
+}
+
+function checkOllamaHost(host: HostName, cwd = process.cwd(), homeDir = os.homedir()): OllamaHostCheck {
+  const config = readOllamaConfig({
+    projectRoot: cwd,
+    homeDir,
+    host
+  });
+
+  if (!config?.hostIntegration?.enabled) {
+    return {
+      mode: { ok: true, detail: "disabled" },
+      binary: { ok: true, detail: "not required" },
+      readiness: { ok: true, detail: "not required" },
+      integration: { ok: true, detail: "disabled" }
+    };
+  }
+
+  const strategy = config.hostIntegration.strategy === "auto"
+    ? host === "claude" ? "launch" : "managed"
+    : config.hostIntegration.strategy;
+  const binary = checkCommand("ollama");
+
+  if (!binary.ok) {
+    return {
+      mode: {
+        ok: true,
+        detail: `${strategy} (${config.model} @ ${config.baseUrl})`
+      },
+      binary: {
+        ok: false,
+        detail: "missing"
+      },
+      readiness: {
+        ok: false,
+        detail: "ollama binary is required to verify host integration readiness"
+      },
+      integration: resolveOllamaIntegrationDetail(host, strategy, homeDir)
+    };
+  }
+
+  try {
+    const output = execSync("ollama list", {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5_000,
+      env: {
+        ...process.env,
+        OLLAMA_HOST: stripApiSuffix(config.baseUrl)
+      }
+    }).toString("utf8");
+
+    return {
+      mode: {
+        ok: true,
+        detail: `${strategy} (${config.model} @ ${config.baseUrl})`
+      },
+      binary: {
+        ok: true,
+        detail: "available"
+      },
+      readiness: new RegExp(`^\\s*${escapeRegExp(config.model)}(?:\\s|$)`, "m").test(output)
+        ? {
+            ok: true,
+            detail: `configured model '${config.model}' is available`
+          }
+        : {
+            ok: false,
+            detail: `configured model '${config.model}' is not listed by ollama`
+          },
+      integration: resolveOllamaIntegrationDetail(host, strategy, homeDir)
+    };
+  } catch (error) {
+    return {
+      mode: {
+        ok: true,
+        detail: `${strategy} (${config.model} @ ${config.baseUrl})`
+      },
+      binary: {
+        ok: true,
+        detail: "available"
+      },
+      readiness: {
+        ok: false,
+        detail: `ollama list failed: ${error instanceof Error ? error.message : String(error)}`
+      },
+      integration: resolveOllamaIntegrationDetail(host, strategy, homeDir)
+    };
+  }
+}
+
 function buildRecommendations(
   workflow: DoctorCheck,
   gitProject: ReturnType<typeof inspectGitProject>,
-  hostCommands: Record<string, DoctorCheck>
+  hostCommands: Record<string, DoctorCheck>,
+  ollama: OllamaCheck
 ): DoctorRecommendation[] {
   const recommendations: DoctorRecommendation[] = [];
 
@@ -130,6 +262,19 @@ function buildRecommendations(
     });
   }
 
+  for (const host of SUPPORTED_HOSTS) {
+    const check = ollama[host];
+    if (check.mode.detail === "disabled" || check.readiness.ok) {
+      continue;
+    }
+
+    recommendations.push({
+      label: `verify ${host} Ollama readiness`,
+      command: "ollama list",
+      detail: `${host} host integration is enabled, but the configured Ollama model could not be verified`
+    });
+  }
+
   const uniqueRecommendations: DoctorRecommendation[] = [];
   const seenCommands = new Set<string>();
 
@@ -145,10 +290,13 @@ function buildRecommendations(
   return uniqueRecommendations;
 }
 
-export function createDoctorReport(cwd = process.cwd()): DoctorReport {
+export function createDoctorReport(cwd = process.cwd(), homeDir = os.homedir()): DoctorReport {
   const runtime = observeRuntimeStatus();
   const workflow = resolveWorkflowCheck(cwd);
   const gitProject = inspectGitProject(cwd);
+  const ollama = Object.fromEntries(
+    SUPPORTED_HOSTS.map((host) => [host, checkOllamaHost(host, cwd, homeDir)])
+  ) as OllamaCheck;
   const hostCommands = {
     claude: checkHostCommand("claude"),
     codex: checkHostCommand("codex"),
@@ -165,7 +313,7 @@ export function createDoctorReport(cwd = process.cwd()): DoctorReport {
         ok: false,
         detail: gitProject.isRepository ? "repository has no commits yet" : "unavailable"
       };
-  const recommendations = buildRecommendations(workflow, gitProject, hostCommands);
+  const recommendations = buildRecommendations(workflow, gitProject, hostCommands, ollama);
 
   return {
     healthy:
@@ -174,13 +322,15 @@ export function createDoctorReport(cwd = process.cwd()): DoctorReport {
       workflow.ok &&
       gitRepository.ok &&
       gitHead.ok &&
-      runtime.run_count >= 0,
+      runtime.run_count >= 0 &&
+      Object.values(ollama).every((check) => check.mode.detail === "disabled" || (check.binary.ok && check.readiness.ok)),
     checks: {
       git: checkCommand("git"),
       node: checkCommand("node"),
       hosts: Object.fromEntries(
         SUPPORTED_HOSTS.map((host) => [host, hostCommands[host]])
       ),
+      ollama,
       project: {
         workflow,
         git_repository: gitRepository,
@@ -225,6 +375,13 @@ export async function runDoctorCommand(options: DoctorCommandOptions): Promise<v
   printTableLine(`node: ${report.checks.node.detail}`);
   for (const host of SUPPORTED_HOSTS) {
     printTableLine(`${host}: ${hostCommands[host].detail}`);
+  }
+  for (const host of SUPPORTED_HOSTS) {
+    const ollama = report.checks.ollama[host];
+    printTableLine(`ollama/${host}: ${ollama.mode.detail}`);
+    printTableLine(`  binary: ${ollama.binary.detail}`);
+    printTableLine(`  readiness: ${ollama.readiness.detail}`);
+    printTableLine(`  integration: ${ollama.integration.detail}`);
   }
   printTableLine(`workflow: ${report.checks.project.workflow.detail}`);
   printTableLine(`git_repository: ${report.checks.project.git_repository.detail}`);

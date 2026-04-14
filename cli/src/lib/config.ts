@@ -19,6 +19,9 @@ export type AgentName = (typeof AGENT_NAMES)[number];
 export const OLLAMA_SCOPES = ["research", "full"] as const;
 export type OllamaScope = (typeof OLLAMA_SCOPES)[number];
 
+export const OLLAMA_HOST_INTEGRATION_STRATEGIES = ["auto", "launch", "managed"] as const;
+export type OllamaHostIntegrationStrategy = (typeof OLLAMA_HOST_INTEGRATION_STRATEGIES)[number];
+
 export type AgentConfig = {
   model: ModelAlias;
   tools: string;
@@ -40,12 +43,25 @@ export type OllamaConfig = {
   model: string;
   scope: OllamaScope;
   baseUrl: string;
+  hostIntegration: OllamaHostIntegrationConfig | null;
 };
+
+export type OllamaHostIntegrationConfig = {
+  enabled: boolean;
+  strategy: OllamaHostIntegrationStrategy;
+};
+
+type OllamaConfigLayer = Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">> & {
+  hostIntegration?: Partial<OllamaHostIntegrationConfig> | null;
+  host_integration?: Partial<OllamaHostIntegrationConfig> | null;
+};
+
+type OllamaHostIntegrationLayer = Partial<OllamaHostIntegrationConfig> | null | undefined;
 
 export type LineupConfigFile = {
   models?: Partial<Record<ModelAlias, string>>;
   agents?: Partial<Record<AgentName, Partial<AgentConfig>>>;
-  ollama?: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">>;
+  ollama?: OllamaConfigLayer;
 };
 
 export type ResolveConfigOptions = {
@@ -56,7 +72,7 @@ export type ResolveConfigOptions = {
   cli?: {
     models?: Partial<Record<ModelAlias, string>>;
     agents?: Partial<Record<AgentName, Partial<AgentConfig>>>;
-    ollama?: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">>;
+    ollama?: OllamaConfigLayer;
   };
 };
 
@@ -86,7 +102,13 @@ const DEFAULT_OLLAMA: OllamaConfig = {
   enabled: false,
   model: "llama3.1:8b",
   scope: "research",
-  baseUrl: "http://127.0.0.1:11434/v1"
+  baseUrl: "http://127.0.0.1:11434/v1",
+  hostIntegration: null
+};
+
+const DEFAULT_OLLAMA_HOST_INTEGRATION: OllamaHostIntegrationConfig = {
+  enabled: false,
+  strategy: "auto"
 };
 
 const OLLAMA_APPENDIX_AGENTS = new Set<AgentName>(["researcher", "architect"]);
@@ -101,6 +123,49 @@ function isMemoryScope(value: unknown): value is MemoryScope {
 
 function isOllamaScope(value: unknown): value is OllamaScope {
   return typeof value === "string" && (OLLAMA_SCOPES as readonly string[]).includes(value);
+}
+
+function isOllamaHostIntegrationStrategy(value: unknown): value is OllamaHostIntegrationStrategy {
+  return typeof value === "string" && (OLLAMA_HOST_INTEGRATION_STRATEGIES as readonly string[]).includes(value);
+}
+
+function readHostIntegrationLayer(raw: unknown): Partial<OllamaHostIntegrationConfig> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+
+  const candidate = raw as Record<string, unknown>;
+  const hostIntegration: Partial<OllamaHostIntegrationConfig> = {};
+
+  if (typeof candidate.enabled === "boolean") {
+    hostIntegration.enabled = candidate.enabled;
+  }
+
+  if (isOllamaHostIntegrationStrategy(candidate.strategy)) {
+    hostIntegration.strategy = candidate.strategy;
+  }
+
+  return hostIntegration;
+}
+
+function mergeHostIntegration(...layers: OllamaHostIntegrationLayer[]): OllamaHostIntegrationConfig | null {
+  const merged = {
+    ...DEFAULT_OLLAMA_HOST_INTEGRATION
+  };
+
+  for (const layer of layers) {
+    if (!layer) {
+      continue;
+    }
+    if (typeof layer.enabled === "boolean") {
+      merged.enabled = layer.enabled;
+    }
+    if (isOllamaHostIntegrationStrategy(layer.strategy)) {
+      merged.strategy = layer.strategy;
+    }
+  }
+
+  return merged.enabled ? merged : null;
 }
 
 function parseYamlObject(raw: string, source: string): Record<string, unknown> | null {
@@ -184,7 +249,7 @@ function readProjectConfig(filePath: string): { config: LineupConfigFile; warnin
 function readOllamaLayer(
   filePath: string,
   fromProjectConfig: boolean
-): { override: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">>; warnings: string[] } {
+): { override: OllamaConfigLayer; warnings: string[] } {
   if (!existsSync(filePath)) {
     return { override: {}, warnings: [] };
   }
@@ -196,7 +261,7 @@ function readOllamaLayer(
     }
 
     const raw = fromProjectConfig ? (parsed.ollama as Record<string, unknown> | undefined) ?? {} : parsed;
-    const override: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">> = {};
+    const override: OllamaConfigLayer = {};
 
     if (typeof raw.enabled === "boolean") {
       override.enabled = raw.enabled;
@@ -212,6 +277,13 @@ function readOllamaLayer(
 
     if (typeof raw.baseUrl === "string" && raw.baseUrl.trim().length > 0) {
       override.baseUrl = normalizeBaseUrl(raw.baseUrl);
+    }
+
+    const hostIntegration = readHostIntegrationLayer((fromProjectConfig
+      ? (raw.host_integration as Record<string, unknown> | undefined) ?? (raw.hostIntegration as Record<string, unknown> | undefined)
+      : (raw.host_integration as Record<string, unknown> | undefined) ?? (raw.hostIntegration as Record<string, unknown> | undefined)) ?? null);
+    if (Object.keys(hostIntegration).length > 0) {
+      override.hostIntegration = hostIntegration;
     }
 
     return { override, warnings: [] };
@@ -272,11 +344,11 @@ function readUserAgentOverride(filePath: string, agent: AgentName): { override: 
 
 function readGlobalEnvConfig(env: NodeJS.ProcessEnv): {
   routing: Partial<Record<ModelAlias, string>>;
-  ollama: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">>;
+  ollama: OllamaConfigLayer;
   warnings: string[];
 } {
   const routing: Partial<Record<ModelAlias, string>> = {};
-  const ollama: Partial<Pick<OllamaConfig, "enabled" | "model" | "scope" | "baseUrl">> = {};
+  const ollama: OllamaConfigLayer = {};
   const warnings: string[] = [];
 
   for (const alias of MODEL_ALIASES) {
@@ -306,6 +378,23 @@ function readGlobalEnvConfig(env: NodeJS.ProcessEnv): {
   const ollamaBaseUrl = env.LINEUP_OLLAMA_BASE_URL ?? env.OLLAMA_HOST;
   if (ollamaBaseUrl?.trim()) {
     ollama.baseUrl = normalizeBaseUrl(ollamaBaseUrl);
+  }
+
+  const ollamaHostIntegrationEnabled = env.LINEUP_OLLAMA_HOST_INTEGRATION_ENABLED;
+  if (ollamaHostIntegrationEnabled !== undefined) {
+    ollama.hostIntegration = {
+      ...(ollama.hostIntegration ?? {}),
+      enabled: /^(1|true|yes|on)$/i.test(ollamaHostIntegrationEnabled)
+    };
+  }
+
+  const ollamaHostIntegrationStrategy = env.LINEUP_OLLAMA_HOST_INTEGRATION_STRATEGY;
+  const normalizedHostIntegrationStrategy = ollamaHostIntegrationStrategy?.trim();
+  if (isOllamaHostIntegrationStrategy(normalizedHostIntegrationStrategy)) {
+    ollama.hostIntegration = {
+      ...(ollama.hostIntegration ?? {}),
+      strategy: normalizedHostIntegrationStrategy
+    };
   }
 
   return { routing, ollama, warnings };
@@ -446,12 +535,20 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
     ...options.cli?.ollama
   };
 
+  const hostIntegrationCandidate = mergeHostIntegration(
+    userOllamaLayer.override.hostIntegration,
+    projectOllamaLayer.override.hostIntegration,
+    globalEnv.ollama.hostIntegration,
+    options.cli?.ollama?.hostIntegration
+  );
+
   const ollama = ollamaCandidate.enabled
     ? {
         enabled: true,
         model: typeof ollamaCandidate.model === "string" && ollamaCandidate.model.trim().length > 0 ? ollamaCandidate.model.trim() : DEFAULT_OLLAMA.model,
         scope: isOllamaScope(ollamaCandidate.scope) ? ollamaCandidate.scope : DEFAULT_OLLAMA.scope,
-        baseUrl: typeof ollamaCandidate.baseUrl === "string" && ollamaCandidate.baseUrl.trim().length > 0 ? normalizeBaseUrl(ollamaCandidate.baseUrl) : DEFAULT_OLLAMA.baseUrl
+        baseUrl: typeof ollamaCandidate.baseUrl === "string" && ollamaCandidate.baseUrl.trim().length > 0 ? normalizeBaseUrl(ollamaCandidate.baseUrl) : DEFAULT_OLLAMA.baseUrl,
+        hostIntegration: hostIntegrationCandidate
       }
     : null;
 
@@ -474,6 +571,10 @@ export function shouldAppendOllamaAppendix(agent: AgentName, options: ResolveCon
 
 export function isOllamaFullPipelineEnabled(options: ResolveConfigOptions = {}): boolean {
   return readOllamaConfig(options)?.scope === "full";
+}
+
+export function isOllamaHostIntegrationEnabled(options: ResolveConfigOptions = {}): boolean {
+  return Boolean(readOllamaConfig(options)?.hostIntegration?.enabled)
 }
 
 export function resolveAgentConfig(agent: AgentName, options: ResolveConfigOptions = {}): ResolvedAgentConfig {
@@ -543,6 +644,13 @@ export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConf
     ...options.cli?.ollama
   };
 
+  const hostIntegrationCandidate = mergeHostIntegration(
+    userLayer.override.hostIntegration,
+    projectLayer.override.hostIntegration,
+    globalEnv.ollama.hostIntegration,
+    options.cli?.ollama?.hostIntegration
+  );
+
   if (!merged.enabled) {
     return null;
   }
@@ -551,6 +659,7 @@ export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConf
     enabled: true,
     model: typeof merged.model === "string" && merged.model.trim().length > 0 ? merged.model.trim() : DEFAULT_OLLAMA.model,
     scope: isOllamaScope(merged.scope) ? merged.scope : DEFAULT_OLLAMA.scope,
-    baseUrl: typeof merged.baseUrl === "string" && merged.baseUrl.trim().length > 0 ? normalizeBaseUrl(merged.baseUrl) : DEFAULT_OLLAMA.baseUrl
+    baseUrl: typeof merged.baseUrl === "string" && merged.baseUrl.trim().length > 0 ? normalizeBaseUrl(merged.baseUrl) : DEFAULT_OLLAMA.baseUrl,
+    hostIntegration: hostIntegrationCandidate
   };
 }

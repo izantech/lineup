@@ -5,13 +5,36 @@ import { tmpdir } from "node:os";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runDoctorCommand } from "../../src/commands/doctor.js";
+import { createDoctorReport, runDoctorCommand } from "../../src/commands/doctor.js";
 import { runInitCommand } from "../../src/commands/init.js";
 
 let tempDir: string;
 let stdout: string[];
 let originalCwd: string;
 let originalPath: string | undefined;
+
+function writeProjectConfig(root: string, content: string): void {
+  const dir = join(root, ".lineup");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "config.yaml"), content, "utf8");
+}
+
+function writeUserOllamaConfig(homeDir: string, host: "claude" | "codex" | "opencode", content: string): void {
+  const dir =
+    host === "claude"
+      ? join(homeDir, ".claude", "lineup")
+      : host === "codex"
+        ? join(homeDir, ".codex", "lineup")
+        : join(homeDir, ".config", "opencode", "lineup");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "ollama.yaml"), content, "utf8");
+}
+
+function writeBinary(binDir: string, name: string, content: string): void {
+  const filePath = join(binDir, name);
+  writeFileSync(filePath, content, "utf8");
+  chmodSync(filePath, 0o755);
+}
 
 beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), "lineup-doctor-"));
@@ -120,6 +143,75 @@ describe("doctor command", () => {
         detail: "native Lineup runs require at least one commit"
       }
     ]);
+  });
+
+  it("does not block health when Ollama host integration is disabled", async () => {
+    const homeDir = join(tempDir, "home");
+    await runInitCommand({});
+    execSync("git init", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.email 'lineup@example.com'", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.name 'Lineup Tests'", { cwd: tempDir, stdio: "ignore" });
+    execSync("git add -A", { cwd: tempDir, stdio: "ignore" });
+    execSync("git commit -m 'Initial commit'", { cwd: tempDir, stdio: "ignore" });
+    writeProjectConfig(
+      tempDir,
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  baseUrl: http://127.0.0.1:11434/v1\n`
+    );
+
+    const report = createDoctorReport(tempDir, homeDir);
+
+    expect(report.healthy).toBe(true);
+    expect(report.checks.ollama.claude.mode.detail).toBe("disabled");
+    expect(report.checks.ollama.codex.mode.detail).toBe("disabled");
+    expect(report.checks.ollama.opencode.mode.detail).toBe("disabled");
+  });
+
+  it("fails when Codex host integration cannot verify the configured model", async () => {
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    writeBinary(
+      binDir,
+      "ollama",
+      `#!/bin/sh
+if [ "$1" = "list" ]; then
+  cat <<'EOF'
+NAME               ID              SIZE      MODIFIED
+different-model     abc123          1 GB      now
+EOF
+  exit 0
+fi
+echo "unexpected" >&2
+exit 1
+`
+    );
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    await runInitCommand({});
+    execSync("git init", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.email 'lineup@example.com'", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.name 'Lineup Tests'", { cwd: tempDir, stdio: "ignore" });
+    execSync("git add -A", { cwd: tempDir, stdio: "ignore" });
+    execSync("git commit -m 'Initial commit'", { cwd: tempDir, stdio: "ignore" });
+    writeUserOllamaConfig(
+      homeDir,
+      "codex",
+      `enabled: true\nmodel: local-qwen\nscope: research\nbaseUrl: http://127.0.0.1:11434/v1\nhost_integration:\n  enabled: true\n  strategy: managed\n`
+    );
+
+    const report = createDoctorReport(tempDir, homeDir);
+
+    expect(report.healthy).toBe(false);
+    expect(report.checks.ollama.codex.mode.detail).toContain("managed");
+    expect(report.checks.ollama.codex.binary.ok).toBe(true);
+    expect(report.checks.ollama.codex.readiness.ok).toBe(false);
+    expect(report.checks.ollama.codex.readiness.detail).toContain("local-qwen");
+    expect(report.checks.ollama.codex.integration.detail).toContain(".codex/config.toml");
+    expect(report.checks.project.next_commands).toContainEqual({
+      label: "verify codex Ollama readiness",
+      command: "ollama list",
+      detail: "codex host integration is enabled, but the configured Ollama model could not be verified"
+    });
   });
 
   it("recommends installing a supported host when none are available", async () => {

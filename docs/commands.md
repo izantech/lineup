@@ -121,7 +121,8 @@ For first-run onboarding:
 
 - `lineup start "<task>"` runs `init`-style scaffolding automatically, checks readiness, and only hands off to the native pipeline when the repo is ready
 - if the repo still needs an initial commit, `lineup start` stops with the exact `git add -A && git commit -m "Initial commit"` command and a rerun command
-- `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, and installing a supported host CLI when no local executor is available
+- `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, installing a supported host CLI when no local executor is available, and Ollama readiness when host integration is enabled for Claude, Codex, or OpenCode
+- see [Ollama](./ollama.md) for the exact `host_integration` config shape and host-specific launch behavior
 
 Before the first full native run without `lineup start`, make sure:
 

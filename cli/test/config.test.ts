@@ -120,7 +120,8 @@ describe("config resolution", () => {
       enabled: true,
       model: "cli-ollama",
       scope: "full",
-      baseUrl: "http://env-ollama:11434/v1"
+      baseUrl: "http://env-ollama:11434/v1",
+      hostIntegration: null
     });
   });
 
@@ -142,26 +143,88 @@ describe("config resolution", () => {
     expect(resolved.warnings.some((warning) => warning.includes("malformed"))).toBe(true);
   });
 
-  it("prefers project Ollama config over user config", () => {
+  it("preserves scope behavior when host_integration is absent or disabled", () => {
     root = mkdtempSync(join(tmpdir(), "tmp-config-root-"));
     home = mkdtempSync(join(tmpdir(), "tmp-config-home-"));
     writeProjectConfig(
       root,
       `ollama:\n  enabled: true\n  model: project-ollama\n  scope: full\n`
     );
-    writeUserOllamaConfig(home, "claude", `enabled: false\nmodel: user-ollama\nscope: research\n`);
+    writeUserOllamaConfig(
+      home,
+      "claude",
+      `enabled: false\nmodel: user-ollama\nscope: research\nhost_integration:\n  enabled: false\n  strategy: launch\n`
+    );
 
     const config = resolveLineupConfig({
       projectRoot: root,
       homeDir: home,
-      host: "claude"
+      host: "claude",
+      cli: {
+        ollama: {
+          enabled: true,
+          hostIntegration: {
+            enabled: false,
+            strategy: "launch"
+          }
+        }
+      }
     });
 
     expect(config.ollama).toEqual({
       enabled: true,
       model: "project-ollama",
       scope: "full",
-      baseUrl: "http://127.0.0.1:11434/v1"
+      baseUrl: "http://127.0.0.1:11434/v1",
+      hostIntegration: null
+    });
+  });
+
+  it("applies host_integration precedence across user, project, env, and cli layers", () => {
+    root = mkdtempSync(join(tmpdir(), "tmp-config-root-"));
+    home = mkdtempSync(join(tmpdir(), "tmp-config-home-"));
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: project-ollama\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: managed\n`
+    );
+    writeUserOllamaConfig(
+      home,
+      "claude",
+      `enabled: true\nmodel: user-ollama\nscope: full\nhost_integration:\n  enabled: true\n  strategy: launch\n`
+    );
+
+    const config = resolveLineupConfig({
+      projectRoot: root,
+      homeDir: home,
+      host: "claude",
+      env: {
+        LINEUP_OLLAMA_ENABLED: "true",
+        LINEUP_OLLAMA_MODEL: "env-ollama",
+        LINEUP_OLLAMA_SCOPE: "full",
+        LINEUP_OLLAMA_HOST_INTEGRATION_ENABLED: "true",
+        LINEUP_OLLAMA_HOST_INTEGRATION_STRATEGY: "launch"
+      },
+      cli: {
+        ollama: {
+          enabled: true,
+          model: "cli-ollama",
+          hostIntegration: {
+            enabled: true,
+            strategy: "auto"
+          }
+        }
+      }
+    });
+
+    expect(config.ollama).toEqual({
+      enabled: true,
+      model: "cli-ollama",
+      scope: "full",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      hostIntegration: {
+        enabled: true,
+        strategy: "auto"
+      }
     });
   });
 

@@ -5,9 +5,9 @@ import { spawn } from "node:child_process";
 import { execSync } from "node:child_process";
 
 import { SUPPORTED_HOSTS, type HostName } from "./constants.js";
-import { resolveAgentModelTarget } from "./config.js";
 import { CliError } from "./errors.js";
 import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
+import { planHostLaunch } from "./launch-planner.js";
 import { parseRestrictedYaml } from "./validation.js";
 import type { AgentRole } from "./types.js";
 
@@ -261,28 +261,24 @@ export function resolveLocalExecutionHost(preferredHost?: HostName): HostName {
 }
 
 async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
-  const modelTarget = resolveAgentModelTarget(input.agent, {
-    projectRoot: input.projectRoot,
-    host
-  });
   const schemaContent = input.outputSchemaPath ? readFileSync(input.outputSchemaPath, "utf8") : null;
-  const args = [
-    "-p",
-    "--output-format",
-    schemaContent ? "json" : "text",
-    "--permission-mode",
-    "bypassPermissions",
-    ...uniqueDirs([input.projectRoot, input.workingDirectory, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
-    ...(schemaContent ? ["--json-schema", schemaContent] : []),
-    ...(modelTarget ? ["--model", modelTarget] : []),
-    input.prompt
-  ];
+  const launchPlan = planHostLaunch({
+    host,
+    projectRoot: input.projectRoot,
+    workingDirectory: input.workingDirectory,
+    agent: input.agent,
+    prompt: input.prompt,
+    timeoutMs: input.timeoutMs,
+    addDirs: input.addDirs,
+    schemaContent
+  });
 
   const result = await runSpawnedCommand({
-    host,
-    command: "claude",
-    args,
+    host: launchPlan.host,
+    command: launchPlan.command,
+    args: launchPlan.args,
     cwd: input.workingDirectory,
+    env: launchPlan.env,
     timeoutMs: input.timeoutMs
   });
   const fileOutput = readFileIfPresent(input.expectedOutputPath);
@@ -362,38 +358,33 @@ async function formatStructuredOutputWithClaude(input: {
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
   const outputDir = mkdtempSync(path.join(os.tmpdir(), "lineup-codex-output-"));
   const outputPath = path.join(outputDir, `${input.agent}.txt`);
-  const modelTarget = resolveAgentModelTarget(input.agent, {
-    projectRoot: input.projectRoot,
-    host
-  });
   const normalizedSchema = input.outputSchemaPath
     ? normalizeCodexOutputSchema(readFileSync(input.outputSchemaPath, "utf8"))
     : null;
   const normalizedSchemaPath = normalizedSchema ? path.join(outputDir, `${input.agent}.schema.json`) : null;
+  const launchPlan = planHostLaunch({
+    host,
+    projectRoot: input.projectRoot,
+    workingDirectory: input.workingDirectory,
+    agent: input.agent,
+    prompt: input.prompt,
+    timeoutMs: input.timeoutMs,
+    addDirs: input.addDirs,
+    outputPath,
+    schemaPath: normalizedSchemaPath
+  });
 
   try {
     if (normalizedSchemaPath && normalizedSchema) {
       writeFileSync(normalizedSchemaPath, normalizedSchema, "utf8");
     }
 
-    const args = [
-      "exec",
-      "--dangerously-bypass-approvals-and-sandbox",
-      "-C",
-      input.workingDirectory,
-      ...uniqueDirs([input.projectRoot, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
-      ...(modelTarget && !["haiku", "sonnet", "opus"].includes(modelTarget) ? ["-m", modelTarget] : []),
-      ...(normalizedSchemaPath ? ["--output-schema", normalizedSchemaPath] : []),
-      "-o",
-      outputPath,
-      input.prompt
-    ];
-
     const result = await runSpawnedCommand({
-      host,
-      command: "codex",
-      args,
+      host: launchPlan.host,
+      command: launchPlan.command,
+      args: launchPlan.args,
       cwd: input.workingDirectory,
+      env: launchPlan.env,
       timeoutMs: input.timeoutMs,
       stopOnExpectedOutputPath: input.expectedOutputPath
     });
@@ -417,24 +408,22 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
 }
 
 async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
-  const modelTarget = resolveAgentModelTarget(input.agent, {
+  const launchPlan = planHostLaunch({
+    host,
     projectRoot: input.projectRoot,
-    host
+    workingDirectory: input.workingDirectory,
+    agent: input.agent,
+    prompt: input.prompt,
+    timeoutMs: input.timeoutMs,
+    addDirs: input.addDirs
   });
-  const args = [
-    "run",
-    "--dir",
-    input.workingDirectory,
-    "--dangerously-skip-permissions",
-    ...(modelTarget && !["haiku", "sonnet", "opus"].includes(modelTarget) ? ["--model", modelTarget] : []),
-    input.prompt
-  ];
 
   const result = await runSpawnedCommand({
-    host,
-    command: "opencode",
-    args,
+    host: launchPlan.host,
+    command: launchPlan.command,
+    args: launchPlan.args,
     cwd: input.workingDirectory,
+    env: launchPlan.env,
     timeoutMs: input.timeoutMs
   });
   const fileOutput = readFileIfPresent(input.expectedOutputPath);
@@ -453,13 +442,14 @@ async function runSpawnedCommand(input: {
   command: string;
   args: string[];
   cwd: string;
+  env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   stopOnExpectedOutputPath?: string;
 }): Promise<LocalAgentInvocationResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
       cwd: input.cwd,
-      env: process.env,
+      env: input.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
 

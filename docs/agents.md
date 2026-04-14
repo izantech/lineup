@@ -66,15 +66,21 @@ when the project needs to override the default role instructions.
 
 ## Ollama Integration
 
-Lineup optionally uses local Ollama-backed models. Ollama runs in two scopes:
-`research` for pre-digesting large files and fetch results, and `full` for broader
-local-agent coverage when explicitly enabled.
+Lineup optionally uses local Ollama-backed models. It supports three modes:
 
-Configuration is in `~/.claude/lineup/ollama.yaml`. When enabled, researchers can use
-`research` scope for pre-digesting large files and web fetch results, or `full` scope
-to route all Lineup agent stages through the selected host using the configured local
-model target. When unavailable, all features degrade cleanly — Ollama is never required
-for correctness.
+- **Research assist**: `scope: research`. Researchers and architects get the Ollama appendix for summarization and compression help only. Host routing does not change.
+- **Legacy full routing**: `scope: full`. Compatibility mode that preserves the existing full-stage Ollama model-target routing without enabling host-native integration.
+- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex uses a managed Ollama profile, and OpenCode uses a managed Ollama provider. `lineup doctor` verifies model availability for every configured host integration before native runs start.
+
+Configuration is host-specific:
+
+- Claude: `~/.claude/lineup/ollama.yaml`
+- Codex: `~/.codex/lineup/ollama.yaml`
+- OpenCode: `~/.config/opencode/lineup/ollama.yaml`
+
+When unavailable, all features degrade cleanly — Ollama is never required for correctness.
+
+See [Ollama](./ollama.md) for concrete config examples and host-specific behavior.
 
 ## Agent Configuration Overrides
 

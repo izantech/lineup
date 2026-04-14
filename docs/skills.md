@@ -80,6 +80,9 @@ Recommended host integration:
 - poll `lineup bridge events` for incremental updates
 - answer only `question` events with `lineup bridge answer`
 - inspect final results with the existing read-only commands after completion
+- if the repo uses Ollama research assist, keep it as an appendix-only optimization
+- if the repo uses legacy full routing or true host integration, run `lineup doctor --json` first and confirm Ollama readiness before starting the bridge
+- use [Ollama](./ollama.md) as the source of truth for `host_integration` examples and host-specific expectations
 
 Built-in CLI tactics such as `explain` are resolvable by name even outside the
 Lineup repo. `lineup tactic list` remains focused on repo-local/project tactics
