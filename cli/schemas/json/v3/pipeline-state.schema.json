@@ -24,6 +24,10 @@
       "type": "string",
       "minLength": 1
     },
+    "gate_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
     "git_tree_sha": {
       "type": "string",
       "minLength": 1

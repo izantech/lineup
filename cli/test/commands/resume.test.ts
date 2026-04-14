@@ -5,12 +5,30 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockedRunPipeline = vi.hoisted(() => vi.fn());
+const mockedCreateLocalAgentRunner = vi.hoisted(() => vi.fn());
+const mockedIsInteractive = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/lib/run-pipeline.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/lib/run-pipeline.js")>("../../src/lib/run-pipeline.js");
   return {
     ...actual,
     runPipeline: mockedRunPipeline
+  };
+});
+
+vi.mock("../../src/lib/agent-runner.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/lib/agent-runner.js")>("../../src/lib/agent-runner.js");
+  return {
+    ...actual,
+    createLocalAgentRunner: mockedCreateLocalAgentRunner
+  };
+});
+
+vi.mock("../../src/lib/prompts.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/lib/prompts.js")>("../../src/lib/prompts.js");
+  return {
+    ...actual,
+    isInteractive: mockedIsInteractive
   };
 });
 
@@ -33,6 +51,9 @@ describe("lineup resume", () => {
       return true;
     });
     mockedRunPipeline.mockReset();
+    mockedCreateLocalAgentRunner.mockReset();
+    mockedIsInteractive.mockReset();
+    mockedIsInteractive.mockReturnValue(false);
     mockedRunPipeline.mockResolvedValue({
       runId: "resume-1",
       status: "success",
@@ -113,7 +134,12 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("lineup cancel resume-blocked");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
-      fromStage: "plan-approval"
+      fromStage: "plan-approval",
+      gateTimeout: undefined,
+      mode: "host",
+      host: undefined
+    }, {
+      emitProtocolToStdout: false
     });
   });
 
@@ -149,7 +175,12 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("Run resume-failed completed successfully.");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
-      fromStage: "implement"
+      fromStage: "implement",
+      gateTimeout: undefined,
+      mode: "host",
+      host: undefined
+    }, {
+      emitProtocolToStdout: false
     });
   });
 
@@ -176,7 +207,12 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("Run resume-canceled completed successfully.");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
-      fromStage: "research"
+      fromStage: "research",
+      gateTimeout: undefined,
+      mode: "host",
+      host: undefined
+    }, {
+      emitProtocolToStdout: false
     });
   });
 
@@ -221,6 +257,7 @@ describe("lineup resume", () => {
       run_id: "resume-timeout",
       status: "blocked",
       workflow: "workflows/full.yaml",
+      gate_timeout_seconds: 5,
       current_stage: "plan-approval",
       completed_stages: ["triage", "plan"],
       artifact_hashes: {},
@@ -236,10 +273,51 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("because a gate timed out");
     expect(stdout.join("")).toContain("lineup show resume-timeout");
     expect(stdout.join("")).toContain("lineup cancel resume-timeout");
+    expect(mockedRunPipeline).toHaveBeenCalledWith({
+      workflow: "workflows/full.yaml",
+      fromStage: "plan-approval",
+      gateTimeout: 5,
+      mode: "host",
+      host: undefined
+    }, {
+      emitProtocolToStdout: false
+    });
   });
 
   it("returns null for a nonexistent run", () => {
     const loaded = loadPipelineState("nonexistent", tempDir);
     expect(loaded).toBeNull();
+  });
+
+  it("uses the local agent runner in interactive mode", async () => {
+    mockedIsInteractive.mockReturnValue(true);
+    mockedCreateLocalAgentRunner.mockReturnValue({ host: "claude" });
+
+    const state: PipelineStateRecord = {
+      apiVersion: "lineup/v3",
+      kind: "PipelineState",
+      run_id: "resume-interactive",
+      status: "canceled",
+      workflow: "workflows/full.yaml",
+      current_stage: "research",
+      artifact_hashes: {},
+      updated_at: "2026-04-12T12:00:00.000Z"
+    };
+
+    mkdirSync(lineupRunDir("resume-interactive", tempDir), { recursive: true });
+    savePipelineState(state, tempDir);
+
+    await runResumeCommand({ runId: "resume-interactive" });
+
+    expect(mockedRunPipeline).toHaveBeenCalledWith({
+      workflow: "workflows/full.yaml",
+      fromStage: "research",
+      gateTimeout: undefined,
+      mode: "human",
+      host: "claude"
+    }, {
+      emitProtocolToStdout: false,
+      localAgentRunner: { host: "claude" }
+    });
   });
 });

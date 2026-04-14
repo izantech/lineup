@@ -35,6 +35,7 @@ describe("pipeline state", () => {
     const state = defaultPipelineState({
       runId,
       workflow: workflowPath,
+      gateTimeoutSeconds: 15,
       gitTreeSha: "tree-abc123"
     });
 
@@ -49,6 +50,7 @@ describe("pipeline state", () => {
 
     expect(saved.run_id).toBe(runId);
     expect(saved.workflow).toBe(workflowPath);
+    expect(saved.gate_timeout_seconds).toBe(15);
     expect(saved.git_tree_sha).toBe("tree-abc123");
     expect(readFileSync(pipelineStateFile(runId, tempDir), "utf8")).toContain('"run_id": "run-123"');
     expect(loaded).toEqual(saved);

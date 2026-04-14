@@ -139,6 +139,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       defaultPipelineState({
         runId,
         workflow: workflowPath,
+        gateTimeoutSeconds: options.gateTimeout,
         gitTreeSha,
         status: "running"
       }),

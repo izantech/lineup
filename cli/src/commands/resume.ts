@@ -1,7 +1,9 @@
 import { execSync } from "node:child_process";
 
+import { createLocalAgentRunner } from "../lib/agent-runner.js";
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
+import { isInteractive } from "../lib/prompts.js";
 import { runPipeline } from "../lib/run-pipeline.js";
 import {
   appendPipelineCompletedStage,
@@ -53,6 +55,8 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   let fromStage: string | null;
   let mode: "resume" | "retry" = "resume";
   let guidance = buildResumeGuidance(state, options, completedStages);
+  const runMode = isInteractive() ? "human" : "host";
+  const localAgentRunner = runMode === "human" ? createLocalAgentRunner() : undefined;
 
   if (options.retryFailed && state.status === "failed" && state.current_stage) {
     const maxRetries = options.maxRetries ?? 3;
@@ -86,6 +90,12 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   const result = await runPipeline({
     workflow: state.workflow,
     fromStage: fromStage ?? undefined,
+    gateTimeout: state.gate_timeout_seconds,
+    mode: runMode,
+    host: localAgentRunner?.host
+  }, {
+    emitProtocolToStdout: false,
+    ...(localAgentRunner ? { localAgentRunner } : {})
   });
 
   if (!options.json) {

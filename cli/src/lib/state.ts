@@ -29,6 +29,7 @@ export type PipelineStateRecord = {
   run_id: string;
   status: PipelineRunStatus;
   workflow?: string;
+  gate_timeout_seconds?: number;
   git_tree_sha?: string;
   current_stage?: string;
   completed_stages?: string[];
@@ -111,6 +112,7 @@ export function updateHostState(
 export function defaultPipelineState(input: {
   runId: string;
   workflow: string;
+  gateTimeoutSeconds?: number;
   gitTreeSha?: string | null;
   status?: PipelineRunStatus;
   currentStage?: string;
@@ -128,6 +130,10 @@ export function defaultPipelineState(input: {
 
   if (input.gitTreeSha) {
     state.git_tree_sha = input.gitTreeSha;
+  }
+
+  if (input.gateTimeoutSeconds !== undefined) {
+    state.gate_timeout_seconds = input.gateTimeoutSeconds;
   }
 
   if (input.currentStage) {
