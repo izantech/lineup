@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -75,10 +75,80 @@ function hasStrictAdditionalProperties(schema: unknown): boolean {
   return Object.values(record).every((value) => hasStrictAdditionalProperties(value));
 }
 
+function inferSchemaTypeFromConst(value: unknown): string | null {
+  if (typeof value === "string") {
+    return "string";
+  }
+
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "integer" : "number";
+  }
+
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  if (typeof value === "object") {
+    return "object";
+  }
+
+  return null;
+}
+
+function normalizeCodexSchemaNode(schema: unknown): { value: unknown; changed: boolean } {
+  if (Array.isArray(schema)) {
+    let changed = false;
+    const value = schema.map((item) => {
+      const normalized = normalizeCodexSchemaNode(item);
+      changed ||= normalized.changed;
+      return normalized.value;
+    });
+
+    return changed ? { value, changed: true } : { value: schema, changed: false };
+  }
+
+  if (!schema || typeof schema !== "object") {
+    return { value: schema, changed: false };
+  }
+
+  const record = schema as Record<string, unknown>;
+  let changed = false;
+  const normalizedRecord: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(record)) {
+    const normalized = normalizeCodexSchemaNode(value);
+    normalizedRecord[key] = normalized.value;
+    changed ||= normalized.changed;
+  }
+
+  if (!("type" in normalizedRecord) && "const" in normalizedRecord) {
+    const inferredType = inferSchemaTypeFromConst(normalizedRecord.const);
+    if (inferredType) {
+      normalizedRecord.type = inferredType;
+      changed = true;
+    }
+  }
+
+  return changed ? { value: normalizedRecord, changed: true } : { value: schema, changed: false };
+}
+
 export function normalizeCodexOutputSchema(schemaContent: string): string | null {
   try {
     const parsed = JSON.parse(schemaContent) as unknown;
-    return hasStrictAdditionalProperties(parsed) ? schemaContent : null;
+    if (!hasStrictAdditionalProperties(parsed)) {
+      return null;
+    }
+
+    const normalized = normalizeCodexSchemaNode(parsed);
+    return normalized.changed ? JSON.stringify(normalized.value, null, 2) : schemaContent;
   } catch {
     return null;
   }
@@ -299,8 +369,13 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
   const normalizedSchema = input.outputSchemaPath
     ? normalizeCodexOutputSchema(readFileSync(input.outputSchemaPath, "utf8"))
     : null;
+  const normalizedSchemaPath = normalizedSchema ? path.join(outputDir, `${input.agent}.schema.json`) : null;
 
   try {
+    if (normalizedSchemaPath && normalizedSchema) {
+      writeFileSync(normalizedSchemaPath, normalizedSchema, "utf8");
+    }
+
     const args = [
       "exec",
       "--dangerously-bypass-approvals-and-sandbox",
@@ -308,7 +383,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       input.workingDirectory,
       ...uniqueDirs([input.projectRoot, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
       ...(agentConfig.modelTarget && !["haiku", "sonnet", "opus"].includes(agentConfig.modelTarget) ? ["-m", agentConfig.modelTarget] : []),
-      ...(normalizedSchema ? ["--output-schema", input.outputSchemaPath!] : []),
+      ...(normalizedSchemaPath ? ["--output-schema", normalizedSchemaPath] : []),
       "-o",
       outputPath,
       input.prompt
@@ -319,7 +394,8 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       command: "codex",
       args,
       cwd: input.workingDirectory,
-      timeoutMs: input.timeoutMs
+      timeoutMs: input.timeoutMs,
+      stopOnExpectedOutputPath: input.expectedOutputPath
     });
     const fileOutput = readFileIfPresent(input.expectedOutputPath);
     if (fileOutput) {
@@ -378,6 +454,7 @@ async function runSpawnedCommand(input: {
   args: string[];
   cwd: string;
   timeoutMs?: number;
+  stopOnExpectedOutputPath?: string;
 }): Promise<LocalAgentInvocationResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
@@ -389,7 +466,22 @@ async function runSpawnedCommand(input: {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let completedFromExpectedOutput = false;
     let timer: NodeJS.Timeout | undefined;
+    let expectedOutputPoller: NodeJS.Timeout | undefined;
+    let expectedOutputKillTimer: NodeJS.Timeout | undefined;
+
+    const clearPendingTimers = (): void => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (expectedOutputPoller) {
+        clearInterval(expectedOutputPoller);
+      }
+      if (expectedOutputKillTimer) {
+        clearTimeout(expectedOutputKillTimer);
+      }
+    };
 
     if (input.timeoutMs && input.timeoutMs > 0) {
       timer = setTimeout(() => {
@@ -397,6 +489,25 @@ async function runSpawnedCommand(input: {
         child.kill("SIGTERM");
         setTimeout(() => child.kill("SIGKILL"), 1_000).unref();
       }, input.timeoutMs);
+    }
+
+    if (input.stopOnExpectedOutputPath) {
+      expectedOutputPoller = setInterval(() => {
+        const fileOutput = readFileIfPresent(input.stopOnExpectedOutputPath);
+        if (!fileOutput || fileOutput.trim().length === 0 || completedFromExpectedOutput) {
+          return;
+        }
+
+        completedFromExpectedOutput = true;
+        if (expectedOutputPoller) {
+          clearInterval(expectedOutputPoller);
+          expectedOutputPoller = undefined;
+        }
+        child.kill("SIGTERM");
+        expectedOutputKillTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+        expectedOutputKillTimer.unref();
+      }, 250);
+      expectedOutputPoller.unref();
     }
 
     child.stdout.on("data", (chunk) => {
@@ -408,9 +519,7 @@ async function runSpawnedCommand(input: {
     });
 
     child.on("error", (error: NodeJS.ErrnoException) => {
-      if (timer) {
-        clearTimeout(timer);
-      }
+      clearPendingTimers();
       if (error.code === "ENOENT") {
         reject(
           new CliError(`Required command not found: ${input.command}`, {
@@ -423,9 +532,7 @@ async function runSpawnedCommand(input: {
     });
 
     child.on("close", (code) => {
-      if (timer) {
-        clearTimeout(timer);
-      }
+      clearPendingTimers();
 
       if (timedOut) {
         reject(
@@ -433,6 +540,15 @@ async function runSpawnedCommand(input: {
             code: "timeout"
           })
         );
+        return;
+      }
+
+      if (completedFromExpectedOutput) {
+        resolve({
+          host: input.host,
+          content: stdout,
+          stderr
+        });
         return;
       }
 
