@@ -16,6 +16,9 @@ export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 export const AGENT_NAMES = ["researcher", "architect", "developer", "reviewer", "documenter", "teacher"] as const;
 export type AgentName = (typeof AGENT_NAMES)[number];
 
+export const OLLAMA_SCOPES = ["research", "full"] as const;
+export type OllamaScope = (typeof OLLAMA_SCOPES)[number];
+
 export type AgentConfig = {
   model: ModelAlias;
   tools: string;
@@ -35,7 +38,7 @@ export type ResolvedAgentConfig = AgentConfig & {
 export type OllamaConfig = {
   enabled: boolean;
   model: string;
-  scope: "research";
+  scope: OllamaScope;
   baseUrl: string;
 };
 
@@ -86,12 +89,18 @@ const DEFAULT_OLLAMA: OllamaConfig = {
   baseUrl: "http://127.0.0.1:11434/v1"
 };
 
+const OLLAMA_APPENDIX_AGENTS = new Set<AgentName>(["researcher", "architect"]);
+
 function isModelAlias(value: unknown): value is ModelAlias {
   return typeof value === "string" && (MODEL_ALIASES as readonly string[]).includes(value);
 }
 
 function isMemoryScope(value: unknown): value is MemoryScope {
   return typeof value === "string" && (MEMORY_SCOPES as readonly string[]).includes(value);
+}
+
+function isOllamaScope(value: unknown): value is OllamaScope {
+  return typeof value === "string" && (OLLAMA_SCOPES as readonly string[]).includes(value);
 }
 
 function parseYamlObject(raw: string, source: string): Record<string, unknown> | null {
@@ -197,8 +206,8 @@ function readOllamaLayer(
       override.model = raw.model.trim();
     }
 
-    if (raw.scope === "research") {
-      override.scope = "research";
+    if (isOllamaScope(raw.scope)) {
+      override.scope = raw.scope;
     }
 
     if (typeof raw.baseUrl === "string" && raw.baseUrl.trim().length > 0) {
@@ -289,8 +298,9 @@ function readGlobalEnvConfig(env: NodeJS.ProcessEnv): {
   }
 
   const ollamaScope = env.LINEUP_OLLAMA_SCOPE;
-  if (ollamaScope?.trim() === "research") {
-    ollama.scope = "research";
+  const normalizedOllamaScope = ollamaScope?.trim();
+  if (isOllamaScope(normalizedOllamaScope)) {
+    ollama.scope = normalizedOllamaScope;
   }
 
   const ollamaBaseUrl = env.LINEUP_OLLAMA_BASE_URL ?? env.OLLAMA_HOST;
@@ -440,7 +450,7 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
     ? {
         enabled: true,
         model: typeof ollamaCandidate.model === "string" && ollamaCandidate.model.trim().length > 0 ? ollamaCandidate.model.trim() : DEFAULT_OLLAMA.model,
-        scope: ollamaCandidate.scope === "research" ? "research" : DEFAULT_OLLAMA.scope,
+        scope: isOllamaScope(ollamaCandidate.scope) ? ollamaCandidate.scope : DEFAULT_OLLAMA.scope,
         baseUrl: typeof ollamaCandidate.baseUrl === "string" && ollamaCandidate.baseUrl.trim().length > 0 ? normalizeBaseUrl(ollamaCandidate.baseUrl) : DEFAULT_OLLAMA.baseUrl
       }
     : null;
@@ -451,6 +461,19 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
 export function resolveModelAlias(alias: ModelAlias, options: ResolveConfigOptions = {}): string {
   const config = resolveLineupConfig(options);
   return config.modelRouting[alias] ?? alias;
+}
+
+export function shouldAppendOllamaAppendix(agent: AgentName, options: ResolveConfigOptions = {}): boolean {
+  const ollama = readOllamaConfig(options);
+  if (!ollama) {
+    return false;
+  }
+
+  return OLLAMA_APPENDIX_AGENTS.has(agent);
+}
+
+export function isOllamaFullPipelineEnabled(options: ResolveConfigOptions = {}): boolean {
+  return readOllamaConfig(options)?.scope === "full";
 }
 
 export function resolveAgentConfig(agent: AgentName, options: ResolveConfigOptions = {}): ResolvedAgentConfig {
@@ -494,6 +517,15 @@ export function resolveAgentConfig(agent: AgentName, options: ResolveConfigOptio
   };
 }
 
+export function resolveAgentModelTarget(agent: AgentName, options: ResolveConfigOptions = {}): string {
+  const ollama = readOllamaConfig(options);
+  if (ollama?.scope === "full") {
+    return ollama.model;
+  }
+
+  return resolveAgentConfig(agent, options).modelTarget;
+}
+
 export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConfig | null {
   const root = options.projectRoot ?? projectRoot();
   const homeDir = options.homeDir ?? os.homedir();
@@ -518,7 +550,7 @@ export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConf
   return {
     enabled: true,
     model: typeof merged.model === "string" && merged.model.trim().length > 0 ? merged.model.trim() : DEFAULT_OLLAMA.model,
-    scope: merged.scope === "research" ? "research" : DEFAULT_OLLAMA.scope,
+    scope: isOllamaScope(merged.scope) ? merged.scope : DEFAULT_OLLAMA.scope,
     baseUrl: typeof merged.baseUrl === "string" && merged.baseUrl.trim().length > 0 ? normalizeBaseUrl(merged.baseUrl) : DEFAULT_OLLAMA.baseUrl
   };
 }

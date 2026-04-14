@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildAgentSystemPrompt, loadAgentPrompt, parseAgentPrompt } from "../src/lib/prompt-builder.js";
 
+function writeProjectConfig(root: string, content: string): void {
+  const dir = join(root, ".lineup");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "config.yaml"), content, "utf8");
+}
+
 describe("prompt builder", () => {
   let tempDir = "";
 
@@ -99,5 +105,44 @@ You are the architect body.
 
     expect(built.parsed.frontmatter.name).toBe("developer");
     expect(built.prompt).toContain("You are a developer agent.");
+  });
+
+  it("appends the Ollama appendix for supported agents when enabled", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "researcher.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "codex"
+      }
+    });
+
+    expect(built.prompt).toContain("## Ollama-Assisted Research");
+    expect(built.prompt).toContain("This run may be using a smaller local Ollama-backed model");
+  });
+
+  it("adds full-pipeline Ollama runtime guidance for agents without appendices", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: full\n  baseUrl: http://127.0.0.1:11434/v1\n`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "developer.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "opencode"
+      }
+    });
+
+    expect(built.prompt).toContain("## Ollama Full-Pipeline Mode");
+    expect(built.prompt).toContain("configured model: local-qwen");
+    expect(built.prompt).toContain("route all Lineup agent stages through the selected host");
   });
 });

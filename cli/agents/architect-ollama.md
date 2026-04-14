@@ -1,30 +1,27 @@
-<!-- architect-ollama.md: Conditional appendix appended to architect spawn prompts when OLLAMA_AVAILABLE = true -->
+<!-- architect-ollama.md: Conditional appendix appended when Lineup Ollama mode is enabled for the architect. -->
 
 ## Ollama-Assisted Planning
 
-You have access to Ollama tools (`mcp__ollama__ollama_chat`, `mcp__ollama__ollama_generate`)
-for delegating text formatting and prose expansion to a local model. You make all design
-decisions — Ollama only handles mechanical text formatting. Use the model name from
-`OLLAMA_MODEL` in working context.
+This run may be using a smaller local Ollama-backed model through the selected host.
+Keep the plan narrow, concrete, and directly grounded in the research inputs.
 
 ### When to use Ollama
 
-- Expanding terse bullet notes into full acceptance-criteria prose
-- Formatting a dependency list into a readable ordered sequence
-- Generating risk description paragraphs from a structured risk matrix
+- Compress a plan to the smallest shape that still gives developers enough direction
+- Favor ordered, scoped change lists over long explanatory prose
+- Keep approaches distinct and explicit instead of blending trade-offs together
 
 ### When NOT to use Ollama
 
-- Architectural decisions or trade-off evaluation (always your own reasoning)
-- Code analysis or understanding code logic
-- Generating code, configuration, or file content of any kind
-- Any section where accuracy is critical — Ollama models are smaller and less reliable
+- Invent implementation details not present in research
+- Over-explain obvious steps or broaden the requested scope
+- Replace explicit file-level changes with vague high-level strategy
+- Skip trade-offs or risks because the plan “sounds good enough”
 
 ### Usage pattern
 
-When expanding a plan section:
-1. Draft the structured content yourself (bullet points, risk matrix, dependency notes)
-2. Call `mcp__ollama__ollama_generate` with your draft and a focused expansion prompt
-   (e.g., "Expand these bullet points into clear acceptance criteria prose")
-3. Review the Ollama output for accuracy before including it in the plan
-4. Always verify that Ollama has not introduced claims not present in your draft
+When planning in Ollama mode:
+1. Start from the research findings and stage inputs only.
+2. Prefer a minimal ordered plan over a polished narrative.
+3. Keep acceptance criteria concrete and directly testable.
+4. Re-check any risky or ambiguous claim against the cited files before finalizing the plan.

@@ -66,12 +66,15 @@ when the project needs to override the default role instructions.
 
 ## Ollama Integration
 
-Lineup optionally delegates summarization and context gathering to local Ollama models.
-Code generation and architectural decisions always use the primary model.
+Lineup optionally uses local Ollama-backed models. Ollama runs in two scopes:
+`research` for pre-digesting large files and fetch results, and `full` for broader
+local-agent coverage when explicitly enabled.
 
-Configuration is in `~/.claude/lineup/ollama.yaml`. When enabled, researchers use Ollama
-for pre-digesting large files and web fetch results. When unavailable, all features degrade
-cleanly — Ollama is never required for correctness.
+Configuration is in `~/.claude/lineup/ollama.yaml`. When enabled, researchers can use
+`research` scope for pre-digesting large files and web fetch results, or `full` scope
+to route all Lineup agent stages through the selected host using the configured local
+model target. When unavailable, all features degrade cleanly — Ollama is never required
+for correctness.
 
 ## Agent Configuration Overrides
 

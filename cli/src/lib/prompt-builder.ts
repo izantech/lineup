@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { parseDocument } from "yaml";
 
+import { AGENT_NAMES, readOllamaConfig, shouldAppendOllamaAppendix, type AgentName, type ResolveConfigOptions } from "./config.js";
 import { CliError } from "./errors.js";
 import { packageRoot } from "./paths.js";
 
@@ -101,6 +102,58 @@ function resolveAgentPromptPath(filePath: string): string {
   });
 }
 
+function parseAgentName(filePath: string): AgentName | null {
+  const candidate = path.basename(filePath, path.extname(filePath));
+  return (AGENT_NAMES as readonly string[]).includes(candidate) ? (candidate as AgentName) : null;
+}
+
+function resolveOllamaAppendixPath(agentName: AgentName, resolvedPromptPath: string): string | null {
+  const localCandidate = path.join(path.dirname(resolvedPromptPath), `${agentName}-ollama.md`);
+  if (existsSync(localCandidate)) {
+    return localCandidate;
+  }
+
+  const bundledCandidate = path.join(packageRoot(), "agents", `${agentName}-ollama.md`);
+  if (existsSync(bundledCandidate)) {
+    return bundledCandidate;
+  }
+
+  return null;
+}
+
+function buildOllamaSections(agentName: AgentName | null, resolvedPromptPath: string, options?: ResolveConfigOptions): string[] {
+  if (!options) {
+    return [];
+  }
+
+  const ollama = readOllamaConfig(options);
+  if (!ollama) {
+    return [];
+  }
+
+  const sections: string[] = [];
+  if (ollama.scope === "full") {
+    sections.push(
+      [
+        "## Ollama Full-Pipeline Mode",
+        `- configured model: ${ollama.model}`,
+        `- configured base URL: ${ollama.baseUrl}`,
+        "- This run is configured to route all Lineup agent stages through the selected host using the Ollama-backed model target.",
+        "- Keep outputs compact, deterministic, and strictly structured. Prefer one more targeted inspection over guessing."
+      ].join("\n")
+    );
+  }
+
+  if (agentName && shouldAppendOllamaAppendix(agentName, options)) {
+    const appendixPath = resolveOllamaAppendixPath(agentName, resolvedPromptPath);
+    if (appendixPath) {
+      sections.push(readFileSync(appendixPath, "utf8").trim());
+    }
+  }
+
+  return sections;
+}
+
 function renderContractSection(frontmatter: AgentPromptFrontmatter): string {
   const lines: string[] = [];
 
@@ -137,11 +190,19 @@ export function buildAgentSystemPrompt(input: {
   agentFilePath: string;
   promptTemplate: string;
   extraInstructions?: string;
+  configOptions?: ResolveConfigOptions;
 }): { prompt: string; parsed: ParsedAgentPrompt } {
   const resolvedPath = resolveAgentPromptPath(input.agentFilePath);
   const parsed = loadAgentPrompt(resolvedPath);
   const contractSection = renderContractSection(parsed.frontmatter);
-  const body = contractSection ? `${parsed.body.trimEnd()}\n\n${contractSection}\n` : parsed.body;
+  const agentName = parseAgentName(resolvedPath);
+  const ollamaSections = buildOllamaSections(agentName, resolvedPath, input.configOptions);
+  const bodySections = [parsed.body.trimEnd()];
+  if (contractSection) {
+    bodySections.push(contractSection);
+  }
+  bodySections.push(...ollamaSections.filter((section) => section.trim().length > 0));
+  const body = `${bodySections.filter((section) => section.trim().length > 0).join("\n\n")}\n`;
 
   let prompt = input.promptTemplate.replace("{{AGENT_BODY}}", body);
   if (input.extraInstructions?.trim()) {

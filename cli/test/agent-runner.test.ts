@@ -258,4 +258,76 @@ setTimeout(() => process.exit(0), 10_000)
     expect(Date.now() - startedAt).toBeLessThan(1_000);
     expect(result.content).toContain("how_it_works: artifact was written before codex shutdown");
   });
+
+  it("routes Codex agent stages to the configured Ollama model in full mode", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-ollama-model-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: full\n`,
+      "utf8"
+    );
+
+    const fakeCodexPath = join(binDir, "codex");
+    writeFileSync(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+
+let output = ''
+let model = ''
+const promptParts = []
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index]
+  if (arg === '-o') {
+    output = process.argv[index + 1] ?? ''
+    index += 1
+    continue
+  }
+  if (arg === '-m') {
+    model = process.argv[index + 1] ?? ''
+    index += 1
+    continue
+  }
+  promptParts.push(arg)
+}
+
+const prompt = promptParts.join(' ')
+const match = prompt.match(/Create or overwrite (\\S+) with the final structured payload\\./)
+if (match) {
+  writeFileSync(match[1], \`type: research
+agent: researcher
+date: 2026-04-14
+topic: test
+status: complete
+pipeline_stage: 2
+how_it_works: model=\${model}
+\`)
+}
+if (output) {
+  writeFileSync(output, 'placeholder\\n')
+}
+process.exit(0)
+`,
+      "utf8"
+    );
+    chmodSync(fakeCodexPath, 0o755);
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    const runner = createLocalAgentRunner("codex");
+    const expectedOutputPath = join(tempDir, "research.yaml");
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "researcher",
+      prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
+      expectedOutputPath,
+      timeoutMs: 3_000
+    });
+
+    expect(result.content).toContain("how_it_works: model=local-qwen");
+  });
 });

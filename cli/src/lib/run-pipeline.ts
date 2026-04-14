@@ -6,6 +6,7 @@ import process from "node:process";
 import { stringify as stringifyYaml } from "yaml";
 import type { RunOptions, WorkflowDefinition, WorkflowStage } from "./types.js";
 import type { LocalAgentRunner } from "./agent-runner.js";
+import type { HostName } from "./constants.js";
 import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store.js";
 import {
   applyWorkspacePatch,
@@ -244,6 +245,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             stage,
             expressionCtx,
             projectRoot,
+            localAgentRunner?.host ?? options.host,
             artifactDir,
             runId,
             options.prompt ?? "",
@@ -277,6 +279,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             stage,
             expressionCtx,
             projectRoot,
+            localAgentRunner?.host ?? options.host,
             artifactDir,
             runId,
             options.prompt ?? "",
@@ -399,6 +402,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               const nativeResult = await executeNativeExecutor({
                 runId,
                 projectRoot,
+                host: localAgentRunner?.host ?? options.host,
                 runRoot,
                 artifactDir,
                 gitTreeSha,
@@ -470,6 +474,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                   const retryResult = await executeNativeExecutor({
                     runId,
                     projectRoot,
+                    host: localAgentRunner?.host ?? options.host,
                     runRoot,
                     artifactDir,
                     gitTreeSha,
@@ -923,6 +928,7 @@ function resolveArtifactSchemaPath(agentName: string, outputSchema: string): str
 function buildStageAgentPrompt(input: {
   stage: WorkflowStage;
   projectRoot: string;
+  host?: HostName;
   taskPrompt: string;
   ctx: ExpressionContext;
   outputSchema: string;
@@ -933,6 +939,10 @@ function buildStageAgentPrompt(input: {
   const prompt = buildAgentSystemPrompt({
     agentFilePath: resolve(input.projectRoot, "agents", `${agentName}.md`),
     promptTemplate: "{{AGENT_BODY}}",
+    configOptions: {
+      projectRoot: input.projectRoot,
+      ...(input.host ? { host: input.host } : {})
+    },
     extraInstructions: [
       "Lineup stage contract:",
       `- Stage ID: ${input.stage.id}`,
@@ -1017,6 +1027,7 @@ async function executePreStage(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
+  host: HostName | undefined,
   artifactDir: string,
   runId: string,
   taskPrompt: string,
@@ -1080,6 +1091,7 @@ async function executePreStage(
     const prompt = buildStageAgentPrompt({
       stage,
       projectRoot,
+      host,
       taskPrompt,
       ctx,
       outputSchema: stage.agent === "researcher" ? "Research" : stage.agent,
@@ -1384,6 +1396,7 @@ async function executePlannerPhase(
   stage: WorkflowStage,
   ctx: ExpressionContext,
   projectRoot: string,
+  host: HostName | undefined,
   artifactDir: string,
   runId: string,
   taskPrompt: string,
@@ -1398,6 +1411,7 @@ async function executePlannerPhase(
   const basePrompt = buildStageAgentPrompt({
     stage,
     projectRoot,
+    host,
     taskPrompt,
     ctx,
     outputSchema: "Plan",

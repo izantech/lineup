@@ -21,6 +21,7 @@ import {
 import { retryOperation } from "./retry.js";
 import type { ImplementMethod, WorkflowStage } from "./types.js";
 import { buildAgentSystemPrompt } from "./prompt-builder.js";
+import type { HostName } from "./constants.js";
 import {
   parseRestrictedYaml,
   validatePlanYaml,
@@ -108,6 +109,7 @@ export type NativeExecutionDriver = {
 export type NativeExecutorOptions = {
   runId: string;
   projectRoot: string;
+  host?: HostName;
   runRoot: string;
   artifactDir: string;
   gitTreeSha?: string;
@@ -1004,6 +1006,7 @@ function normalizeTaskExecutionResult(raw: string, task: CompiledTask, source: s
 
 function buildDeveloperPrompt(input: {
   projectRoot: string;
+  host?: HostName;
   approvedPlan: ApprovedPlan;
   task: CompiledTask;
   attempt: number;
@@ -1052,12 +1055,17 @@ function buildDeveloperPrompt(input: {
   return buildAgentSystemPrompt({
     agentFilePath: path.join(input.projectRoot, "agents", "developer.md"),
     promptTemplate: "{{AGENT_BODY}}",
+    configOptions: {
+      projectRoot: input.projectRoot,
+      ...(input.host ? { host: input.host } : {})
+    },
     extraInstructions: extraInstructions.join("\n")
   }).prompt;
 }
 
 function buildReviewerPrompt(input: {
   projectRoot: string;
+  host?: HostName;
   approvedPlan: ApprovedPlan;
   implementationState: ImplementationState;
   tasksArtifact: CompiledTasksArtifact;
@@ -1106,6 +1114,10 @@ function buildReviewerPrompt(input: {
   return buildAgentSystemPrompt({
     agentFilePath: path.join(input.projectRoot, "agents", "reviewer.md"),
     promptTemplate: "{{AGENT_BODY}}",
+    configOptions: {
+      projectRoot: input.projectRoot,
+      ...(input.host ? { host: input.host } : {})
+    },
     extraInstructions: extraInstructions.join("\n")
   }).prompt;
 }
@@ -1245,6 +1257,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
             async (retryContext) => {
               const prompt = buildDeveloperPrompt({
                 projectRoot: options.projectRoot,
+                host: options.host,
                 approvedPlan,
                 task,
                 attempt: retryContext.attempt,
@@ -1325,6 +1338,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
 
     const reviewPrompt = buildReviewerPrompt({
       projectRoot: options.projectRoot,
+      host: options.host,
       approvedPlan,
       implementationState,
       tasksArtifact,

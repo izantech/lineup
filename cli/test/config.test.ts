@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveAgentConfig, resolveLineupConfig, type ResolveConfigOptions } from "../src/lib/config.js";
+import { isOllamaFullPipelineEnabled, resolveAgentConfig, resolveAgentModelTarget, resolveLineupConfig, type ResolveConfigOptions } from "../src/lib/config.js";
 
 function writeAgent(root: string, agent: string, body: string): void {
   const dir = join(root, "agents");
@@ -33,6 +33,17 @@ function writeUserOverride(homeDir: string, host: "claude" | "codex" | "opencode
   writeFileSync(join(dir, `${agent}.yaml`), content, "utf8");
 }
 
+function writeUserOllamaConfig(homeDir: string, host: "claude" | "codex" | "opencode", content: string): void {
+  const dir =
+    host === "claude"
+      ? join(homeDir, ".claude", "lineup")
+      : host === "codex"
+        ? join(homeDir, ".codex", "lineup")
+        : join(homeDir, ".config", "opencode", "lineup");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "ollama.yaml"), content, "utf8");
+}
+
 describe("config resolution", () => {
   let root = "";
   let home = "";
@@ -58,7 +69,7 @@ describe("config resolution", () => {
     );
     writeProjectConfig(
       root,
-      `models:\n  haiku: project-haiku\n  sonnet: project-sonnet\n  opus: project-opus\nagents:\n  researcher:\n    model: sonnet\n    tools: Read, Grep, Glob, LS, Write\n    memory: project\nollama:\n  enabled: true\n  model: project-ollama\n  scope: research\n  baseUrl: http://project-ollama:11434/v1\n`
+      `models:\n  haiku: project-haiku\n  sonnet: project-sonnet\n  opus: project-opus\nagents:\n  researcher:\n    model: sonnet\n    tools: Read, Grep, Glob, LS, Write\n    memory: project\nollama:\n  enabled: true\n  model: project-ollama\n  scope: full\n  baseUrl: http://project-ollama:11434/v1\n`
     );
 
     const options: ResolveConfigOptions = {
@@ -72,7 +83,8 @@ describe("config resolution", () => {
         LINEUP_MODEL_HAIKU: "env-haiku",
         LINEUP_OLLAMA_ENABLED: "true",
         LINEUP_OLLAMA_MODEL: "env-ollama",
-        LINEUP_OLLAMA_BASE_URL: "http://env-ollama:11434/v1"
+        LINEUP_OLLAMA_BASE_URL: "http://env-ollama:11434/v1",
+        LINEUP_OLLAMA_SCOPE: "full"
       },
       cli: {
         models: { haiku: "cli-haiku" },
@@ -95,6 +107,8 @@ describe("config resolution", () => {
     expect(resolved.tools).toBe("Read, Grep, Glob");
     expect(resolved.memory).toBe("project");
     expect(resolved.source).toEqual({ model: "cli", tools: "env", memory: "cli" });
+    expect(resolveAgentModelTarget("researcher", options)).toBe("cli-ollama");
+    expect(isOllamaFullPipelineEnabled(options)).toBe(true);
 
     const lineup = resolveLineupConfig(options);
     expect(lineup.modelRouting).toEqual({
@@ -105,7 +119,7 @@ describe("config resolution", () => {
     expect(lineup.ollama).toEqual({
       enabled: true,
       model: "cli-ollama",
-      scope: "research",
+      scope: "full",
       baseUrl: "http://env-ollama:11434/v1"
     });
   });
@@ -133,9 +147,9 @@ describe("config resolution", () => {
     home = mkdtempSync(join(tmpdir(), "tmp-config-home-"));
     writeProjectConfig(
       root,
-      `ollama:\n  enabled: true\n  model: project-ollama\n  scope: research\n`
+      `ollama:\n  enabled: true\n  model: project-ollama\n  scope: full\n`
     );
-    writeUserOverride(home, "claude", "researcher", `enabled: false\nmodel: user-ollama\nscope: research\n`);
+    writeUserOllamaConfig(home, "claude", `enabled: false\nmodel: user-ollama\nscope: research\n`);
 
     const config = resolveLineupConfig({
       projectRoot: root,
@@ -146,8 +160,29 @@ describe("config resolution", () => {
     expect(config.ollama).toEqual({
       enabled: true,
       model: "project-ollama",
-      scope: "research",
+      scope: "full",
       baseUrl: "http://127.0.0.1:11434/v1"
     });
+  });
+
+  it("keeps host model routing when Ollama is research-only", () => {
+    root = mkdtempSync(join(tmpdir(), "tmp-config-root-"));
+    home = mkdtempSync(join(tmpdir(), "tmp-config-home-"));
+    writeAgent(root, "architect", "You are the architect.");
+    writeProjectConfig(
+      root,
+      `models:\n  haiku: project-haiku\nollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n`
+    );
+
+    expect(resolveAgentModelTarget("architect", {
+      projectRoot: root,
+      homeDir: home,
+      host: "codex"
+    })).toBe("project-haiku");
+    expect(isOllamaFullPipelineEnabled({
+      projectRoot: root,
+      homeDir: home,
+      host: "codex"
+    })).toBe(false);
   });
 });

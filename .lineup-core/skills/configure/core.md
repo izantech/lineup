@@ -34,9 +34,10 @@ Use **{{QUESTION_PRIMITIVE}}** to present categories:
 
 If the user chooses **Enable Ollama**:
 1. Check `ollama --version` via Bash
-2. Check MCP server config; offer to run host's MCP add command if missing
+2. If the user wants research-assist tool access through an Ollama MCP server, check host MCP config and offer to add it when missing; otherwise skip this step
 3. Run `ollama list` to show available models
-4. Write `{{OLLAMA_CONFIG_PATH}}` with `enabled: true`, selected model, `scope: research`
+4. Write `{{OLLAMA_CONFIG_PATH}}` with `enabled: true`, selected model, and `scope: research` or `scope: full`
+   based on whether the user wants research-only or full runtime coverage
 
 ## Apply changes
 

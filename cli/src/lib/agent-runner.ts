@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { execSync } from "node:child_process";
 
 import { SUPPORTED_HOSTS, type HostName } from "./constants.js";
-import { resolveAgentConfig } from "./config.js";
+import { resolveAgentModelTarget } from "./config.js";
 import { CliError } from "./errors.js";
 import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
 import { parseRestrictedYaml } from "./validation.js";
@@ -261,7 +261,7 @@ export function resolveLocalExecutionHost(preferredHost?: HostName): HostName {
 }
 
 async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
-  const agentConfig = resolveAgentConfig(input.agent, {
+  const modelTarget = resolveAgentModelTarget(input.agent, {
     projectRoot: input.projectRoot,
     host
   });
@@ -274,7 +274,7 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
     "bypassPermissions",
     ...uniqueDirs([input.projectRoot, input.workingDirectory, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
     ...(schemaContent ? ["--json-schema", schemaContent] : []),
-    ...(agentConfig.modelTarget ? ["--model", agentConfig.modelTarget] : []),
+    ...(modelTarget ? ["--model", modelTarget] : []),
     input.prompt
   ];
 
@@ -362,7 +362,7 @@ async function formatStructuredOutputWithClaude(input: {
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
   const outputDir = mkdtempSync(path.join(os.tmpdir(), "lineup-codex-output-"));
   const outputPath = path.join(outputDir, `${input.agent}.txt`);
-  const agentConfig = resolveAgentConfig(input.agent, {
+  const modelTarget = resolveAgentModelTarget(input.agent, {
     projectRoot: input.projectRoot,
     host
   });
@@ -382,7 +382,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       "-C",
       input.workingDirectory,
       ...uniqueDirs([input.projectRoot, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
-      ...(agentConfig.modelTarget && !["haiku", "sonnet", "opus"].includes(agentConfig.modelTarget) ? ["-m", agentConfig.modelTarget] : []),
+      ...(modelTarget && !["haiku", "sonnet", "opus"].includes(modelTarget) ? ["-m", modelTarget] : []),
       ...(normalizedSchemaPath ? ["--output-schema", normalizedSchemaPath] : []),
       "-o",
       outputPath,
@@ -417,7 +417,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
 }
 
 async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
-  const agentConfig = resolveAgentConfig(input.agent, {
+  const modelTarget = resolveAgentModelTarget(input.agent, {
     projectRoot: input.projectRoot,
     host
   });
@@ -426,7 +426,7 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
     "--dir",
     input.workingDirectory,
     "--dangerously-skip-permissions",
-    ...(agentConfig.modelTarget && !["haiku", "sonnet", "opus"].includes(agentConfig.modelTarget) ? ["--model", agentConfig.modelTarget] : []),
+    ...(modelTarget && !["haiku", "sonnet", "opus"].includes(modelTarget) ? ["--model", modelTarget] : []),
     input.prompt
   ];
 
