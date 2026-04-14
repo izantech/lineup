@@ -139,6 +139,7 @@ Before the first full native run without `lineup start`, make sure:
 - fenced JSON/YAML payloads are unwrapped and revalidated
 - host planner output gets one stricter retry if it is prose instead of a structured `Plan`
 - pre-stage structured artifacts get one stricter retry if the first output is prose or malformed YAML
+- pre-stage retries clear the previous artifact path before re-invoking the host so stale malformed artifacts cannot short-circuit the retry
 - native developer responses accept common variants like `status: done`
 - markdown-style reviewer summaries are normalized into `Review` YAML
 

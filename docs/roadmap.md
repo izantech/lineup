@@ -213,6 +213,9 @@ Current instrumentation:
   growth instead of relying only on bridge events
 - Ollama-backed Claude strict passes now run from a neutral temporary cwd while
   still receiving repo access through explicit `--add-dir`
+- Ollama-backed Claude structured runs now go draft-first and keep the strict
+  formatter as the final schema-preserving pass instead of starting with the
+  direct strict host invocation
 - Ollama-backed researcher stages can use a compact host-specific prompt body,
   and the local smoke lane now uses a deterministic tiny-repo task instead of a
   generic freeform smoke request
@@ -221,6 +224,10 @@ Current instrumentation:
   - researcher stages without explicit workflow outputs receive default required
     fields (`what_found`, `how_it_works`, `constraints`, `gaps`)
   - outputs are checked for required fields before the stage is accepted
+  - retries clear the previous artifact path before re-invoking the host so a
+    malformed first artifact cannot satisfy the retry with stale output
+- OpenCode research prompts now explicitly mark the stage as read-only and
+  require exactly one YAML Research document
 
 Comprehensive fix plan:
 
@@ -235,24 +242,25 @@ Comprehensive fix plan:
      - preserve the same classification model in any future direct-repro helper
        commands so host-specific debugging stays consistent
 2. Claude stabilization
-   - create a direct minimal repro for the Ollama-backed strict
-     `claude --json-schema` path outside the full pipeline
-   - compare:
-     - minimal schema
-     - current researcher schema
-     - draft-only output
-   - if strict schema mode remains hung, switch Ollama-backed Claude to a
-     two-step strict path:
-     - get a draft from Claude
-     - immediately reformat it through a strict validated Claude pass
-     - only accept the result if final schema validation succeeds
+   - completed:
+     - replace strict-schema-first execution with a draft-first plus strict
+       formatter flow for Ollama-backed Claude structured runs
+   - remaining:
+     - build a direct repro for the current draft-mode hang
+     - try a narrower draft transport such as JSON-mode draft output before
+       changing the final validation contract again
 3. OpenCode stabilization
-   - reproduce the current `opencode run --pure --format json --model lineup-ollama/<model>`
-     command outside the pipeline with the same temp home
-   - determine whether the non-interactive path needs a different prompt/input
-     surface or a different output mode
-   - once the direct repro is reliable, update Lineup’s OpenCode invocation and
-     add a deterministic regression around that exact contract
+   - completed:
+     - tighten the research prompt to require exactly one YAML Research document
+     - make the research contract explicitly read-only
+     - fix retry-path stale artifact reuse before host reinvocation
+   - remaining:
+     - reproduce the current `opencode run --pure --format json --model lineup-ollama/<model>`
+       command outside the pipeline with the same temp home
+     - keep OpenCode on the bounded tiny-repo task instead of broad workspace
+       exploration during retry/follow-up behavior
+     - determine whether the non-interactive path still needs a different
+       output mode once the bounded prompt behavior is stable
 4. Codex stabilization
    - keep `codex exec --oss --local-provider ollama` as the live provider path
    - completed:
@@ -260,6 +268,7 @@ Comprehensive fix plan:
      - tighten the smoke task and researcher prompt so the host sees a small,
        deterministic target
    - remaining:
+     - rerun Codex on top of the current Claude/OpenCode retry-hardening branch
      - tighten the research artifact contract so the local model actually writes
        the expected file instead of free-running in tool/reasoning mode
    - if needed, add a Codex-specific completion helper that can recover a valid

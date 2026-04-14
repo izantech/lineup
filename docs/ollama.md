@@ -213,6 +213,7 @@ The local smoke lane also uses a deterministic tiny-repo task:
 - append a second sentence to `README.md`
 - inspect only `README.md`, `.lineup-core/workflows/full-pipeline.yaml`, and `.lineup/tactics/example.yaml` during research unless later stages truly require more
 - avoid host/service/config/runtime-log exploration during research
+- keep research read-only even when the overall smoke task later requires an implementation change
 
 ## Current Live Findings
 
@@ -221,32 +222,39 @@ failing in different ways:
 
 ### Claude
 
-- both `ollama launch claude` and the Anthropic-compatible env fallback reach
-  the strict research invocation and then hang
-- the trace file records only the `spawn` event
-- there is no stdout, no stderr, no `close` event, and no research artifact
-- neutral temporary cwd isolation and the compact researcher prompt did not
-  change this outcome in the latest bounded smoke pass
+- the old strict-schema-first hang is no longer the current failure
+- Ollama-backed Claude research now goes draft-first, then strict formatter
+- the latest preserved run (`6c4e45` under the `QF4TIN` smoke root) shows the
+  draft pass itself stalling in env mode
+- the strict formatter pass is no longer the first blocking step
+- neutral temporary cwd isolation and the compact researcher prompt are in
+  place, but the draft host invocation still does not complete
 
 Implication:
 
-- the strict `claude ... --json-schema ...` Ollama-backed path is hanging inside
-  the host invocation itself, before Lineup receives any structured output
+- the remaining Claude blocker is the Ollama-backed draft invocation itself,
+  not the strict schema pass
+- the next probe should change Claude draft transport mechanics, not revert the
+  strict final validation contract again
 
 ### OpenCode
 
-- the process starts and writes one-time migration logs to stderr
-- after migration it either produces no stdout at all or reads the tiny smoke
-  repo files but still never writes the research artifact or exits cleanly
-- the bridge remains parked in `research`
-- adding the provider-qualified model identifier, lower-case tool dialect, and
-  deterministic smoke prompt moved the failure forward but did not clear it
+- OpenCode is now past the original model-selection and generic-startup issues
+- one live run (`dcd421` under the `Kyxk5V` smoke root) wrote a near-valid
+  research artifact that failed YAML parsing
+- another live run (`96b99b` under the `E95Fek` smoke root) timed out after
+  drifting back into broad workspace exploration during research
+- the research prompt now explicitly says the stage is read-only and must emit
+  exactly one YAML Research document
+- the pre-stage retry loop now clears stale artifacts before retrying, so a bad
+  first write cannot immediately satisfy the second attempt with old output
 
 Implication:
 
-- OpenCode is not failing on model lookup anymore
-- the remaining problem is a non-interactive lifecycle/invocation issue after
-  startup rather than a provider-selection bug
+- OpenCode is no longer blocked on provider selection
+- the remaining issue is host behavior under the research prompt: keeping it on
+  the bounded tiny-repo task and getting it to terminate with one valid YAML
+  document instead of drifting or writing malformed YAML
 
 ### Codex
 
@@ -256,6 +264,8 @@ Implication:
   after watching both the expected artifact path and Codex's direct `-o` output
 - tighter researcher prompts and stricter pre-stage artifact validation did not
   eliminate the completion failure
+- Codex has not been rerun yet after the latest Claude/OpenCode-specific retry
+  hardening, so the next Codex pass should be taken on the current branch state
 
 Implication:
 
