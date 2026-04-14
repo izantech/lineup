@@ -40,6 +40,7 @@ describe("doctor command", () => {
           workflow: { ok: boolean; detail: string };
           git_repository: { ok: boolean; detail: string };
           git_head: { ok: boolean; detail: string };
+          next_commands: Array<{ label: string; command: string; detail: string }>;
         };
       };
     };
@@ -48,6 +49,13 @@ describe("doctor command", () => {
     expect(report.checks.project.workflow.ok).toBe(false);
     expect(report.checks.project.git_repository.ok).toBe(false);
     expect(report.checks.project.git_head.ok).toBe(false);
+    expect(report.checks.project.next_commands).toEqual([
+      {
+        label: "scaffold the Lineup workflow and git repo",
+        command: "lineup init",
+        detail: "creates .lineup-core/workflows/full-pipeline.yaml and initializes git if needed"
+      }
+    ]);
   });
 
   it("reports a runnable project after init and initial commit", async () => {
@@ -68,6 +76,7 @@ describe("doctor command", () => {
           workflow: { ok: boolean; detail: string };
           git_repository: { ok: boolean; detail: string };
           git_head: { ok: boolean; detail: string };
+          next_commands: Array<{ label: string; command: string; detail: string }>;
         };
       };
     };
@@ -77,5 +86,36 @@ describe("doctor command", () => {
     expect(report.checks.project.workflow.ok).toBe(true);
     expect(report.checks.project.git_repository.ok).toBe(true);
     expect(report.checks.project.git_head.ok).toBe(true);
+    expect(report.checks.project.next_commands).toEqual([]);
+  });
+
+  it("recommends only the initial commit when the workflow exists but the repo has no commits", async () => {
+    await runInitCommand({});
+    execSync("git init", { cwd: tempDir, stdio: "ignore" });
+
+    stdout.length = 0;
+    await runDoctorCommand({ json: true });
+
+    const report = JSON.parse(stdout.join("")) as {
+      checks: {
+        project: {
+          workflow: { ok: boolean };
+          git_repository: { ok: boolean };
+          git_head: { ok: boolean };
+          next_commands: Array<{ label: string; command: string; detail: string }>;
+        };
+      };
+    };
+
+    expect(report.checks.project.workflow.ok).toBe(true);
+    expect(report.checks.project.git_repository.ok).toBe(true);
+    expect(report.checks.project.git_head.ok).toBe(false);
+    expect(report.checks.project.next_commands).toEqual([
+      {
+        label: "create the first commit",
+        command: 'git add -A && git commit -m "Initial commit"',
+        detail: "native Lineup runs require at least one commit"
+      }
+    ]);
   });
 });

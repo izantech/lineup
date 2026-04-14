@@ -9,6 +9,7 @@ function createMockHandlers() {
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
+    start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
     bridgeStart: vi.fn(async () => undefined),
     bridgeEvents: vi.fn(async () => undefined),
@@ -24,6 +25,7 @@ describe("CLI command parsing", () => {
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
+    start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
     bridgeStart: vi.fn(async () => undefined),
     bridgeEvents: vi.fn(async () => undefined),
@@ -151,6 +153,19 @@ describe("CLI command parsing", () => {
 });
 
 describe("run command", () => {
+  it("parses start options", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "start", "Ship the fix", "--tactic", "explain", "--host", "codex"]);
+    expect(handlers.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Ship the fix",
+        tactic: "explain",
+        host: "codex"
+      })
+    );
+  });
+
   it("parses --dry-run flag", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);

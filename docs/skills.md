@@ -14,6 +14,7 @@ execution. Skills are host-native entrypoints, not separate runtimes.
 
 Direct terminal users interact with the engine themselves:
 
+- `lineup start "<task>"` for first-run setup plus the initial native run
 - `lineup init`
 - `lineup run "<task>"` for interactive local use
 - `lineup run "<task>" --mode host` for low-level raw protocol consumers
@@ -21,6 +22,10 @@ Direct terminal users interact with the engine themselves:
 
 This path is appropriate when the user is already working in a shell or when an
 external integration wants the raw runtime contract directly.
+
+For first-run local usage, prefer `lineup start "<task>"`. It scaffolds Lineup,
+checks workflow and git readiness, and stops with exact next commands if the
+repo still needs an initial commit before native isolation can run.
 
 ### Host skill use
 

@@ -20,6 +20,7 @@
 - `lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]`
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
 - `lineup doctor [--json]`
+- `lineup start [task] [--workflow <path>] [--tactic <name>] [--host claude|codex|opencode] [--mode human|host] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
 - `lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--mode human|host] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
 - `lineup bridge start [task] --executor-host <host> [--workflow <path>] [--tactic <name>] [--timeout <seconds>] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>] [--json]`
 - `lineup bridge events <run-id> [--after <seq>] [--wait <seconds>] [--json]`
@@ -38,7 +39,7 @@
 - `lineup workflow lint <path> [--json]`
 - `lineup workflow list [--json]`
 - `lineup tactic new <name>`
-- `lineup tactic list [--json]`
+- `lineup tactic list [--json] [--include-builtins]`
 - `lineup tactic convert <name> [--json]`
 - `lineup approve <run-id> [--json]`
 - `lineup pending [--json]`
@@ -59,6 +60,7 @@ The CLI is always the source of truth. Skills are wrappers that call the CLI.
 
 Practical split:
 
+- `lineup start "<task>"` is the best first native entrypoint in a new repo because it scaffolds Lineup, checks readiness, and only starts the run once the repo is actually ready
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
@@ -82,9 +84,11 @@ Built-in tactics shipped with the CLI can also be resolved by name. For example,
 `lineup bridge start "<question>" --tactic explain --executor-host codex` works
 even in repos that do not define `./tactics/explain.yaml` or `.lineup/tactics/explain.yaml`.
 
-`lineup tactic list` still reflects repo-local/project tactics. Use
-`lineup tactic convert explain --json` or run the tactic directly when you need a
-built-in CLI tactic like `explain`.
+`lineup tactic list` stays focused on repo-local/project tactics by default.
+Use `lineup tactic list --include-builtins` when you want bundled CLI tactics in
+the same listing. Built-ins are labeled with `source: builtin`; repo-local tactics
+are labeled `source: project-local` in JSON and in the text list when built-ins
+are included.
 
 `lineup bridge events --json` keeps:
 
@@ -100,22 +104,30 @@ And also returns:
 - `pendingQuestion` — the unresolved gate even if the caller's cursor is already past the original `question` event
 - `recovery` — the next concrete CLI step for the current session (`answer`, `resume`, or `inspect`)
 
+For detached bridge runs, `recovery.action = "resume"` means the host should
+surface the timeout state and use the returned recovery command instead of
+sending another `lineup bridge answer`.
+
 The human-readable `lineup bridge events` output also prints:
 
 - `next_cursor`
 - `continue_with` — the exact next poll command using `--after <next_cursor>`
-- `recovery`
+- `recovery` — the next concrete step for the current session, which may point to a specific artifact inspection command when the run has produced a relevant artifact
 
 Keep `lineup run --mode host` for advanced integrations and CI that need the low-level
 NDJSON protocol directly.
 
-Before the first full native run, make sure:
+For first-run onboarding:
+
+- `lineup start "<task>"` runs `init`-style scaffolding automatically, checks readiness, and only hands off to the native pipeline when the repo is ready
+- if the repo still needs an initial commit, `lineup start` stops with the exact `git add -A && git commit -m "Initial commit"` command and a rerun command
+- `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init` and `git add -A && git commit -m "Initial commit"`
+
+Before the first full native run without `lineup start`, make sure:
 
 - `lineup init` has scaffolded `.lineup-core/workflows/full-pipeline.yaml`
 - `lineup init` has initialized a git repository if one was missing
 - the repository has at least one commit
-
-`lineup doctor --json` reports all three checks explicitly.
 
 `lineup run` also repairs a few common host/runtime output issues before failing:
 

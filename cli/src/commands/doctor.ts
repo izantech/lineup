@@ -15,6 +15,32 @@ type DoctorCheck = {
   detail: string;
 };
 
+type DoctorRecommendation = {
+  label: string;
+  command: string;
+  detail: string;
+};
+
+export type DoctorReport = {
+  healthy: boolean;
+  checks: {
+    git: DoctorCheck;
+    node: DoctorCheck;
+    hosts: Record<string, DoctorCheck>;
+    project: {
+      workflow: DoctorCheck;
+      git_repository: DoctorCheck;
+      git_head: DoctorCheck;
+      next_commands: DoctorRecommendation[];
+    };
+    runtime: {
+      artifact_store: DoctorCheck;
+      runs_dir: DoctorCheck;
+      latest_run: DoctorCheck;
+    };
+  };
+};
+
 function resolveWorkflowCheck(cwd = process.cwd()): DoctorCheck {
   const workflowCandidates = [
     `${cwd}/.lineup-core/workflows/full-pipeline.yaml`,
@@ -50,10 +76,50 @@ function checkCommand(command: string): DoctorCheck {
   }
 }
 
-export async function runDoctorCommand(options: DoctorCommandOptions): Promise<void> {
+function buildRecommendations(workflow: DoctorCheck, gitProject: ReturnType<typeof inspectGitProject>): DoctorRecommendation[] {
+  const recommendations: DoctorRecommendation[] = [];
+
+  if (!workflow.ok) {
+    recommendations.push({
+      label: "scaffold the Lineup workflow and git repo",
+      command: "lineup init",
+      detail: "creates .lineup-core/workflows/full-pipeline.yaml and initializes git if needed"
+    });
+  }
+
+  if (!gitProject.isRepository) {
+    recommendations.push({
+      label: "initialize git",
+      command: "lineup init",
+      detail: "creates a git repository for native Lineup runs"
+    });
+  } else if (!gitProject.hasHeadCommit) {
+    recommendations.push({
+      label: "create the first commit",
+      command: 'git add -A && git commit -m "Initial commit"',
+      detail: "native Lineup runs require at least one commit"
+    });
+  }
+
+  const uniqueRecommendations: DoctorRecommendation[] = [];
+  const seenCommands = new Set<string>();
+
+  for (const recommendation of recommendations) {
+    if (seenCommands.has(recommendation.command)) {
+      continue;
+    }
+
+    seenCommands.add(recommendation.command);
+    uniqueRecommendations.push(recommendation);
+  }
+
+  return uniqueRecommendations;
+}
+
+export function createDoctorReport(cwd = process.cwd()): DoctorReport {
   const runtime = observeRuntimeStatus();
-  const workflow = resolveWorkflowCheck();
-  const gitProject = inspectGitProject(process.cwd());
+  const workflow = resolveWorkflowCheck(cwd);
+  const gitProject = inspectGitProject(cwd);
   const hostCommands = {
     claude: checkCommand("claude"),
     codex: checkCommand("codex"),
@@ -70,8 +136,9 @@ export async function runDoctorCommand(options: DoctorCommandOptions): Promise<v
         ok: false,
         detail: gitProject.isRepository ? "repository has no commits yet" : "unavailable"
       };
+  const recommendations = buildRecommendations(workflow, gitProject);
 
-  const report = {
+  return {
     healthy:
       checkCommand("git").ok &&
       checkCommand("node").ok &&
@@ -88,7 +155,8 @@ export async function runDoctorCommand(options: DoctorCommandOptions): Promise<v
       project: {
         workflow,
         git_repository: gitRepository,
-        git_head: gitHead
+        git_head: gitHead,
+        next_commands: recommendations
       },
       runtime: {
         artifact_store: {
@@ -111,6 +179,12 @@ export async function runDoctorCommand(options: DoctorCommandOptions): Promise<v
       }
     }
   };
+}
+
+export async function runDoctorCommand(options: DoctorCommandOptions): Promise<void> {
+  const report = createDoctorReport();
+  const hostCommands = report.checks.hosts;
+  const recommendations = report.checks.project.next_commands;
 
   if (options.json) {
     printJson(report);
@@ -126,6 +200,12 @@ export async function runDoctorCommand(options: DoctorCommandOptions): Promise<v
   printTableLine(`workflow: ${report.checks.project.workflow.detail}`);
   printTableLine(`git_repository: ${report.checks.project.git_repository.detail}`);
   printTableLine(`git_head: ${report.checks.project.git_head.detail}`);
+  if (recommendations.length > 0) {
+    printTableLine("next:");
+    for (const recommendation of recommendations) {
+      printTableLine(`  ${recommendation.command} — ${recommendation.detail}`);
+    }
+  }
   printTableLine(`artifact_store: ${report.checks.runtime.artifact_store.detail}`);
   printTableLine(`runs_dir: ${report.checks.runtime.runs_dir.detail}`);
   printTableLine(`latest_run: ${report.checks.runtime.latest_run.detail}`);

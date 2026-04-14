@@ -4,6 +4,7 @@ import path from "node:path";
 import { initializeGitRepository, inspectGitProject } from "../lib/git.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { lineupProjectRoot, projectRoot } from "../lib/paths.js";
+import type { GitProjectStatus } from "../lib/git.js";
 
 export type InitCommandOptions = {
   json?: boolean;
@@ -14,6 +15,11 @@ type InitEntry = {
   path: string;
   kind: "directory" | "file" | "repository";
   status: "created" | "already_exists";
+};
+
+export type InitCommandResult = {
+  entries: InitEntry[];
+  gitProject: GitProjectStatus;
 };
 
 const DEFAULT_WORKFLOW_TEMPLATE = `apiVersion: lineup/v3
@@ -102,8 +108,7 @@ function ensureFile(filePath: string, content: string, entries: InitEntry[]): vo
   }
 }
 
-export async function runInitCommand(options: InitCommandOptions): Promise<void> {
-  const cwd = process.cwd();
+export function initializeLineupProject(options: InitCommandOptions, cwd = process.cwd()): InitCommandResult {
   const lineupRoot = lineupProjectRoot(cwd);
   const root = projectRoot(cwd);
   const workflowName = options.workflow ?? "full-pipeline";
@@ -143,6 +148,15 @@ export async function runInitCommand(options: InitCommandOptions): Promise<void>
       status: "already_exists"
     });
   }
+
+  return {
+    entries,
+    gitProject
+  };
+}
+
+export async function runInitCommand(options: InitCommandOptions): Promise<void> {
+  const { entries, gitProject } = initializeLineupProject(options);
 
   if (options.json) {
     printJson(entries);

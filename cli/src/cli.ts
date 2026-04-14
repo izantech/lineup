@@ -28,6 +28,7 @@ import { runReplayCommand, type ReplayCommandOptions } from "./commands/replay";
 import { runPendingCommand, type PendingCommandOptions } from "./commands/pending";
 import { runResumeCommand, type ResumeCommandOptions } from "./commands/resume";
 import { runRunCommand, type RunCommandOptions } from "./commands/run";
+import { runStartCommand, type StartCommandOptions } from "./commands/start";
 import { runRunsCommand, type RunsCommandOptions } from "./commands/runs";
 import { runShowCommand, type ShowCommandOptions } from "./commands/show";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
@@ -65,6 +66,7 @@ export type CliHandlers = {
   uninstall: (options: UninstallCommandOptions) => Promise<void>;
   status: (options: StatusCommandOptions) => Promise<void>;
   doctor: (options: DoctorCommandOptions) => Promise<void>;
+  start: (options: StartCommandOptions) => Promise<void>;
   run: (options: RunCommandOptions) => Promise<void>;
   resume: (options: ResumeCommandOptions) => Promise<void>;
   cancel: (options: CancelCommandOptions) => Promise<void>;
@@ -109,6 +111,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     uninstall: runUninstallCommand,
     status: runStatusCommand,
     doctor: runDoctorCommand,
+    start: runStartCommand,
     run: runRunCommand,
     resume: runResumeCommand,
     cancel: runCancelCommand,
@@ -193,6 +196,23 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--json", "Emit machine-readable JSON output")
     .option("--workflow <name>", "Workflow template name", "full-pipeline")
     .action(commandHandlers.init);
+
+  program
+    .command("start [task]")
+    .description("Prepare this repo for its first native run, then start Lineup when ready")
+    .option("--workflow <path>", "Path to workflow YAML", undefined)
+    .option("--tactic <name>", "Run a specific tactic", undefined)
+    .option("--host <host>", "Local execution host for human mode: claude|codex|opencode")
+    .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
+    .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
+    .option("--isolation <mode>", "Isolation mode: index|full|sparse")
+    .option("--mode <mode>", "Run mode: human|host")
+    .option("--implement-method <method>", "Task execution method: phase|task|single-session (default: phase)")
+    .option("--gate-timeout <seconds>", "Timeout for gate responses in seconds; on timeout saves state as blocked", parseInt)
+    .option("--approve-plan", "Skip interactive plan approval gate", false)
+    .action((task: string | undefined, opts: StartCommandOptions) =>
+      commandHandlers.start({ ...opts, prompt: task ?? opts.prompt })
+    );
 
   program
     .command("run [task]")
