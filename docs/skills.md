@@ -36,9 +36,11 @@ The host skill should:
 2. Start a detached bridge session with `lineup bridge start`
 3. Poll `lineup bridge events`
 4. Show `status` events as progress
-5. Ask the user only for `question` events
-6. Reply with `lineup bridge answer`
-7. Inspect final results with `lineup show`, `lineup artifacts show`, or `lineup logs`
+5. Prefer `pendingQuestion` on reconnect instead of assuming the last page still contains the original `question` event
+6. Ask the user only for `question` / `pendingQuestion`
+7. Reply with `lineup bridge answer` only while `recovery.action` is `answer`
+8. If `recovery.action` is `resume`, treat the run as a timeout-recovery flow instead of sending an inert answer
+9. Inspect final results with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
 This keeps the host session thin and prevents prompt-space orchestration drift.
 
@@ -57,9 +59,11 @@ Skills are thin CLI wrappers (~12 KB total, down from ~100 KB). The kick-off ski
 1. Preflights workflow and git readiness (`lineup init` if needed, `lineup doctor --json`)
 2. Launches `lineup bridge start "<user request>" --executor-host <host>` (or adds `--tactic <name>` / `--workflow <path>`)
 3. Polls `lineup bridge events <run-id> --after <seq> --wait <seconds> --json`
-4. Handles `question` events by asking the user and calling `lineup bridge answer`
-5. Presents `status` events as progress updates
-6. Presents `complete` results, then inspects artifacts with `lineup show`, `lineup artifacts show`, or `lineup logs`
+4. Uses `pendingQuestion` for reconnect-safe gate handling
+5. Handles live `question` / `pendingQuestion` payloads by asking the user and calling `lineup bridge answer`
+6. Uses `recovery` to distinguish `answer`, `resume`, and `inspect` next steps
+7. Presents `status` events as progress updates
+8. Presents `complete` results, then inspects artifacts with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
 All pipeline orchestration (agent spawning, DAG scheduling, state, artifacts) lives in the CLI.
 The bridge is the skill-facing API; it keeps the host session thin and avoids raw
@@ -71,6 +75,10 @@ Recommended host integration:
 - poll `lineup bridge events` for incremental updates
 - answer only `question` events with `lineup bridge answer`
 - inspect final results with the existing read-only commands after completion
+
+Built-in CLI tactics such as `explain` are resolvable by name even outside the
+Lineup repo. They are not currently advertised by `lineup tactic list`, which
+remains focused on repo-local/project tactics.
 
 This keeps the host session responsive instead of treating the pipeline as a single
 opaque blocking Bash call.
@@ -88,8 +96,10 @@ should still aim to emit the correct artifacts on the first try:
 - markdown-style reviewer summaries are normalized into `Review` YAML
 
 Stages 1-3 (clarify, research, gate) now surface as bridge `question` events with
-typed `gateType` fields. The skill maps each gate type to the appropriate user
-interaction pattern.
+typed `gateType` fields. The bridge also persists unresolved gate metadata in
+`pendingQuestion` so interrupted host sessions can reconnect without replaying the
+entire event stream. The skill maps each gate type to the appropriate user
+interaction pattern and follows `recovery.action` when a gate has timed out.
 
 ## Commands
 

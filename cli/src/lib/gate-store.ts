@@ -5,6 +5,7 @@ import type { JsonRpcId, LineupGateType } from "./protocol.js";
 
 export type PendingGate = {
   requestId: JsonRpcId;
+  stageId?: string;
   gateType: LineupGateType;
   question: string;
   choices: readonly string[];

@@ -34,6 +34,7 @@
         "HOST_DEFAULTS_TERM",
         "HOST_ARTIFACT_LABEL",
         "HOST_ARTIFACT_LABEL_LOWER",
+        "EXECUTOR_HOST",
         "AGENTS_DIR",
         "OLLAMA_CONFIG_PATH"
       ],
@@ -58,6 +59,7 @@
         "HOST_DEFAULTS_TERM": { "type": "string" },
         "HOST_ARTIFACT_LABEL": { "type": "string" },
         "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" },
+        "EXECUTOR_HOST": { "type": "string", "enum": ["claude", "codex", "opencode"] },
         "AGENTS_DIR": { "type": "string" },
         "OLLAMA_CONFIG_PATH": { "type": "string" }
       }

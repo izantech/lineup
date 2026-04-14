@@ -68,12 +68,56 @@ function createRunId(): string {
 
 function formatBridgeEvent(event: BridgeEvent): string {
   if (event.type === "status") {
-    return `[${event.stageId}] ${event.text}`;
+    return `[${event.stageLabel}:${event.kind}] ${event.text}`;
   }
   if (event.type === "question") {
-    return `[question:${event.gateType}] ${event.question}`;
+    return `[question:${event.gateType}:${event.stageId}] ${event.question}`;
   }
   return `[complete:${event.status}] ${event.summary ?? "Run completed."}`;
+}
+
+function stageLabel(stageId: string): string {
+  const knownLabels: Record<string, string> = {
+    triage: "Triage",
+    clarify: "Clarify",
+    research: "Research",
+    gate: "Clarification Gate",
+    plan: "Plan",
+    "plan-approval": "Plan Approval",
+    implement: "Implement",
+    verify: "Verify",
+    document: "Document"
+  };
+
+  if (knownLabels[stageId]) {
+    return knownLabels[stageId];
+  }
+
+  return stageId
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function statusKind(text: string, final: boolean | undefined): "stage-start" | "progress" | "stage-end" | "warning" {
+  if (text.startsWith("[stage/warning]")) {
+    return "warning";
+  }
+  if (final) {
+    return "stage-end";
+  }
+  if (text.startsWith("Starting ")) {
+    return "stage-start";
+  }
+  return "progress";
+}
+
+function resumeRecovery(runId: string): { action: "resume"; command: string; message: string } {
+  return {
+    action: "resume",
+    command: `lineup resume ${runId}`,
+    message: "The bridge worker already stopped after a gate timeout. Resume the run to continue."
+  };
 }
 
 function resolveWorkerCommand(): { command: string; args: string[] } {
@@ -135,7 +179,7 @@ function spawnBridgeWorker(input: { runId: string; executorHost: HostName; optio
   return child.pid;
 }
 
-function translateProtocolToBridgeEvent(message: LineupProtocolMessage, runId: string): { terminal: boolean } {
+function translateProtocolToBridgeEvent(message: LineupProtocolMessage, runId: string, projectRoot: string): { terminal: boolean } {
   if ("method" in message && message.method === "agent/output") {
     const params = message.params as LineupAgentOutputParams | undefined;
     if (!params || params.channel !== "status") {
@@ -143,6 +187,8 @@ function translateProtocolToBridgeEvent(message: LineupProtocolMessage, runId: s
     }
     appendBridgeStatusEvent(runId, {
       stageId: params.stageId,
+      stageLabel: stageLabel(params.stageId),
+      kind: statusKind(params.chunk, params.final),
       text: params.chunk,
       ...(params.final ? { final: true } : {})
     });
@@ -151,14 +197,17 @@ function translateProtocolToBridgeEvent(message: LineupProtocolMessage, runId: s
 
   if ("method" in message && message.method === "gate/request" && "id" in message) {
     const params = message.params as LineupGateRequestParams;
+    const pending = readPendingGate(runId, message.id, projectRoot);
     appendBridgeQuestionEvent(runId, {
       requestId: message.id,
+      stageId: params.stageId,
       gateType: params.gateType,
       question: params.question,
       choices: params.choices,
       ...(params.defaultChoice ? { defaultChoice: params.defaultChoice } : {}),
       ...(params.context ? { context: params.context } : {}),
-      ...(params.allowFreeText ? { allowFreeText: true } : {})
+      ...(params.allowFreeText ? { allowFreeText: true } : {}),
+      createdAt: pending?.createdAt ?? new Date().toISOString()
     });
     return { terminal: false };
   }
@@ -193,7 +242,8 @@ export async function runBridgeStartCommand(options: BridgeStartOptions, deps: B
       runId,
       executorHost,
       ...(options.workflow ? { workflow: options.workflow } : {}),
-      ...(options.tactic ? { tactic: options.tactic } : {})
+      ...(options.tactic ? { tactic: options.tactic } : {}),
+      ...(options.gateTimeout !== undefined ? { gateTimeoutSeconds: options.gateTimeout } : {})
     })
   );
 
@@ -244,12 +294,46 @@ export async function runBridgeEventsCommand(options: BridgeEventsOptions): Prom
   for (const event of result.events) {
     printTableLine(formatBridgeEvent(event));
   }
+  if (result.pendingQuestion && !result.events.some((event) => event.type === "question")) {
+    printTableLine(`[pending:${result.pendingQuestion.gateType}:${result.pendingQuestion.stageId}] ${result.pendingQuestion.question}`);
+  }
   printTableLine(`next_cursor: ${result.nextCursor}`);
+  printTableLine(`continue_with: lineup bridge events ${options.runId} --after ${result.nextCursor}`);
   printTableLine(`status: ${result.status}`);
   printTableLine(`terminal: ${result.terminal ? "yes" : "no"}`);
+  printTableLine(`recovery: ${result.recovery.command}`);
 }
 
 export async function runBridgeAnswerCommand(options: BridgeAnswerOptions): Promise<void> {
+  const session = loadBridgeSession(options.runId);
+  if (!session) {
+    throw new CliError(`Bridge session not found for run ${options.runId}.`, {
+      code: "invalid_path"
+    });
+  }
+
+  if (session.pending_question && String(session.pending_question.requestId) === options.requestId) {
+    if (!session.pending_question.workerWaiting || session.pending_question.timedOut || session.blocked_recovery) {
+      const recovery = resumeRecovery(options.runId);
+      const payload = {
+        accepted: false,
+        runId: options.runId,
+        requestId: options.requestId,
+        choice: options.choice,
+        recovery,
+        message: recovery.message
+      };
+
+      if (options.json) {
+        printJson(payload);
+        return;
+      }
+
+      printTableLine(`${recovery.message} Use \`${recovery.command}\`.`);
+      return;
+    }
+  }
+
   const projectRoot = resolve(".");
   const pending = readPendingGate(options.runId, options.requestId, projectRoot);
   if (!pending) {
@@ -305,7 +389,7 @@ export async function runBridgeWorkerCommand(options: BridgeWorkerOptions): Prom
         localAgentRunner,
         emitProtocolToStdout: false,
         onProtocolMessage(message) {
-          const translated = translateProtocolToBridgeEvent(message, options.runId);
+          const translated = translateProtocolToBridgeEvent(message, options.runId, resolve("."));
           sawTerminalEvent = sawTerminalEvent || translated.terminal;
         }
       }

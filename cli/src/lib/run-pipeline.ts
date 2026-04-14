@@ -199,7 +199,6 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     }
 
     // 8. Execute stages in wave order
-    const preStages = new Set(["triage", "clarify", "research", "gate"]);
     const postStages = new Set(["document"]);
 
     for (const wave of waves) {
@@ -223,7 +222,15 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           continue;
         }
 
-        if (preStages.has(stageId)) {
+        const isPrePipelineStage =
+          stage.type === "builtin" ||
+          (stage.type === "agent" &&
+            stage.id !== "plan" &&
+            stage.id !== "implement" &&
+            stage.id !== "verify" &&
+            !postStages.has(stage.id));
+
+        if (isPrePipelineStage) {
           // Pre-pipeline: output protocol messages for host orchestrator
           const result = await executePreStage(
             stage,
@@ -276,6 +283,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             const reqId = protocolRequestId++;
             const pendingGate: PendingGate = {
               requestId: reqId,
+              stageId,
               gateType: "approval",
               question: "Approve the generated plan?",
               choices: ["approve", "reject"],
@@ -389,6 +397,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 const reqId = protocolRequestId++;
                 const pendingGate: PendingGate = {
                   requestId: reqId,
+                  stageId: "verify",
                   gateType: "verify-decision",
                   question: reviewSummary,
                   choices: ["retry", "accept", "abort"],
@@ -610,6 +619,7 @@ function resolveTacticPath(name: string): string {
   const candidates = [
     resolve(".lineup", "tactics", `${name}.yaml`),
     resolve("tactics", `${name}.yaml`),
+    resolve(packageRoot(), "tactics", `${name}.yaml`),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -1217,6 +1227,7 @@ async function emitGateAndWait(
   const reqId = nextRequestId();
   const pendingGate: PendingGate = {
     requestId: reqId,
+    stageId: stage.id,
     gateType,
     question,
     choices,

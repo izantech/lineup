@@ -22,8 +22,10 @@ Recommended host pattern:
 
 1. Start a bridge session and capture the returned `runId`
 2. Poll `lineup bridge events` for `status`, `question`, and `complete` events
-3. Present only `question` events to the user and answer them with `lineup bridge answer`
-4. Inspect results after completion with `lineup show`, `lineup artifacts show`, or `lineup logs`
+3. Use `pendingQuestion` when reconnecting after the caller's cursor has already advanced past the original `question` event
+4. Present only `question` / `pendingQuestion` to the user and answer them with `lineup bridge answer` while `recovery.action` is `answer`
+5. If `recovery.action` is `resume`, surface the timeout state and resume instead of sending an inert late answer
+6. Inspect results after completion with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
 ## Event Types
 
@@ -33,17 +35,32 @@ Recommended host pattern:
 | `question` | User-facing decisions that require a response |
 | `complete` | Terminal success, failure, or aborted state |
 
+`status` events also carry host-facing `stageLabel` and `kind` fields so hosts can
+render progress without interpreting raw stage text.
+
 `question` events carry the interaction details that the skill should present:
 
+- `stageId`
 - `gateType`
 - `question`
 - `choices`
 - `defaultChoice` if present
 - `context` if present
 - `allowFreeText` if present
+- `createdAt`
+- `expiresAt` if a gate timeout is active
 
 The skill should present the question via its normal question primitive, then call
 `lineup bridge answer <run-id> <request-id> --choice <value>` with an optional reason.
+
+`lineup bridge events --json` also returns:
+
+- `session` — session metadata for reconnect-safe rendering
+- `pendingQuestion` — the unresolved question even if no new `question` event is in the current page
+- `recovery` — the concrete next step: `answer`, `resume`, or `inspect`
+
+The text-mode `lineup bridge events` output also emits `continue_with` so hosts
+that are shelling out manually can reuse the exact next `--after` cursor value.
 
 ## Triage Gate
 
@@ -79,6 +96,10 @@ The bridge event stream is intentionally smaller than the raw host protocol:
 - `status`
 - `question`
 - `complete`
+
+Blocked bridge runs still use `status: "blocked"` but should be treated as recovery
+states. A live unanswered gate yields `recovery.action = "answer"`. A timed-out gate
+that already stopped the worker yields `recovery.action = "resume"`.
 
 The bridge owns orchestration, local agent spawning, and artifact handoff. Generated
 skills stay focused on progress display and user decisions.

@@ -709,6 +709,101 @@ gaps:
     }
   });
 
+  it("runs the bundled explain tactic outside the lineup repo", async () => {
+    const projectRoot = join(tempDir, "project-explain-tactic");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        if (input.agent === "researcher") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-13
+topic: explain-tactic
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: The bundled explain tactic resolved successfully.
+constraints:
+  tooling: local
+gaps:
+  pending: []
+`
+          };
+        }
+
+        if (input.agent === "teacher") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `type: explanation
+agent: teacher
+date: 2026-04-13
+topic: explain-tactic
+status: complete
+pipeline_stage: explain
+learning_objectives:
+  - Understand bundled tactic resolution.
+prerequisites: []
+explanation:
+  overview: |
+    The bundled explain tactic resolved successfully.
+  sections:
+    - title: Resolution
+      content: |
+        The CLI found the built-in explain tactic without requiring a repo-local tactics directory.
+      code_examples: []
+      key_takeaways:
+        - Bundled tactics are available outside the lineup repo.
+further_exploration: []
+`
+          };
+        }
+
+        return {
+          host: "codex",
+          stderr: "",
+          content: REVIEW_YAML
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          tactic: "explain",
+          mode: "human",
+          prompt: "Explain tactic resolution"
+        },
+        {
+          runId: "expln1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(String(result.stageResults.get("research")?.outputs.artifactPath)).toContain("/.lineup/.runs/expln1/artifacts/research.yaml");
+      expect(readFileSync(String(result.stageResults.get("research")?.outputs.artifactPath), "utf8")).toContain(
+        "The bundled explain tactic resolved successfully."
+      );
+      expect(result.stageResults.get("explain")?.outputs).toHaveProperty("artifactPath");
+      expect(String(result.stageResults.get("explain")?.outputs.artifactPath)).toContain("/.lineup/.runs/expln1/artifacts/explain.yaml");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("rejects workflow with cycle", async () => {
     const workflowDir = join(tempDir, ".lineup-core", "workflows");
     mkdirSync(workflowDir, { recursive: true });

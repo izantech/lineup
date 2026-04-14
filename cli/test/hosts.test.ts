@@ -65,5 +65,7 @@ describe.each([
     expect(files.every((file) => file.content.includes("<!-- AUTO-GENERATED."))).toBe(true);
     expect(files.some((file) => file.target === kickoffTarget)).toBe(true);
     expect(kickoffFile?.content.startsWith("---")).toBe(true);
+    expect(kickoffFile?.content.includes("--executor-host <host>")).toBe(false);
+    expect(kickoffFile?.content.includes(`--executor-host ${host}`)).toBe(true);
   });
 });

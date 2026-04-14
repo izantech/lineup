@@ -59,6 +59,25 @@ export type RuntimeStatus = {
 
 export type BridgeSessionStatus = "starting" | "running" | "blocked" | "succeeded" | "failed" | "canceled";
 
+export type BridgeRecoveryAction = "answer" | "resume" | "inspect";
+
+export type BridgeStatusKind = "stage-start" | "progress" | "stage-end" | "warning";
+
+export type BridgePendingQuestion = {
+  requestId: string | number;
+  stageId: string;
+  gateType: string;
+  question: string;
+  choices: readonly string[];
+  defaultChoice?: string;
+  context?: string;
+  allowFreeText?: boolean;
+  createdAt: string;
+  expiresAt?: string;
+  workerWaiting: boolean;
+  timedOut: boolean;
+};
+
 export type BridgeSessionRecord = {
   apiVersion: Extract<LineupApiVersion, "lineup/v3">;
   kind: "BridgeSession";
@@ -69,6 +88,9 @@ export type BridgeSessionRecord = {
   current_seq: number;
   workflow?: string;
   tactic?: string;
+  gate_timeout_seconds?: number;
+  pending_question?: BridgePendingQuestion;
+  blocked_recovery?: boolean;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -79,6 +101,8 @@ export type BridgeStatusEvent = {
   type: "status";
   runId: string;
   stageId: string;
+  stageLabel: string;
+  kind: BridgeStatusKind;
   text: string;
   final?: boolean;
 };
@@ -88,12 +112,15 @@ export type BridgeQuestionEvent = {
   type: "question";
   runId: string;
   requestId: string | number;
+  stageId: string;
   gateType: string;
   question: string;
   choices: readonly string[];
   defaultChoice?: string;
   context?: string;
   allowFreeText?: boolean;
+  createdAt: string;
+  expiresAt?: string;
 };
 
 export type BridgeCompleteEvent = {
@@ -106,6 +133,33 @@ export type BridgeCompleteEvent = {
 };
 
 export type BridgeEvent = BridgeStatusEvent | BridgeQuestionEvent | BridgeCompleteEvent;
+
+export type BridgeSessionView = {
+  executorHost: HostName;
+  workflow?: string;
+  tactic?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  currentSeq: number;
+};
+
+export type BridgeRecoveryInfo = {
+  action: BridgeRecoveryAction;
+  command: string;
+  message: string;
+};
+
+export type BridgeEventsResult = {
+  runId: string;
+  events: BridgeEvent[];
+  nextCursor: number;
+  terminal: boolean;
+  status: BridgeSessionRecord["status"];
+  session: BridgeSessionView;
+  pendingQuestion?: BridgePendingQuestion;
+  recovery: BridgeRecoveryInfo;
+};
 
 export type StatusOutput = {
   schema_version: number;

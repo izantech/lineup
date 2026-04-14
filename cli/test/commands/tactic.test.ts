@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runTacticNewCommand, runTacticListCommand } from "../../src/commands/tactic.js";
+import { runTacticConvertCommand, runTacticNewCommand, runTacticListCommand } from "../../src/commands/tactic.js";
 
 let tempDir: string;
 let stdout: string[];
@@ -108,5 +108,19 @@ stages:
 
     const output = stdout.join("");
     expect(output).toContain("No tactics found");
+  });
+});
+
+describe("tactic convert", () => {
+  it("resolves bundled tactics when the project does not define one", async () => {
+    await runTacticConvertCommand({ name: "explain", json: true });
+
+    const output = JSON.parse(stdout.join(""));
+    expect(output.name).toBe("explain");
+    expect(output.stages).toEqual([
+      expect.objectContaining({ id: "research", agent: "researcher" }),
+      expect.objectContaining({ id: "explain", agent: "teacher" }),
+      expect.objectContaining({ id: "verify", agent: "reviewer" })
+    ]);
   });
 });

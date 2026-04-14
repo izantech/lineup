@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseLocalAgentStructuredOutput } from "../src/lib/agent-runner.js";
+import { normalizeCodexOutputSchema, parseLocalAgentStructuredOutput } from "../src/lib/agent-runner.js";
 
 describe("parseLocalAgentStructuredOutput", () => {
   it("unwraps Claude YAML result envelopes that contain fenced JSON", () => {
@@ -52,5 +52,29 @@ result: >-
         }
       ]
     });
+  });
+
+  it("skips permissive schemas for Codex structured output mode", () => {
+    const rawSchema = JSON.stringify({
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        summary: { type: "string" }
+      }
+    });
+
+    expect(normalizeCodexOutputSchema(rawSchema)).toBeNull();
+  });
+
+  it("keeps strict schemas for Codex structured output mode", () => {
+    const rawSchema = JSON.stringify({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        summary: { type: "string" }
+      }
+    });
+
+    expect(normalizeCodexOutputSchema(rawSchema)).toBe(rawSchema);
   });
 });

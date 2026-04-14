@@ -6,7 +6,16 @@ import {
   lineupRunBridgeEventsFile,
   lineupRunBridgeSessionFile
 } from "./paths.js";
-import type { BridgeCompleteEvent, BridgeEvent, BridgeQuestionEvent, BridgeSessionRecord, BridgeStatusEvent } from "./types.js";
+import type {
+  BridgeCompleteEvent,
+  BridgeEvent,
+  BridgeEventsResult,
+  BridgePendingQuestion,
+  BridgeQuestionEvent,
+  BridgeRecoveryInfo,
+  BridgeSessionRecord,
+  BridgeStatusEvent
+} from "./types.js";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -30,6 +39,7 @@ export function defaultBridgeSession(input: {
   executorHost: BridgeSessionRecord["executor_host"];
   workflow?: string;
   tactic?: string;
+  gateTimeoutSeconds?: number;
 }): BridgeSessionRecord {
   const createdAt = nowIso();
   return {
@@ -41,6 +51,7 @@ export function defaultBridgeSession(input: {
     current_seq: 0,
     ...(input.workflow ? { workflow: input.workflow } : {}),
     ...(input.tactic ? { tactic: input.tactic } : {}),
+    ...(input.gateTimeoutSeconds !== undefined ? { gate_timeout_seconds: input.gateTimeoutSeconds } : {}),
     created_at: createdAt,
     updated_at: createdAt
   };
@@ -97,6 +108,113 @@ function persistBridgeEvent(runId: string, event: BridgeEvent, cwd = process.cwd
   appendFileSync(lineupRunBridgeEventsFile(runId, cwd), `${JSON.stringify(event)}\n`, "utf8");
 }
 
+function toIsoOrUndefined(value: number | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return new Date(value).toISOString();
+}
+
+function computeExpiresAt(createdAt: string, gateTimeoutSeconds: number | undefined): string | undefined {
+  if (gateTimeoutSeconds === undefined) {
+    return undefined;
+  }
+
+  const createdAtMs = Date.parse(createdAt);
+  if (Number.isNaN(createdAtMs)) {
+    return undefined;
+  }
+
+  return toIsoOrUndefined(createdAtMs + gateTimeoutSeconds * 1000);
+}
+
+function bridgeInspectCommand(runId: string): string {
+  return `lineup show ${runId} --json`;
+}
+
+function bridgeResumeCommand(runId: string): string {
+  return `lineup resume ${runId}`;
+}
+
+function bridgeAnswerCommand(runId: string, pendingQuestion: BridgePendingQuestion): string {
+  const choice = pendingQuestion.defaultChoice ?? "<choice>";
+  return `lineup bridge answer ${runId} ${pendingQuestion.requestId} --choice "${choice}"`;
+}
+
+function formatCompletionSummary(
+  runId: string,
+  status: BridgeSessionRecord["status"],
+  summary: string | undefined,
+  session: BridgeSessionRecord
+): string {
+  const detail = summary?.trim();
+  if (status === "succeeded") {
+    return detail && detail !== "Pipeline completed successfully."
+      ? `Bridge run succeeded. ${detail} Inspect with \`${bridgeInspectCommand(runId)}\`.`
+      : `Bridge run succeeded. Inspect with \`${bridgeInspectCommand(runId)}\` or \`lineup logs ${runId} --json\`.`;
+  }
+
+  if (status === "blocked") {
+    const pending = session.pending_question;
+    if (pending?.timedOut) {
+      return `Bridge run is blocked after the ${pending.gateType} question timed out. Resume with \`${bridgeResumeCommand(runId)}\`.`;
+    }
+
+    return `Bridge run is blocked and waiting for a bridge answer. Answer with \`${pending ? bridgeAnswerCommand(runId, pending) : `lineup bridge answer ${runId} <request-id> --choice "<choice>"`}\`.`;
+  }
+
+  if (status === "canceled") {
+    return detail
+      ? `Bridge run was canceled. ${detail} Inspect with \`${bridgeInspectCommand(runId)}\`.`
+      : `Bridge run was canceled. Inspect with \`${bridgeInspectCommand(runId)}\`.`;
+  }
+
+  return detail
+    ? `Bridge run failed: ${detail} Inspect with \`lineup logs ${runId} --json\`.`
+    : `Bridge run failed. Inspect with \`lineup logs ${runId} --json\`.`;
+}
+
+function sessionRecovery(runId: string, session: BridgeSessionRecord): BridgeRecoveryInfo {
+  const pending = session.pending_question;
+  if (session.status === "blocked" && pending) {
+    if (pending.workerWaiting && !pending.timedOut) {
+      return {
+        action: "answer",
+        command: bridgeAnswerCommand(runId, pending),
+        message: `Answer the pending ${pending.gateType} question to continue the bridge run.`
+      };
+    }
+
+    return {
+      action: "resume",
+      command: bridgeResumeCommand(runId),
+      message: "The worker stopped after a gate timeout. Resume the run to continue."
+    };
+  }
+
+  return {
+    action: "inspect",
+    command: bridgeInspectCommand(runId),
+    message:
+      session.status === "running" || session.status === "starting"
+        ? "Inspect the live run state."
+        : "Inspect the completed run state."
+  };
+}
+
+export function clearBridgePendingQuestion(runId: string, cwd = process.cwd()): BridgeSessionRecord {
+  return updateBridgeSession(
+    runId,
+    {
+      pending_question: undefined,
+      blocked_recovery: false,
+      status: "running"
+    },
+    cwd
+  );
+}
+
 export function appendBridgeStatusEvent(
   runId: string,
   input: Omit<BridgeStatusEvent, "seq" | "type" | "runId">,
@@ -110,13 +228,21 @@ export function appendBridgeStatusEvent(
     type: "status",
     runId,
     stageId: input.stageId,
+    stageLabel: input.stageLabel,
+    kind: input.kind,
     text: input.text,
     ...(input.final ? { final: true } : {})
   };
   persistBridgeEvent(runId, event, cwd);
   updateBridgeSession(runId, {
     current_seq: event.seq,
-    status: "running"
+    status: "running",
+    ...(event.kind === "stage-end" && event.text.startsWith("Gate '")
+      ? {
+          pending_question: undefined,
+          blocked_recovery: false
+        }
+      : {})
   }, cwd);
   return event;
 }
@@ -130,22 +256,43 @@ export function appendBridgeQuestionEvent(
   if (!session) {
     throw new CliError(`Bridge session not found for run ${runId}.`, { code: "invalid_path" });
   }
+
+  const createdAt = input.createdAt;
+  const expiresAt = input.expiresAt ?? computeExpiresAt(createdAt, session.gate_timeout_seconds);
   const event: BridgeQuestionEvent = {
     seq: session.current_seq + 1,
     type: "question",
     runId,
     requestId: input.requestId,
+    stageId: input.stageId,
     gateType: input.gateType,
     question: input.question,
     choices: input.choices,
     ...(input.defaultChoice ? { defaultChoice: input.defaultChoice } : {}),
     ...(input.context ? { context: input.context } : {}),
-    ...(input.allowFreeText ? { allowFreeText: true } : {})
+    ...(input.allowFreeText ? { allowFreeText: true } : {}),
+    createdAt,
+    ...(expiresAt ? { expiresAt } : {})
   };
   persistBridgeEvent(runId, event, cwd);
   updateBridgeSession(runId, {
     current_seq: event.seq,
-    status: "blocked"
+    status: "blocked",
+    pending_question: {
+      requestId: event.requestId,
+      stageId: event.stageId,
+      gateType: event.gateType,
+      question: event.question,
+      choices: event.choices,
+      ...(event.defaultChoice ? { defaultChoice: event.defaultChoice } : {}),
+      ...(event.context ? { context: event.context } : {}),
+      ...(event.allowFreeText ? { allowFreeText: true } : {}),
+      createdAt: event.createdAt,
+      ...(event.expiresAt ? { expiresAt: event.expiresAt } : {}),
+      workerWaiting: true,
+      timedOut: false
+    },
+    blocked_recovery: false
   }, cwd);
   return event;
 }
@@ -173,18 +320,38 @@ export function appendBridgeCompleteEvent(
     throw new CliError(`Bridge session not found for run ${runId}.`, { code: "invalid_path" });
   }
   const finalStatus = toBridgeCompletionStatus(input.status);
+  const pendingQuestion =
+    finalStatus === "blocked" && session.pending_question
+      ? {
+          ...session.pending_question,
+          workerWaiting: false,
+          timedOut: true
+        }
+      : undefined;
   const event: BridgeCompleteEvent = {
     seq: session.current_seq + 1,
     type: "complete",
     runId,
     status: finalStatus,
-    ...(input.summary ? { summary: input.summary } : {}),
+    summary: formatCompletionSummary(runId, finalStatus, input.summary, {
+      ...session,
+      ...(pendingQuestion ? { pending_question: pendingQuestion } : {})
+    }),
     ...(input.completedAt ? { completedAt: input.completedAt } : {})
   };
   persistBridgeEvent(runId, event, cwd);
   updateBridgeSession(runId, {
     current_seq: event.seq,
     status: finalStatus,
+    ...(finalStatus === "blocked"
+      ? {
+          pending_question: pendingQuestion,
+          blocked_recovery: true
+        }
+      : {
+          pending_question: undefined,
+          blocked_recovery: false
+        }),
     ...(event.completedAt ? { completed_at: event.completedAt } : {})
   }, cwd);
   return event;
@@ -197,13 +364,7 @@ export async function readBridgeEvents(
     waitMs?: number;
   } = {},
   cwd = process.cwd()
-): Promise<{
-  runId: string;
-  events: BridgeEvent[];
-  nextCursor: number;
-  terminal: boolean;
-  status: BridgeSessionRecord["status"];
-}> {
+): Promise<BridgeEventsResult> {
   const after = options.after ?? 0;
   const waitMs = options.waitMs ?? 0;
   const startedAt = Date.now();
@@ -223,7 +384,18 @@ export async function readBridgeEvents(
         events,
         nextCursor: events.length > 0 ? events[events.length - 1]!.seq : after,
         terminal,
-        status: session.status
+        status: session.status,
+        session: {
+          executorHost: session.executor_host,
+          ...(session.workflow ? { workflow: session.workflow } : {}),
+          ...(session.tactic ? { tactic: session.tactic } : {}),
+          createdAt: session.created_at,
+          updatedAt: session.updated_at,
+          ...(session.completed_at ? { completedAt: session.completed_at } : {}),
+          currentSeq: session.current_seq
+        },
+        ...(session.pending_question ? { pendingQuestion: session.pending_question } : {}),
+        recovery: sessionRecovery(runId, session)
       };
     }
 

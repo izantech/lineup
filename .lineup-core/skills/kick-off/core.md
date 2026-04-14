@@ -15,9 +15,9 @@ Before launching the pipeline, run the lightweight init in `{{KICKOFF_INIT_PATH}
 
 Determine the CLI command based on the user's request:
 
-- **Default pipeline**: `lineup bridge start "<user request>" --executor-host <host>`
-- **Specific tactic**: `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`
-- **With workflow**: `lineup bridge start "<user request>" --executor-host <host> --workflow <path>`
+- **Default pipeline**: `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}}`
+- **Specific tactic**: `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}} --tactic <name>`
+- **With workflow**: `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}} --workflow <path>`
 
 Prefer a detached bridge session so the host stays responsive while you monitor
 progress and handle questions.
@@ -27,8 +27,10 @@ Recommended pattern:
 1. Start `lineup bridge start ...` and capture the returned `runId`
 2. Poll `lineup bridge events <run-id> --after <seq> --wait 30 --json`
 3. Render `status` events as progress updates
-4. Render `question` events to the user and answer them with `lineup bridge answer`
-5. When `complete` arrives, inspect the run with `lineup show`, `lineup artifacts show`, or `lineup logs`
+4. If `pendingQuestion` is present, prefer that over assuming the latest `question` event is still in the current page
+5. Render `question` events or `pendingQuestion` to the user and answer them with `lineup bridge answer`
+6. Use `recovery` to decide whether the next step is `answer`, `resume`, or `inspect`
+7. When `complete` arrives, inspect the run with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
 The bridge is the skill-facing API. Keep the host session focused on rendering
 progress and answering questions.
@@ -38,9 +40,15 @@ progress and answering questions.
 Each bridge event is a compact JSON object from `lineup bridge events`. Handle
 these event types:
 
+The JSON payload also includes:
+
+- `session` — run metadata for reconnect-safe rendering
+- `pendingQuestion` — the unresolved gate, even if the caller's cursor is already past the original `question` event
+- `recovery` — the exact next CLI step for the current bridge session state
+
 ### `question` — requires user interaction
 
-When you see a `question` event:
+When you see a `question` event or `pendingQuestion`:
 
 1. Read `gateType` to determine the interaction pattern
 2. Present `question` to the user
@@ -54,6 +62,10 @@ lineup bridge answer <run-id> <request-id> --choice "<user_choice>"
 ```
 
 If the user provides a reason or elaboration, add `--reason "<text>"`.
+
+If `recovery.action` is `resume`, do not call `lineup bridge answer` and hope the
+worker picks it up later. Tell the user the run timed out and use the provided
+resume command instead.
 
 ### Gate types
 
@@ -69,7 +81,8 @@ If the user provides a reason or elaboration, add `--reason "<text>"`.
 
 ### `status` — informational
 
-Show `text` to the user as a progress update.
+Show `text` to the user as a progress update. `stageLabel` and `kind` are already
+prepared for host rendering, so you should not need to interpret the raw stage text.
 
 When you launch the CLI, tell the user what is happening in plain language:
 
@@ -81,9 +94,10 @@ When you launch the CLI, tell the user what is happening in plain language:
 
 The bridge finished. Show `status` and `summary` to the user.
 
-- On `"success"`: report what was accomplished.
+- On `"succeeded"`: report what was accomplished and inspect artifacts.
+- On `"blocked"`: treat this as a recovery state, not a normal terminal success/failure. Follow `recovery`.
 - On `"failed"`: show the error summary and suggest `lineup logs <runId>` for details.
-- On `"aborted"`: note the pipeline was stopped and why.
+- On `"canceled"`: note the pipeline was stopped and why.
 
 ## Reading results
 
@@ -120,15 +134,15 @@ orchestrator, classify the task to choose the right approach:
 | Complexity | Approach |
 |------------|----------|
 | **Simple** (single file, explicit instructions) | Skip the bridge. Just do it directly. |
-| **Moderate** (multiple files, clear scope) | `lineup bridge start "<user request>" --executor-host <host>` with default workflow |
-| **Complex** (multiple modules, unclear trade-offs) | `lineup bridge start "<user request>" --executor-host <host>` with default workflow (full pipeline) |
+| **Moderate** (multiple files, clear scope) | `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}}` with default workflow |
+| **Complex** (multiple modules, unclear trade-offs) | `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}}` with default workflow (full pipeline) |
 
 For simple tasks, do not invoke the CLI — handle directly as the orchestrator.
 
 ## Tactics
 
 If the user names a specific tactic or if project tactics exist in
-`.lineup/tactics/`, use `lineup bridge start "<user request>" --executor-host <host> --tactic <name>`.
+`.lineup/tactics/`, use `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}} --tactic <name>`.
 
 To list available tactics: `lineup tactic list --json`.
 
@@ -136,6 +150,8 @@ To list available tactics: `lineup tactic list --json`.
 
 - **Handle questions promptly** — the bridge blocks until you respond. Do not
   leave questions pending.
+- **Prefer `pendingQuestion` on reconnect** — a host may reconnect after the original
+  `question` event scrolled past its cursor.
 - **Always use {{QUESTION_PRIMITIVE}}** for user decisions at gates.
 - **Report stage progress** — show `status` events as they arrive.
 - **Never implement code yourself** — the CLI delegates to developer agents.

@@ -26,7 +26,9 @@ Generated host outputs are **not committed** to git:
 
 ## CLI Package (`cli/`)
 
-`cli/` is the source of truth for distribution and host lifecycle management.
+`cli/` is the source of truth for distribution and host lifecycle management. It
+also ships bundled tactics in `cli/tactics/` so installed skills can resolve
+`--tactic explain` outside the Lineup repo.
 
 Key internals:
 
@@ -34,7 +36,7 @@ Key internals:
 - `cli/src/commands/*.ts` — CLI command handlers (runtime, inspection, lifecycle, gate operations)
 - `cli/src/lib/run-pipeline.ts` — Pipeline orchestration engine with gate blocking
 - `cli/src/commands/bridge.ts` — Detached bridge session lifecycle for generated skills
-- `cli/src/lib/bridge.ts` — Bridge session/event persistence and replay
+- `cli/src/lib/bridge.ts` — Bridge session/event persistence, reconnect-safe pending gate state, and replay
 - `cli/src/lib/git.ts` — project git readiness checks and tree SHA resolution
 - `cli/src/lib/protocol.ts` — NDJSON protocol types (gate/request, gate/respond, agent/spawn)
 - `cli/src/lib/gate-store.ts` — Gate request/response file persistence, `GateTimeoutError`
@@ -57,3 +59,12 @@ without copying agent files into the repo.
 
 Fresh projects still need a git repository with at least one commit before native
 implementation can run, because isolation uses detached git worktrees.
+
+The bridge session record persists more than an event cursor. It also stores the
+latest unresolved gate metadata, whether the worker is still waiting for an answer,
+and whether the run has moved into blocked timeout recovery. This lets generated
+skills reconnect without replaying the full event stream and distinguish between:
+
+- live unanswered gates (`recovery.action = "answer"`)
+- timed-out blocked runs that need `lineup resume`
+- completed runs that should be inspected with `lineup show` / `lineup logs`

@@ -4,6 +4,7 @@ import { stringify as stringifyYaml } from "yaml";
 
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
+import { packageRoot } from "../lib/paths.js";
 import { tacticToWorkflow, type TacticDefinition } from "../lib/tactic-convert.js";
 import { parseRestrictedYaml, validateTacticYaml } from "../lib/validation.js";
 
@@ -132,6 +133,7 @@ function resolveTacticFile(name: string): string {
   const candidates = [
     path.resolve(".lineup", "tactics", `${name}.yaml`),
     path.resolve("tactics", `${name}.yaml`),
+    path.resolve(packageRoot(), "tactics", `${name}.yaml`),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;

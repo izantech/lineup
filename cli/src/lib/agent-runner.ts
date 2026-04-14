@@ -58,6 +58,32 @@ function readFileIfPresent(filePath?: string): string | null {
   }
 }
 
+function hasStrictAdditionalProperties(schema: unknown): boolean {
+  if (!schema || typeof schema !== "object") {
+    return true;
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.every((item) => hasStrictAdditionalProperties(item));
+  }
+
+  const record = schema as Record<string, unknown>;
+  if (record.type === "object" && record.additionalProperties !== false) {
+    return false;
+  }
+
+  return Object.values(record).every((value) => hasStrictAdditionalProperties(value));
+}
+
+export function normalizeCodexOutputSchema(schemaContent: string): string | null {
+  try {
+    const parsed = JSON.parse(schemaContent) as unknown;
+    return hasStrictAdditionalProperties(parsed) ? schemaContent : null;
+  } catch {
+    return null;
+  }
+}
+
 function extractStructuredPayload(raw: string): unknown {
   let parsed: { structured_output?: unknown; result?: unknown } | unknown;
   try {
@@ -270,6 +296,9 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
     projectRoot: input.projectRoot,
     host
   });
+  const normalizedSchema = input.outputSchemaPath
+    ? normalizeCodexOutputSchema(readFileSync(input.outputSchemaPath, "utf8"))
+    : null;
 
   try {
     const args = [
@@ -279,7 +308,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       input.workingDirectory,
       ...uniqueDirs([input.projectRoot, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
       ...(agentConfig.modelTarget && !["haiku", "sonnet", "opus"].includes(agentConfig.modelTarget) ? ["-m", agentConfig.modelTarget] : []),
-      ...(input.outputSchemaPath ? ["--output-schema", input.outputSchemaPath] : []),
+      ...(normalizedSchema ? ["--output-schema", input.outputSchemaPath!] : []),
       "-o",
       outputPath,
       input.prompt

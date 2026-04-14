@@ -25,6 +25,7 @@ import {
   runBridgeWorkerCommand
 } from "../../src/commands/bridge.js";
 import {
+  appendBridgeCompleteEvent,
   appendBridgeQuestionEvent,
   appendBridgeStatusEvent,
   defaultBridgeSession,
@@ -107,34 +108,56 @@ describe("bridge commands", () => {
 
   it("bridge events replay from a cursor and bridge answer writes the gate response shape", async () => {
     saveBridgeSession(defaultBridgeSession({ runId: "abc123", executorHost: "claude" }), tempDir);
-    appendBridgeStatusEvent("abc123", { stageId: "triage", text: "Started triage." }, tempDir);
+    appendBridgeStatusEvent(
+      "abc123",
+      { stageId: "triage", stageLabel: "Triage", kind: "stage-start", text: "Started triage." },
+      tempDir
+    );
     appendBridgeQuestionEvent(
       "abc123",
       {
         requestId: 7,
+        stageId: "plan-approval",
         gateType: "approval",
         question: "Approve the plan?",
         choices: ["approve", "reject"],
-        defaultChoice: "approve"
+        defaultChoice: "approve",
+        createdAt: "2026-04-13T10:00:00.000Z"
       },
       tempDir
     );
 
     const replay = await readBridgeEvents("abc123", { after: 1 }, tempDir);
     expect(replay.events).toHaveLength(1);
-    expect(replay.events[0]).toMatchObject({ type: "question", requestId: 7 });
+    expect(replay.events[0]).toMatchObject({ type: "question", requestId: 7, stageId: "plan-approval" });
     expect(replay.nextCursor).toBe(2);
     expect(replay.status).toBe("blocked");
+    expect(replay.pendingQuestion).toMatchObject({
+      requestId: 7,
+      stageId: "plan-approval",
+      workerWaiting: true,
+      timedOut: false
+    });
+    expect(replay.recovery.action).toBe("answer");
 
     stdout.length = 0;
     await runBridgeEventsCommand({ runId: "abc123", after: 0, json: true });
-    const commandPayload = JSON.parse(stdout.join("")) as { events: Array<{ seq: number }> };
+    const commandPayload = JSON.parse(stdout.join("")) as {
+      events: Array<{ seq: number }>;
+      session: { executorHost: string; currentSeq: number };
+      pendingQuestion?: { requestId: number };
+      recovery: { action: string };
+    };
     expect(commandPayload.events).toHaveLength(2);
+    expect(commandPayload.session).toMatchObject({ executorHost: "claude", currentSeq: 2 });
+    expect(commandPayload.pendingQuestion).toMatchObject({ requestId: 7 });
+    expect(commandPayload.recovery.action).toBe("answer");
 
     writePendingGate(
       "abc123",
       {
         requestId: 7,
+        stageId: "plan-approval",
         gateType: "approval",
         question: "Approve the plan?",
         choices: ["approve", "reject"],
@@ -162,6 +185,117 @@ describe("bridge commands", () => {
       choice: "approve",
       reason: "Looks good"
     });
+  });
+
+  it("replays pending questions across reconnects and exposes timeout recovery", async () => {
+    saveBridgeSession(defaultBridgeSession({ runId: "reco12", executorHost: "codex", gateTimeoutSeconds: 5 }), tempDir);
+    appendBridgeQuestionEvent(
+      "reco12",
+      {
+        requestId: 9,
+        stageId: "clarify",
+        gateType: "clarify",
+        question: "What should this workflow optimize for?",
+        choices: ["speed", "quality"],
+        defaultChoice: "quality",
+        createdAt: "2026-04-13T10:00:00.000Z"
+      },
+      tempDir
+    );
+
+    const replay = await readBridgeEvents("reco12", { after: 1 }, tempDir);
+    expect(replay.events).toEqual([]);
+    expect(replay.pendingQuestion).toMatchObject({
+      requestId: 9,
+      stageId: "clarify",
+      expiresAt: "2026-04-13T10:00:05.000Z",
+      workerWaiting: true
+    });
+    expect(replay.recovery).toMatchObject({
+      action: "answer",
+      command: 'lineup bridge answer reco12 9 --choice "quality"'
+    });
+
+    appendBridgeCompleteEvent(
+      "reco12",
+      {
+        status: "blocked",
+        summary: "Pipeline is awaiting a bridge answer.",
+        completedAt: "2026-04-13T10:00:06.000Z"
+      },
+      tempDir
+    );
+
+    const blocked = await readBridgeEvents("reco12", { after: 1 }, tempDir);
+    expect(blocked.events).toHaveLength(1);
+    expect(blocked.events[0]).toMatchObject({ type: "complete", status: "blocked" });
+    expect((blocked.events[0] as { summary?: string }).summary).toContain("lineup resume reco12");
+    expect(blocked.pendingQuestion).toMatchObject({
+      requestId: 9,
+      timedOut: true,
+      workerWaiting: false
+    });
+    expect(blocked.recovery).toMatchObject({
+      action: "resume",
+      command: "lineup resume reco12"
+    });
+
+    stdout.length = 0;
+    await runBridgeAnswerCommand({
+      runId: "reco12",
+      requestId: "9",
+      choice: "quality",
+      json: true
+    });
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      accepted: false,
+      runId: "reco12",
+      requestId: "9",
+      recovery: {
+        action: "resume",
+        command: "lineup resume reco12"
+      }
+    });
+  });
+
+  it("prints the next polling command in human-readable bridge events output", async () => {
+    saveBridgeSession(defaultBridgeSession({ runId: "next01", executorHost: "claude" }), tempDir);
+    appendBridgeStatusEvent(
+      "next01",
+      { stageId: "triage", stageLabel: "Triage", kind: "stage-start", text: "Starting triage." },
+      tempDir
+    );
+
+    stdout.length = 0;
+    await runBridgeEventsCommand({ runId: "next01" });
+
+    const output = stdout.join("");
+    expect(output).toContain("next_cursor: 1");
+    expect(output).toContain("continue_with: lineup bridge events next01 --after 1");
+  });
+
+  it("uses generic success recovery text for completed bridge runs", async () => {
+    saveBridgeSession(defaultBridgeSession({ runId: "done01", executorHost: "opencode", tactic: "explain" }), tempDir);
+
+    appendBridgeCompleteEvent(
+      "done01",
+      {
+        status: "succeeded",
+        summary: "Pipeline completed successfully.",
+        completedAt: "2026-04-13T10:00:00.000Z"
+      },
+      tempDir
+    );
+
+    const replay = await readBridgeEvents("done01", {}, tempDir);
+    expect(replay.events).toHaveLength(1);
+    expect(replay.events[0]).toMatchObject({
+      type: "complete",
+      status: "succeeded"
+    });
+    expect((replay.events[0] as { summary?: string }).summary).toContain("lineup show done01 --json");
+    expect((replay.events[0] as { summary?: string }).summary).toContain("lineup logs done01 --json");
+    expect((replay.events[0] as { summary?: string }).summary).not.toContain("artifacts show review");
   });
 
   it("bridge worker runs the native pipeline with local agents and emits question and completion events", async () => {
@@ -230,6 +364,8 @@ stages:
     expect(events.events.some((event) => event.type === "question")).toBe(true);
     expect(events.events.some((event) => event.type === "complete" && event.status === "succeeded")).toBe(true);
     expect(loadBridgeSession("def456", tempDir)?.status).toBe("succeeded");
+    expect(events.session.executorHost).toBe("claude");
+    expect(events.recovery.action).toBe("inspect");
     expect(mockedCreateLocalAgentRunner).toHaveBeenCalledWith("claude");
   });
 });

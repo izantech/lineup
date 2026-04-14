@@ -39,6 +39,7 @@
 - `lineup workflow list [--json]`
 - `lineup tactic new <name>`
 - `lineup tactic list [--json]`
+- `lineup tactic convert <name> [--json]`
 - `lineup approve <run-id> [--json]`
 - `lineup pending [--json]`
 - `lineup gate respond <run-id> <request-id> --choice <value> [--reason <text>] [--json]`
@@ -74,8 +75,36 @@ If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
 Generated skills should prefer the detached bridge API:
 
 - `lineup bridge start` launches a CLI-owned detached session
-- `lineup bridge events` returns compact replayable `status`, `question`, and `complete` events
+- `lineup bridge events` returns compact replayable `status`, `question`, and `complete` events plus reconnect-safe `session`, `pendingQuestion`, and `recovery` fields
 - `lineup bridge answer` responds to pending bridge questions
+
+Built-in tactics shipped with the CLI can also be resolved by name. For example,
+`lineup bridge start "<question>" --tactic explain --executor-host codex` works
+even in repos that do not define `./tactics/explain.yaml` or `.lineup/tactics/explain.yaml`.
+
+`lineup tactic list` still reflects repo-local/project tactics. Use
+`lineup tactic convert explain --json` or run the tactic directly when you need a
+built-in CLI tactic like `explain`.
+
+`lineup bridge events --json` keeps:
+
+- `runId`
+- `events`
+- `nextCursor`
+- `terminal`
+- `status`
+
+And also returns:
+
+- `session` — `executorHost`, `workflow`, `tactic`, `createdAt`, `updatedAt`, `completedAt`, `currentSeq`
+- `pendingQuestion` — the unresolved gate even if the caller's cursor is already past the original `question` event
+- `recovery` — the next concrete CLI step for the current session (`answer`, `resume`, or `inspect`)
+
+The human-readable `lineup bridge events` output also prints:
+
+- `next_cursor`
+- `continue_with` — the exact next poll command using `--after <next_cursor>`
+- `recovery`
 
 Keep `lineup run --mode host` for advanced integrations and CI that need the low-level
 NDJSON protocol directly.

@@ -21,6 +21,7 @@
     "HOST_DEFAULTS_TERM": "skill pack defaults",
     "HOST_ARTIFACT_LABEL": "Skill Pack",
     "HOST_ARTIFACT_LABEL_LOWER": "skill pack",
+    "EXECUTOR_HOST": "codex",
     "AGENTS_DIR": "agents/",
     "OLLAMA_CONFIG_PATH": "~/.codex/lineup/ollama.yaml"
   }
