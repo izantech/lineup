@@ -77,8 +77,13 @@ Recommended host integration:
 - inspect final results with the existing read-only commands after completion
 
 Built-in CLI tactics such as `explain` are resolvable by name even outside the
-Lineup repo. They are not currently advertised by `lineup tactic list`, which
-remains focused on repo-local/project tactics.
+Lineup repo. `lineup tactic list` remains focused on repo-local/project tactics
+unless the user passes `--include-builtins`, which adds bundled CLI tactics and
+labels each row or JSON entry with `source` so the origin stays obvious.
+
+When a host skill needs to discover tactics before prompting the user, it should
+call `lineup tactic list --include-builtins --json` so bundled tactics and
+project tactics are both available for selection.
 
 This keeps the host session responsive instead of treating the pipeline as a single
 opaque blocking Bash call.
@@ -100,6 +105,10 @@ typed `gateType` fields. The bridge also persists unresolved gate metadata in
 `pendingQuestion` so interrupted host sessions can reconnect without replaying the
 entire event stream. The skill maps each gate type to the appropriate user
 interaction pattern and follows `recovery.action` when a gate has timed out.
+
+Detached bridge sessions that time out should be recovered by following the
+returned `recovery.action` and recovery command rather than sending another late
+`lineup bridge answer`.
 
 ## Commands
 

@@ -1,11 +1,13 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 import { CliError } from "./errors.js";
+import { observePipelineRuns } from "./observer.js";
 import {
   lineupRunBridgeDir,
   lineupRunBridgeEventsFile,
   lineupRunBridgeSessionFile
 } from "./paths.js";
+import type { PipelineArtifactKey } from "./state.js";
 import type {
   BridgeCompleteEvent,
   BridgeEvent,
@@ -14,7 +16,8 @@ import type {
   BridgeQuestionEvent,
   BridgeRecoveryInfo,
   BridgeSessionRecord,
-  BridgeStatusEvent
+  BridgeStatusEvent,
+  ObservedPipelineRun
 } from "./types.js";
 
 function nowIso(): string {
@@ -142,6 +145,82 @@ function bridgeAnswerCommand(runId: string, pendingQuestion: BridgePendingQuesti
   return `lineup bridge answer ${runId} ${pendingQuestion.requestId} --choice "${choice}"`;
 }
 
+type CompletionArtifactGuidance = {
+  inspectCommand: string;
+  summary: string;
+};
+
+const ARTIFACT_PRIORITY_BY_SESSION: Array<{
+  when: (session: BridgeSessionRecord, available: Set<PipelineArtifactKey>) => boolean;
+  artifact: PipelineArtifactKey;
+  label: string;
+}> = [
+  {
+    when: (session, available) => session.tactic === "explain" && available.has("spec"),
+    artifact: "spec",
+    label: "spec"
+  },
+  {
+    when: (_session, available) => available.has("review"),
+    artifact: "review",
+    label: "review"
+  },
+  {
+    when: (_session, available) => available.has("plan"),
+    artifact: "plan",
+    label: "plan"
+  },
+  {
+    when: (_session, available) => available.has("tasks"),
+    artifact: "tasks",
+    label: "tasks"
+  },
+  {
+    when: (_session, available) => available.has("spec"),
+    artifact: "spec",
+    label: "spec"
+  },
+  {
+    when: (_session, available) => available.has("constitution"),
+    artifact: "constitution",
+    label: "constitution"
+  },
+  {
+    when: (_session, available) => available.has("protocol"),
+    artifact: "protocol",
+    label: "protocol"
+  },
+  {
+    when: (_session, available) => available.has("config"),
+    artifact: "config",
+    label: "config"
+  }
+];
+
+function loadBridgeRunState(runId: string, cwd = process.cwd()): ObservedPipelineRun | null {
+  return observePipelineRuns(cwd).find((run) => run.run_id === runId) ?? null;
+}
+
+function selectCompletionGuidance(runId: string, session: BridgeSessionRecord, cwd = process.cwd()): CompletionArtifactGuidance {
+  const state = loadBridgeRunState(runId, cwd);
+  const available = new Set<PipelineArtifactKey>(
+    (state?.artifacts ?? []).filter((artifact) => artifact.exists).map((artifact) => artifact.kind as PipelineArtifactKey)
+  );
+  const selected = ARTIFACT_PRIORITY_BY_SESSION.find((candidate) => candidate.when(session, available));
+
+  if (selected) {
+    return {
+      inspectCommand: `lineup artifacts show ${selected.artifact} --run ${runId} --json`,
+      summary: `Inspect the ${selected.label} artifact.`
+    };
+  }
+
+  return {
+    inspectCommand: `lineup show ${runId} --json`,
+    summary: "Inspect the run state."
+  };
+}
+
 function formatCompletionSummary(
   runId: string,
   status: BridgeSessionRecord["status"],
@@ -149,10 +228,11 @@ function formatCompletionSummary(
   session: BridgeSessionRecord
 ): string {
   const detail = summary?.trim();
+  const guidance = selectCompletionGuidance(runId, session);
   if (status === "succeeded") {
     return detail && detail !== "Pipeline completed successfully."
-      ? `Bridge run succeeded. ${detail} Inspect with \`${bridgeInspectCommand(runId)}\`.`
-      : `Bridge run succeeded. Inspect with \`${bridgeInspectCommand(runId)}\` or \`lineup logs ${runId} --json\`.`;
+      ? `Bridge run succeeded. ${detail} ${guidance.summary} Inspect with \`${guidance.inspectCommand}\`.`
+      : `Bridge run succeeded. ${guidance.summary} Inspect with \`${guidance.inspectCommand}\`.`;
   }
 
   if (status === "blocked") {
@@ -166,8 +246,8 @@ function formatCompletionSummary(
 
   if (status === "canceled") {
     return detail
-      ? `Bridge run was canceled. ${detail} Inspect with \`${bridgeInspectCommand(runId)}\`.`
-      : `Bridge run was canceled. Inspect with \`${bridgeInspectCommand(runId)}\`.`;
+      ? `Bridge run was canceled. ${detail} Inspect with \`${guidance.inspectCommand}\`.`
+      : `Bridge run was canceled. Inspect with \`${guidance.inspectCommand}\`.`;
   }
 
   return detail
@@ -199,7 +279,7 @@ function sessionRecovery(runId: string, session: BridgeSessionRecord): BridgeRec
     message:
       session.status === "running" || session.status === "starting"
         ? "Inspect the live run state."
-        : "Inspect the completed run state."
+        : selectCompletionGuidance(runId, session).summary
   };
 }
 

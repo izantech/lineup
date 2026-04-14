@@ -65,7 +65,7 @@ If the user provides a reason or elaboration, add `--reason "<text>"`.
 
 If `recovery.action` is `resume`, do not call `lineup bridge answer` and hope the
 worker picks it up later. Tell the user the run timed out and use the provided
-resume command instead.
+recovery command instead of sending a late answer.
 
 ### Gate types
 

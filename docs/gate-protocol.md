@@ -27,13 +27,17 @@ Recommended host pattern:
 5. If `recovery.action` is `resume`, surface the timeout state and resume instead of sending an inert late answer
 6. Inspect results after completion with `lineup show`, `lineup artifacts show`, or `lineup logs`
 
+When `recovery.action` is `resume`, the host should follow the provided recovery
+command for that blocked bridge session instead of sending another late bridge
+answer.
+
 ## Event Types
 
 | type | Purpose |
 |------|---------|
 | `status` | Progress updates for stage execution |
 | `question` | User-facing decisions that require a response |
-| `complete` | Terminal success, failure, or aborted state |
+| `complete` | Terminal `succeeded`, `blocked`, `failed`, or `canceled` state |
 
 `status` events also carry host-facing `stageLabel` and `kind` fields so hosts can
 render progress without interpreting raw stage text.
@@ -57,10 +61,12 @@ The skill should present the question via its normal question primitive, then ca
 
 - `session` — session metadata for reconnect-safe rendering
 - `pendingQuestion` — the unresolved question even if no new `question` event is in the current page
-- `recovery` — the concrete next step: `answer`, `resume`, or `inspect`
+- `recovery` — the concrete next step: `answer`, `resume`, or `inspect`, with `inspect` using the most relevant artifact command when that artifact exists
 
 The text-mode `lineup bridge events` output also emits `continue_with` so hosts
 that are shelling out manually can reuse the exact next `--after` cursor value.
+When a bridge run is `blocked`, the text output also includes the matching
+`recovery` command for the current session state.
 
 ## Triage Gate
 

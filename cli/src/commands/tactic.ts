@@ -14,6 +14,7 @@ export type TacticNewOptions = {
 
 export type TacticListOptions = {
   json?: boolean;
+  includeBuiltins?: boolean;
 };
 
 const TACTIC_SCAFFOLD = (name: string): string => `apiVersion: lineup/v3
@@ -61,9 +62,10 @@ type TacticEntry = {
   name: string;
   description: string;
   stages: number;
+  source: "project-local" | "builtin";
 };
 
-function scanTactics(dir: string): TacticEntry[] {
+function scanTactics(dir: string, source: TacticEntry["source"]): TacticEntry[] {
   if (!existsSync(dir)) return [];
 
   const entries: TacticEntry[] = [];
@@ -84,13 +86,15 @@ function scanTactics(dir: string): TacticEntry[] {
       entries.push({
         name: parsed.name ?? file.name.replace(/\.yaml$/, ""),
         description: desc.length > 60 ? desc.slice(0, 57) + "..." : desc,
-        stages: Array.isArray(parsed.stages) ? parsed.stages.length : 0
+        stages: Array.isArray(parsed.stages) ? parsed.stages.length : 0,
+        source
       });
     } catch {
       entries.push({
         name: file.name.replace(/\.yaml$/, ""),
         description: "(invalid)",
-        stages: 0
+        stages: 0,
+        source
       });
     }
   }
@@ -99,18 +103,27 @@ function scanTactics(dir: string): TacticEntry[] {
 }
 
 export async function runTacticListCommand(options: TacticListOptions): Promise<void> {
-  const dirs = [
-    path.resolve(".lineup", "tactics"),
-    path.resolve("tactics")
+  const dirs: Array<{ dir: string; source: TacticEntry["source"] }> = [
+    { dir: path.resolve(".lineup", "tactics"), source: "project-local" },
+    { dir: path.resolve("tactics"), source: "project-local" }
   ];
 
+  if (options.includeBuiltins) {
+    dirs.push({ dir: path.resolve(packageRoot(), "tactics"), source: "builtin" });
+  }
+
   const entries: TacticEntry[] = [];
-  for (const dir of dirs) {
-    entries.push(...scanTactics(dir));
+  for (const { dir, source } of dirs) {
+    entries.push(...scanTactics(dir, source));
   }
 
   if (options.json) {
-    printJson(entries);
+    if (options.includeBuiltins) {
+      printJson(entries);
+      return;
+    }
+
+    printJson(entries.map(({ source: _source, ...entry }) => entry));
     return;
   }
 
@@ -120,7 +133,8 @@ export async function runTacticListCommand(options: TacticListOptions): Promise<
   }
 
   for (const entry of entries) {
-    printTableLine(`${entry.name}  ${entry.description}  ${entry.stages} stages`);
+    const sourceLabel = options.includeBuiltins ? `  ${entry.source}` : "";
+    printTableLine(`${entry.name}  ${entry.description}  ${entry.stages} stages${sourceLabel}`);
   }
 }
 

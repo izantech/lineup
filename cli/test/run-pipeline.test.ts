@@ -798,7 +798,103 @@ further_exploration: []
         "The bundled explain tactic resolved successfully."
       );
       expect(result.stageResults.get("explain")?.outputs).toHaveProperty("artifactPath");
-      expect(String(result.stageResults.get("explain")?.outputs.artifactPath)).toContain("/.lineup/.runs/expln1/artifacts/explain.yaml");
+      const explainArtifact = String(result.stageResults.get("explain")?.outputs.artifactPath);
+      expect(explainArtifact).toContain("/.lineup/.runs/expln1/artifacts/explain.yaml");
+      const explainYaml = readFileSync(explainArtifact, "utf8");
+      expect(explainYaml).toContain("learning_objectives:");
+      expect(explainYaml).toContain("further_exploration:");
+      expect(explainYaml).not.toContain("raw_output:");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("normalizes teacher prose into a valid structured artifact without warnings", async () => {
+    const projectRoot = join(tempDir, "project-explain-prose");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        if (input.agent === "researcher") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-13
+topic: explain-tactic
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: The bundled explain tactic resolved successfully.
+constraints:
+  tooling: local
+gaps:
+  pending: []
+`
+          };
+        }
+
+        if (input.agent === "teacher") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `The bundled explain tactic resolved successfully, but the host returned plain prose instead of structured YAML.`
+          };
+        }
+
+        return {
+          host: "codex",
+          stderr: "",
+          content: REVIEW_YAML
+        };
+      }
+    };
+
+    const capturedStatuses: string[] = [];
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          tactic: "explain",
+          mode: "human",
+          prompt: "Explain tactic resolution"
+        },
+        {
+          runId: "expln2",
+          localAgentRunner,
+          onProtocolMessage: (message) => {
+            if (
+              "method" in message &&
+              message.method === "agent/output" &&
+              message.params !== undefined &&
+              "channel" in message.params &&
+              message.params.channel === "status"
+            ) {
+              if (!("chunk" in message.params)) {
+                return;
+              }
+              capturedStatuses.push(message.params.chunk);
+            }
+          }
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(capturedStatuses.some((chunk) => chunk.includes("[stage/warning]"))).toBe(false);
+      const explainArtifact = String(result.stageResults.get("explain")?.outputs.artifactPath);
+      const explainYaml = readFileSync(explainArtifact, "utf8");
+      expect(explainYaml).toContain("type: explanation");
+      expect(explainYaml).toContain("agent: teacher");
+      expect(explainYaml).toContain("status: complete");
+      expect(explainYaml).toContain("raw_output:");
     } finally {
       process.chdir(origCwd);
     }

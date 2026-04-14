@@ -34,10 +34,11 @@ git if needed before launch.
 If the user provided a tactic name as an argument (e.g., `{{CMD_KICKOFF}} my-tactic`),
 pass it to the bridge: `lineup bridge start "<user request>" --executor-host {{EXECUTOR_HOST}} --tactic <name>`.
 
-If the user provided NO argument, check if project tactics exist:
+If the user provided NO argument, check whether any tactics exist, including
+bundled built-ins:
 
 ```bash
-lineup tactic list --json
+lineup tactic list --include-builtins --json
 ```
 
 If tactics are found, use **{{QUESTION_PRIMITIVE}}** to ask:

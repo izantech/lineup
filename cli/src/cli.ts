@@ -392,6 +392,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .command("list")
     .description("List available tactics")
     .option("--json", "Emit machine-readable JSON output")
+    .option("--include-builtins", "Include bundled CLI tactics alongside project-local tactics")
     .action(commandHandlers.tacticList);
 
   tactic

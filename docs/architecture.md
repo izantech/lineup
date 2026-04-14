@@ -28,7 +28,8 @@ Generated host outputs are **not committed** to git:
 
 `cli/` is the source of truth for distribution and host lifecycle management. It
 also ships bundled tactics in `cli/tactics/` so installed skills can resolve
-`--tactic explain` outside the Lineup repo.
+`--tactic explain` outside the Lineup repo, and so `lineup tactic list
+--include-builtins` can surface the bundled set alongside project-local tactics.
 
 Key internals:
 
@@ -66,5 +67,5 @@ and whether the run has moved into blocked timeout recovery. This lets generated
 skills reconnect without replaying the full event stream and distinguish between:
 
 - live unanswered gates (`recovery.action = "answer"`)
-- timed-out blocked runs that need `lineup resume`
+- timed-out blocked runs that need `recovery.action = "resume"` and an explicit recovery command
 - completed runs that should be inspected with `lineup show` / `lineup logs`

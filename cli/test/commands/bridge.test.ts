@@ -33,6 +33,9 @@ import {
   readBridgeEvents,
   saveBridgeSession
 } from "../../src/lib/bridge.js";
+import { createArtifactStore } from "../../src/lib/artifact-store.js";
+import { savePipelineState, type PipelineStateRecord } from "../../src/lib/state.js";
+import type { ArtifactKind } from "../../src/lib/types.js";
 import { readGateResponse, writeGateResponse, writePendingGate } from "../../src/lib/gate-store.js";
 import { lineupRunBridgeSessionFile } from "../../src/lib/paths.js";
 
@@ -54,6 +57,29 @@ acceptance_criteria:
   - criterion: Docs updated
 risks: []
 `;
+
+function seedPipelineRun(tempDir: string, runId: string, artifacts: Partial<Record<ArtifactKind, string>>): void {
+  const store = createArtifactStore(join(tempDir, ".lineup", ".artifacts"));
+  const state: PipelineStateRecord = {
+    apiVersion: "lineup/v3",
+    kind: "PipelineState",
+    run_id: runId,
+    status: "succeeded",
+    workflow: "workflow.yaml",
+    artifact_hashes: {},
+    updated_at: new Date().toISOString()
+  };
+
+  for (const [kind, content] of Object.entries(artifacts)) {
+    const record =
+      kind === "tasks" || kind === "protocol"
+        ? store.persistText(kind, content ?? "", "yaml")
+        : store.persistText(kind, content ?? "", "yaml");
+    state.artifact_hashes[kind as keyof typeof state.artifact_hashes] = record.sha256;
+  }
+
+  savePipelineState(state, tempDir);
+}
 
 describe("bridge commands", () => {
   let tempDir: string;
@@ -274,11 +300,12 @@ describe("bridge commands", () => {
     expect(output).toContain("continue_with: lineup bridge events next01 --after 1");
   });
 
-  it("uses generic success recovery text for completed bridge runs", async () => {
-    saveBridgeSession(defaultBridgeSession({ runId: "done01", executorHost: "opencode", tactic: "explain" }), tempDir);
+  it("selects artifact-aware completion guidance for explain, plan, and review runs", async () => {
+    saveBridgeSession(defaultBridgeSession({ runId: "expl01", executorHost: "opencode", tactic: "explain" }), tempDir);
+    seedPipelineRun(tempDir, "expl01", { spec: "apiVersion: lineup/v3\nkind: Spec\nsummary: Explain the system\n" });
 
     appendBridgeCompleteEvent(
-      "done01",
+      "expl01",
       {
         status: "succeeded",
         summary: "Pipeline completed successfully.",
@@ -287,15 +314,51 @@ describe("bridge commands", () => {
       tempDir
     );
 
-    const replay = await readBridgeEvents("done01", {}, tempDir);
+    const explainReplay = await readBridgeEvents("expl01", {}, tempDir);
+    expect((explainReplay.events[0] as { summary?: string }).summary).toContain("Inspect the spec artifact.");
+    expect((explainReplay.events[0] as { summary?: string }).summary).toContain("lineup artifacts show spec --run expl01 --json");
+
+    saveBridgeSession(defaultBridgeSession({ runId: "plan01", executorHost: "claude" }), tempDir);
+    seedPipelineRun(tempDir, "plan01", { plan: "apiVersion: lineup/v3\nkind: Plan\nsummary: Draft the work\n" });
+
+    appendBridgeCompleteEvent(
+      "plan01",
+      {
+        status: "succeeded",
+        summary: "Pipeline completed successfully.",
+        completedAt: "2026-04-13T10:00:00.000Z"
+      },
+      tempDir
+    );
+
+    const planReplay = await readBridgeEvents("plan01", {}, tempDir);
+    expect((planReplay.events[0] as { summary?: string }).summary).toContain("Inspect the plan artifact.");
+    expect((planReplay.events[0] as { summary?: string }).summary).toContain("lineup artifacts show plan --run plan01 --json");
+
+    saveBridgeSession(defaultBridgeSession({ runId: "rev01", executorHost: "claude" }), tempDir);
+    seedPipelineRun(tempDir, "rev01", {
+      tasks: '{"kind":"Tasks","tasks":[]}\n',
+      review: "apiVersion: lineup/v3\nkind: Review\nsummary: Verify the change\n"
+    });
+
+    appendBridgeCompleteEvent(
+      "rev01",
+      {
+        status: "succeeded",
+        summary: "Pipeline completed successfully.",
+        completedAt: "2026-04-13T10:00:00.000Z"
+      },
+      tempDir
+    );
+
+    const replay = await readBridgeEvents("rev01", {}, tempDir);
     expect(replay.events).toHaveLength(1);
     expect(replay.events[0]).toMatchObject({
       type: "complete",
       status: "succeeded"
     });
-    expect((replay.events[0] as { summary?: string }).summary).toContain("lineup show done01 --json");
-    expect((replay.events[0] as { summary?: string }).summary).toContain("lineup logs done01 --json");
-    expect((replay.events[0] as { summary?: string }).summary).not.toContain("artifacts show review");
+    expect((replay.events[0] as { summary?: string }).summary).toContain("Inspect the review artifact.");
+    expect((replay.events[0] as { summary?: string }).summary).toContain("lineup artifacts show review --run rev01 --json");
   });
 
   it("bridge worker runs the native pipeline with local agents and emits question and completion events", async () => {

@@ -82,6 +82,27 @@ stages:
     expect(output).toContain("An example tactic");
   });
 
+  it("includes bundled tactics when requested", async () => {
+    const dir = join(tempDir, ".lineup", "tactics");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "example.yaml"), `apiVersion: lineup/v3
+kind: Tactic
+name: example
+description: An example tactic
+stages:
+  - type: agent
+    agent: researcher
+    prompt: "do research"
+`);
+
+    await runTacticListCommand({ includeBuiltins: true });
+
+    const output = stdout.join("");
+    expect(output).toContain("explain");
+    expect(output).toContain("builtin");
+    expect(output).toContain("project-local");
+  });
+
   it("supports --json", async () => {
     const dir = join(tempDir, ".lineup", "tactics");
     mkdirSync(dir, { recursive: true });
@@ -101,6 +122,13 @@ stages:
     expect(output).toHaveLength(1);
     expect(output[0].name).toBe("example");
     expect(output[0].stages).toBe(1);
+  });
+
+  it("supports --json with bundled tactics", async () => {
+    await runTacticListCommand({ json: true, includeBuiltins: true });
+
+    const output = JSON.parse(stdout.join(""));
+    expect(output.some((entry: { name: string; source: string }) => entry.name === "explain" && entry.source === "builtin")).toBe(true);
   });
 
   it("prints message when no tactics found", async () => {

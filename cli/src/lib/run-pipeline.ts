@@ -1026,6 +1026,9 @@ async function executePreStage(
     if (stage.agent === "researcher") {
       repaired = normalizeResearchArtifact(repaired, taskPrompt, outputPath);
     }
+    if (stage.agent === "teacher") {
+      repaired = coerceTeacherAgentOutput(repaired, stage.id);
+    }
     writeFileSync(outputPath, repaired, "utf8");
     validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, repaired, emitStatus, validateOutputs);
 
@@ -1402,9 +1405,44 @@ export function validateAndWarnAgentOutput(
   try {
     validateAgentOutputYaml(kind, content, `stage:${stageId}`);
   } catch (err) {
+    if (kind === "teacher") {
+      const normalized = coerceTeacherAgentOutput(content, stageId);
+      try {
+        validateAgentOutputYaml(kind, normalized, `stage:${stageId}`);
+        return;
+      } catch {
+        // Fall through to the warning below if normalization still does not satisfy the schema.
+      }
+    }
     const message = err instanceof Error ? err.message : String(err);
     emitStatus(stageId, `[stage/warning] Agent output validation failed: ${message}`);
   }
+}
+
+function coerceTeacherAgentOutput(content: string, stageId: string): string {
+  const cleaned = repairYamlOutput(content).content.trim();
+  try {
+    validateAgentOutputYaml("teacher", cleaned, `stage:${stageId}`);
+    return cleaned;
+  } catch {
+    // Fall back to a minimal valid explanation envelope when the host returned prose.
+  }
+
+  const overview = cleaned.length > 0 ? cleaned : "Teacher output was not structured.";
+  const topic = slugifyTopic(stageId);
+
+  return stringifyYaml({
+    type: "explanation",
+    agent: "teacher",
+    date: new Date().toISOString().slice(0, 10),
+    topic,
+    status: "complete",
+    pipeline_stage: stageId,
+    explanation: {
+      overview
+    },
+    raw_output: overview
+  });
 }
 
 function cleanup(artifactDir: string, cacheDir: string, success: boolean): void {
