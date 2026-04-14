@@ -364,7 +364,7 @@ stages:
             }
           }
         )
-      ).rejects.toThrow(/simulated native failure/);
+      ).rejects.toThrow(/lineup logs failrun/);
 
       const debugBundle = join(projectRoot, ".lineup", ".runs", "failrun", "debug-bundle.json");
       expect(existsSync(debugBundle)).toBe(true);
@@ -417,7 +417,9 @@ stages:
     const origCwd = process.cwd();
     process.chdir(projectRoot);
     try {
-      await expect(runPipeline({ workflow: workflowPath })).rejects.toThrow(/already active/i);
+      await expect(runPipeline({ workflow: workflowPath })).rejects.toThrow(
+        /lineup show other[\s\S]*lineup cancel other/
+      );
     } finally {
       process.chdir(origCwd);
     }

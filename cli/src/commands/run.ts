@@ -64,7 +64,7 @@ export async function runRunCommand(options: RunCommandOptions): Promise<void> {
       result.status === "success"
         ? `Run ${result.runId} completed successfully.`
         : result.status === "blocked"
-          ? `Run ${result.runId} is blocked and can be resumed later.`
+          ? `Run ${result.runId} is blocked. Resume with \`lineup resume ${result.runId}\` or inspect with \`lineup show ${result.runId}\`.`
           : `Run ${result.runId} finished with status: ${result.status}.`;
     process.stderr.write(`${summary}\n`);
   }

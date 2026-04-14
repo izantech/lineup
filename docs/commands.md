@@ -135,3 +135,10 @@ Before the first full native run without `lineup start`, make sure:
 - host planner output gets one stricter retry if it is prose instead of a structured `Plan`
 - native developer responses accept common variants like `status: done`
 - markdown-style reviewer summaries are normalized into `Review` YAML
+
+For native recovery:
+
+- blocked runs now point directly at `lineup resume <run-id>`, `lineup show <run-id>`, and `lineup cancel <run-id>` instead of a generic blocked status
+- failed native runs now surface the run id together with `lineup show`, `lineup logs`, and `lineup resume <run-id> --retry-failed`
+- stale runtime lock conflicts now identify the active run and suggest `lineup show <active-run>` and `lineup cancel <active-run>` before telling you to remove `.lineup/runtime.lock`
+- `lineup resume` now explains whether you are resuming a blocked run, retrying a failed stage, or continuing a canceled run, and preserves gate-timeout context when a run blocked waiting for an answer

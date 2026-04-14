@@ -234,7 +234,7 @@ export function assertPipelineStateFresh(
 ): PipelineStateRecord {
   if (isPipelineStateStale(state, gitTreeSha)) {
     throw new CliError(
-      `Pipeline state was created for git tree ${state.git_tree_sha}, but the current tree is ${gitTreeSha}.`,
+      `Pipeline state was created for git tree ${state.git_tree_sha}, but the current tree is ${gitTreeSha}. Inspect the old run with \`lineup show ${state.run_id}\`, then restore the matching tree or start a fresh run.`,
       {
         code: "state_mismatch"
       }

@@ -67,6 +67,13 @@ type StageResult = {
   duration?: number;
 };
 
+type RuntimeLockRecord = {
+  runId?: string;
+  workflow?: string;
+  created_at?: string;
+  pid?: number;
+};
+
 export type RunPipelineHooks = {
   runId?: string;
   localAgentRunner?: LocalAgentRunner;
@@ -245,7 +252,16 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             options.gateTimeout !== undefined ? options.gateTimeout * 1000 : undefined,
             options.validateOutputs !== false,
             runMode,
-            localAgentRunner
+            localAgentRunner,
+            (error, blockedStageId, timeoutMs) => {
+              pipelineState = recordGateTimeout(
+                pipelineState,
+                projectRoot,
+                blockedStageId,
+                error,
+                timeoutMs ? Math.round(timeoutMs / 1000) : undefined
+              );
+            }
           );
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
@@ -318,7 +334,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 if (err instanceof GateTimeoutError) {
                   const blockedResult: StageResult = { id: stageId, status: "blocked", outputs: {} };
                   stageResults.set(stageId, blockedResult);
-                  pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
+                  pipelineState = recordGateTimeout(
+                    pipelineState,
+                    projectRoot,
+                    stageId,
+                    err,
+                    options.gateTimeout
+                  );
                   return { runId, status: "blocked", stageResults };
                 }
                 throw err;
@@ -430,7 +452,13 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     if (err instanceof GateTimeoutError) {
                       stageResults.set("implement", nativeResult.implementResult);
                       stageResults.set("verify", { id: "verify", status: "blocked", outputs: {} });
-                      pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
+                      pipelineState = recordGateTimeout(
+                        pipelineState,
+                        projectRoot,
+                        "verify",
+                        err,
+                        options.gateTimeout
+                      );
                       return { runId, status: "blocked", stageResults };
                     }
                     throw err;
@@ -552,6 +580,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   } catch (error) {
     status = "failed";
     const errorSummary = error instanceof Error ? error.message : String(error);
+    const preserveRecoveryMessage =
+      error instanceof CliError && error.message.includes("Another mutating Lineup run is already active");
+    const failureMessage = preserveRecoveryMessage ? errorSummary : buildPipelineFailureMessage(runId, errorSummary);
     emitProtocol(
       createLineupNotification({
         method: "pipeline/complete",
@@ -559,12 +590,12 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
           runId,
           status,
           completedAt: new Date().toISOString(),
-          summary: errorSummary
+          summary: failureMessage
         }
       })
     );
     if (runMode === "human") {
-      process.stderr.write(`Pipeline failed: ${errorSummary}\n`);
+      process.stderr.write(`${failureMessage}\n`);
     }
     persistProtocolArtifact();
     pipelineState = savePipelineState(
@@ -589,7 +620,12 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     });
     // Cleanup on error (keep cache for debugging)
     cleanup(artifactDir, cacheDir, false);
-    throw error;
+    if (preserveRecoveryMessage && error instanceof CliError) {
+      throw error;
+    }
+    throw error instanceof CliError
+      ? new CliError(failureMessage, { code: error.code, exitCode: error.exitCode })
+      : new CliError(failureMessage, { code: "command_failed" });
   } finally {
     if (lockAcquired) {
       releaseRuntimeLock(projectRoot, runId);
@@ -627,6 +663,62 @@ function resolveTacticPath(name: string): string {
   throw new Error(`Tactic '${name}' not found. Searched: ${candidates.join(", ")}`);
 }
 
+function appendPipelineErrorRecord(
+  state: ReturnType<typeof defaultPipelineState>,
+  error: { code: string; message: string; details?: unknown }
+) {
+  return {
+    ...state,
+    errors: [...(state.errors ?? []), error]
+  };
+}
+
+function recordGateTimeout(
+  state: ReturnType<typeof defaultPipelineState>,
+  projectRoot: string,
+  stageId: string,
+  error: GateTimeoutError,
+  timeoutSeconds?: number
+) {
+  return savePipelineState(
+    appendPipelineErrorRecord(
+      {
+        ...state,
+        status: "blocked"
+      },
+      {
+        code: "gate_timeout",
+        message: `${error.gateType} gate timed out while waiting for a response.`,
+        details: {
+          stage_id: stageId,
+          request_id: error.requestId,
+          timeout_seconds: timeoutSeconds
+        }
+      }
+    ),
+    projectRoot
+  );
+}
+
+function buildRuntimeLockError(lockPath: string, current?: RuntimeLockRecord, currentStatus?: string): CliError {
+  if (current?.runId) {
+    const statusDetail = currentStatus ? ` (${currentStatus})` : "";
+    return new CliError(
+      `Another mutating Lineup run is already active${statusDetail}: ${current.runId}. Inspect with \`lineup show ${current.runId}\`, cancel it with \`lineup cancel ${current.runId}\`, or remove ${lockPath} only if that lock is stale.`,
+      { code: "command_failed" }
+    );
+  }
+
+  return new CliError(
+    `Another mutating Lineup run is already active. Inspect the current run, or remove ${lockPath} only if it is stale.`,
+    { code: "command_failed" }
+  );
+}
+
+function buildPipelineFailureMessage(runId: string, errorSummary: string): string {
+  return `Run ${runId} failed: ${errorSummary}. Inspect with \`lineup show ${runId}\` or \`lineup logs ${runId}\`. Retry with \`lineup resume ${runId} --retry-failed\` when appropriate.`;
+}
+
 function acquireRuntimeLock(projectRoot: string, runId: string, workflowPath: string): void {
   const lockPath = lineupRuntimeLockFile(projectRoot);
   if (existsSync(lockPath)) {
@@ -652,7 +744,19 @@ function acquireRuntimeLock(projectRoot: string, runId: string, workflowPath: st
       { encoding: "utf8", flag: "wx" }
     );
   } catch {
-    throw new Error(`Another mutating Lineup run is already active. Remove ${lockPath} if it is stale.`);
+    let current: RuntimeLockRecord | undefined;
+    let currentStatus: string | undefined;
+
+    try {
+      current = JSON.parse(readFileSync(lockPath, "utf8")) as RuntimeLockRecord;
+      if (current.runId) {
+        currentStatus = loadPipelineState(current.runId, projectRoot)?.status;
+      }
+    } catch {
+      // fall through to the generic guidance
+    }
+
+    throw buildRuntimeLockError(lockPath, current, currentStatus);
   }
 }
 
@@ -921,18 +1025,19 @@ async function executePreStage(
   gateTimeoutMs?: number,
   validateOutputs = true,
   runMode: "human" | "host" = "human",
-  localAgentRunner?: LocalAgentRunner
+  localAgentRunner?: LocalAgentRunner,
+  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGateTimeout);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGateTimeout);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
@@ -953,7 +1058,8 @@ async function executePreStage(
         ["simple", "moderate", "complex"],
         "moderate", runId, projectRoot, nextRequestId,
         emitProtocol, emitStatus, true, gateTimeoutMs, runMode,
-        contextPayload
+        contextPayload,
+        onGateTimeout
       );
 
       if (classifyResult.status !== "complete") return classifyResult;
@@ -1225,7 +1331,8 @@ async function emitGateAndWait(
   allowFreeText: boolean,
   gateTimeoutMs?: number,
   runMode: "human" | "host" = "human",
-  context?: string
+  context?: string,
+  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
 ): Promise<StageResult> {
   const reqId = nextRequestId();
   const pendingGate: PendingGate = {
@@ -1257,6 +1364,7 @@ async function emitGateAndWait(
       gateResponse = await waitForGateResponse(runId, reqId, projectRoot, gateTimeoutMs, gateType);
     } catch (err) {
       if (err instanceof GateTimeoutError) {
+        onGateTimeout?.(err, stage.id, gateTimeoutMs);
         return { id: stage.id, status: "blocked", outputs: {} };
       }
       throw err;
