@@ -48,6 +48,7 @@
 - `lineup dag [--workflow <path>] [--json]`
 - `lineup waves [--run <id>] [--compact] [--json]`
 - `lineup history [--status <status>] [--limit <n>] [--json]`
+- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]` — local-only smoke lane that validates Ollama-backed Claude, Codex, and OpenCode host integrations end to end against a real local Ollama daemon; it creates an isolated temp home and repo, runs `lineup init`, `lineup doctor --json`, a full pipeline task, and a bundled `explain` tactic task, then drives bridge questions through the bridge contract; it preserves the temp workspace on failure or stall for debugging and prints the exact bridge/host trace files to inspect
 
 ## Entry Points
 
@@ -64,6 +65,7 @@ Practical split:
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
+- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; until all hosts are green, run it per host instead of `--host all`
 
 ## Run Modes
 
@@ -123,6 +125,8 @@ For first-run onboarding:
 - if the repo still needs an initial commit, `lineup start` stops with the exact `git add -A && git commit -m "Initial commit"` command and a rerun command
 - `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, installing a supported host CLI when no local executor is available, and Ollama readiness when host integration is enabled for Claude, Codex, or OpenCode
 - see [Ollama](./ollama.md) for the exact `host_integration` config shape and host-specific launch behavior
+- the Ollama validation suite is split across deterministic tests, pipeline/bridge tests, and a local-only smoke lane; see [Ollama](./ollama.md) for the suite layout and the `smoke:ollama-hosts` command
+- until all hosts are green, prefer per-host smoke runs over `--host all` so host-specific failures stay isolated
 
 Before the first full native run without `lineup start`, make sure:
 

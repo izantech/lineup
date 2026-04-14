@@ -196,17 +196,17 @@ exit 1
     writeUserOllamaConfig(
       homeDir,
       "codex",
-      `enabled: true\nmodel: local-qwen\nscope: research\nbaseUrl: http://127.0.0.1:11434/v1\nhost_integration:\n  enabled: true\n  strategy: managed\n`
+      `enabled: true\nmodel: local-qwen\nscope: research\nbaseUrl: http://127.0.0.1:11434/v1\nhost_integration:\n  enabled: true\n  strategy: auto\n`
     );
 
     const report = createDoctorReport(tempDir, homeDir);
 
     expect(report.healthy).toBe(false);
-    expect(report.checks.ollama.codex.mode.detail).toContain("managed");
+    expect(report.checks.ollama.codex.mode.detail).toContain("launch");
     expect(report.checks.ollama.codex.binary.ok).toBe(true);
     expect(report.checks.ollama.codex.readiness.ok).toBe(false);
     expect(report.checks.ollama.codex.readiness.detail).toContain("local-qwen");
-    expect(report.checks.ollama.codex.integration.detail).toContain(".codex/config.toml");
+    expect(report.checks.ollama.codex.integration.detail).toContain("codex --oss --local-provider ollama");
     expect(report.checks.project.next_commands).toContainEqual({
       label: "verify codex Ollama readiness",
       command: "ollama list",

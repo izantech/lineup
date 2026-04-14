@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { LINEUP_CODEX_OLLAMA_PROFILE, codexConfigPath } from "../src/lib/codex-config.js"
-import { planHostLaunch } from "../src/lib/launch-planner.js"
+import { planHostLaunch, resolveHostLaunchStrategy } from "../src/lib/launch-planner.js"
 import { LINEUP_OPENCODE_OLLAMA_PROVIDER, opencodeConfigPath } from "../src/lib/opencode-config.js"
 
 function writeProjectConfig(root: string, content: string): void {
@@ -102,7 +102,8 @@ describe("launch planner", () => {
     expect(plan.command).toBe("opencode")
     expect(plan.integration).toBe("ollama-managed")
     expect(plan.args).toContain("--model")
-    expect(plan.args).toContain("qwen3-coder")
+    expect(plan.args).toContain(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
+    expect(plan.effectiveModel).toBe(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
     expect(plan.args[plan.args.length - 1]).toBe("inspect")
 
     const config = opencodeConfigPath(home)
@@ -112,6 +113,31 @@ describe("launch planner", () => {
         [LINEUP_OPENCODE_OLLAMA_PROVIDER]: expect.any(Object)
       })
     }))
+  })
+
+  it("launches Codex with the OSS local-provider contract when strategy resolves to launch", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3.5:9b\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: auto\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect"
+    })
+
+    expect(plan.command).toBe("codex")
+    expect(plan.integration).toBe("ollama-launch")
+    expect(plan.args.slice(0, 4)).toEqual(["exec", "--oss", "--local-provider", "ollama"])
+    expect(plan.args).toContain("-m")
+    expect(plan.args).toContain("qwen3.5:9b")
+    expect(plan.env.OLLAMA_HOST).toBe("http://127.0.0.1:11434")
   })
 
   it("wraps Claude with ollama launch when the wrapper is available", () => {
@@ -170,5 +196,47 @@ describe("launch planner", () => {
     expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBe("ollama")
     expect(plan.env.ANTHROPIC_API_KEY).toBe("")
     expect(plan.env.ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:11434")
+  })
+
+  it("gives host integration precedence over legacy full routing", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3-coder\n  scope: full\n  host_integration:\n    enabled: true\n    strategy: auto\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect"
+    })
+
+    expect(plan.integration).toBe("ollama-launch")
+    expect(plan.args).toContain("--oss")
+    expect(plan.args).toContain("--local-provider")
+    expect(plan.args).toContain("ollama")
+    expect(plan.args).toContain("-m")
+    expect(plan.args).toContain("qwen3-coder")
+  })
+
+  it("resolves auto strategy to launch for Claude and managed for Codex and OpenCode", () => {
+    const ollama = {
+      enabled: true as const,
+      model: "local-qwen",
+      scope: "research" as const,
+      baseUrl: "http://127.0.0.1:11434/v1",
+      hostIntegration: {
+        enabled: true as const,
+        strategy: "auto" as const
+      }
+    }
+
+    expect(resolveHostLaunchStrategy("claude", ollama)).toBe("launch")
+    expect(resolveHostLaunchStrategy("codex", ollama)).toBe("launch")
+    expect(resolveHostLaunchStrategy("opencode", ollama)).toBe("managed")
   })
 })

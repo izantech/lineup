@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -21,11 +21,17 @@ describe("lineup start", () => {
   let tempDir = "";
   let stdout: string[];
   let originalCwd = "";
+  let originalPath: string | undefined;
+  let originalHome: string | undefined;
+  let originalUserProfile: string | undefined;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "lineup-start-test-"));
     stdout = [];
     originalCwd = process.cwd();
+    originalPath = process.env.PATH;
+    originalHome = process.env.HOME;
+    originalUserProfile = process.env.USERPROFILE;
     process.chdir(tempDir);
     vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
       stdout.push(String(chunk));
@@ -37,6 +43,9 @@ describe("lineup start", () => {
 
   afterEach(() => {
     process.chdir(originalCwd);
+    process.env.PATH = originalPath;
+    process.env.HOME = originalHome;
+    process.env.USERPROFILE = originalUserProfile;
     rmSync(tempDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
@@ -81,5 +90,70 @@ describe("lineup start", () => {
     await expect(runStartCommand({ prompt: "Ship it", workflow: "missing.yaml" })).rejects.toThrow(
       "Workflow not found: missing.yaml"
     );
+  });
+
+  it("surfaces Ollama doctor guidance before running when host integration is not ready", async () => {
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(binDir, { recursive: true });
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    writeFileSync(
+      join(binDir, "codex"),
+      "#!/bin/sh\nexit 0\n",
+      "utf8"
+    );
+    chmodSync(join(binDir, "codex"), 0o755);
+    writeFileSync(
+      join(binDir, "ollama"),
+      `#!/bin/sh
+if [ "$1" = "list" ]; then
+  cat <<'EOF'
+NAME               ID              SIZE      MODIFIED
+different-model     abc123          1 GB      now
+EOF
+  exit 0
+fi
+exit 1
+`,
+      "utf8"
+    );
+    chmodSync(join(binDir, "ollama"), 0o755);
+
+    execSync("git init", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.email 'lineup@example.com'", { cwd: tempDir, stdio: "ignore" });
+    execSync("git config user.name 'Lineup Tests'", { cwd: tempDir, stdio: "ignore" });
+    writeFileSync(join(tempDir, "README.md"), "# Lineup\n");
+    mkdirSync(join(tempDir, ".lineup-core", "workflows"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup-core", "workflows", "full-pipeline.yaml"),
+      "apiVersion: lineup/v3\nkind: Workflow\nname: full-pipeline\nstages: []\n"
+    );
+    execSync("git add -A", { cwd: tempDir, stdio: "ignore" });
+    execSync("git commit -m 'Initial commit'", { cwd: tempDir, stdio: "ignore" });
+
+    mkdirSync(join(homeDir, ".codex", "lineup"), { recursive: true });
+    writeFileSync(
+      join(homeDir, ".codex", "lineup", "ollama.yaml"),
+      `enabled: true
+model: missing-model
+scope: research
+baseUrl: http://127.0.0.1:11434/v1
+host_integration:
+  enabled: true
+  strategy: managed
+`,
+      "utf8"
+    );
+
+    await runStartCommand({ prompt: "Ship the next version", host: "codex", approvePlan: true });
+
+    expect(stdout.join("")).toContain("Lineup found environment issues that should be fixed before starting this run.");
+    expect(stdout.join("")).toContain("next: ollama list");
+    expect(stdout.join("")).toContain("then: lineup start 'Ship the next version' --host codex");
+    expect(mockedRunRunCommand).not.toHaveBeenCalled();
   });
 });

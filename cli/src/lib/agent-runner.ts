@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -20,6 +20,7 @@ export type LocalAgentInvocationInput = {
   addDirs?: string[];
   outputSchemaPath?: string;
   expectedOutputPath?: string;
+  tracePrefixPath?: string;
 };
 
 export type LocalAgentInvocationResult = {
@@ -56,6 +57,96 @@ function readFileIfPresent(filePath?: string): string | null {
   } catch {
     return null;
   }
+}
+
+type HostInvocationTraceEvent = {
+  at: string;
+  type: string;
+  detail?: string;
+  data?: Record<string, unknown>;
+};
+
+type HostInvocationTrace = {
+  host: HostName;
+  command: string;
+  args: string[];
+  cwd: string;
+  timeoutMs?: number;
+  expectedOutputPath?: string;
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  completionReason?: "exit" | "expected_output" | "timeout" | "spawn_error" | "command_failed";
+  exitCode?: number | null;
+  signal?: NodeJS.Signals;
+  stdoutPath?: string;
+  stderrPath?: string;
+  env: Record<string, string | null>;
+  events: HostInvocationTraceEvent[];
+};
+
+function tracePaths(tracePrefixPath: string): { json: string; stdout: string; stderr: string } {
+  return {
+    json: `${tracePrefixPath}.trace.json`,
+    stdout: `${tracePrefixPath}.stdout.log`,
+    stderr: `${tracePrefixPath}.stderr.log`
+  };
+}
+
+function tracedEnvSubset(env: NodeJS.ProcessEnv | undefined): Record<string, string | null> {
+  const current = env ?? process.env;
+  const secretMarker = (value: string | undefined) => value ? "[set]" : null;
+
+  return {
+    HOME: current.HOME ?? null,
+    USERPROFILE: current.USERPROFILE ?? null,
+    OLLAMA_HOST: current.OLLAMA_HOST ?? null,
+    ANTHROPIC_BASE_URL: current.ANTHROPIC_BASE_URL ?? null,
+    ANTHROPIC_AUTH_TOKEN: secretMarker(current.ANTHROPIC_AUTH_TOKEN),
+    ANTHROPIC_API_KEY: secretMarker(current.ANTHROPIC_API_KEY),
+    LINEUP_WRAPPED_VIA_OLLAMA: current.LINEUP_WRAPPED_VIA_OLLAMA ?? null
+  };
+}
+
+function appendTraceEvent(trace: HostInvocationTrace, type: string, detail?: string, data?: Record<string, unknown>): void {
+  trace.events.push({
+    at: new Date().toISOString(),
+    type,
+    ...(detail ? { detail } : {}),
+    ...(data ? { data } : {})
+  });
+}
+
+function recordTraceEvent(
+  trace: HostInvocationTrace,
+  tracePrefixPath: string | undefined,
+  type: string,
+  detail?: string,
+  data?: Record<string, unknown>
+): void {
+  appendTraceEvent(trace, type, detail, data);
+  writeTraceFile(trace, tracePrefixPath);
+}
+
+function writeTraceFile(trace: HostInvocationTrace, tracePrefixPath?: string): void {
+  if (!tracePrefixPath) {
+    return;
+  }
+
+  const paths = tracePaths(tracePrefixPath);
+  mkdirSync(path.dirname(paths.json), { recursive: true });
+  writeFileSync(paths.json, `${JSON.stringify(trace, null, 2)}\n`, "utf8");
+}
+
+function appendTraceStream(tracePrefixPath: string | undefined, stream: "stdout" | "stderr", chunk: string): void {
+  if (!tracePrefixPath) {
+    return;
+  }
+
+  const paths = tracePaths(tracePrefixPath);
+  const target = stream === "stdout" ? paths.stdout : paths.stderr;
+  mkdirSync(path.dirname(target), { recursive: true });
+  appendFileSync(target, chunk, "utf8");
 }
 
 function hasStrictAdditionalProperties(schema: unknown): boolean {
@@ -262,58 +353,99 @@ export function resolveLocalExecutionHost(preferredHost?: HostName): HostName {
 
 async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
   const schemaContent = input.outputSchemaPath ? readFileSync(input.outputSchemaPath, "utf8") : null;
-  const launchPlan = planHostLaunch({
-    host,
-    projectRoot: input.projectRoot,
-    workingDirectory: input.workingDirectory,
-    agent: input.agent,
-    prompt: input.prompt,
-    timeoutMs: input.timeoutMs,
-    addDirs: input.addDirs,
-    schemaContent
-  });
+  const runClaudeAttempt = async (attempt: {
+    prompt: string;
+    schemaContent: string | null;
+    traceSuffix: string;
+  }): Promise<LocalAgentInvocationResult> => {
+    const launchPlan = planHostLaunch({
+      host,
+      projectRoot: input.projectRoot,
+      workingDirectory: input.workingDirectory,
+      agent: input.agent,
+      prompt: attempt.prompt,
+      timeoutMs: input.timeoutMs,
+      addDirs: input.addDirs,
+      schemaContent: attempt.schemaContent
+    });
 
-  const result = await runSpawnedCommand({
-    host: launchPlan.host,
-    command: launchPlan.command,
-    args: launchPlan.args,
-    cwd: input.workingDirectory,
-    env: launchPlan.env,
-    timeoutMs: input.timeoutMs
-  });
-  const fileOutput = readFileIfPresent(input.expectedOutputPath);
-  if (fileOutput && !schemaContent) {
+    const result = await runSpawnedCommand({
+      host: launchPlan.host,
+      command: launchPlan.command,
+      args: launchPlan.args,
+      cwd: input.workingDirectory,
+      env: launchPlan.env,
+      timeoutMs: input.timeoutMs,
+      stopOnExpectedOutputPath: input.expectedOutputPath,
+      tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
+    });
+    const fileOutput = readFileIfPresent(input.expectedOutputPath);
+    if (fileOutput && !attempt.schemaContent) {
+      return {
+        host: result.host,
+        stderr: result.stderr,
+        content: fileOutput
+      };
+    }
+    if (!attempt.schemaContent) {
+      return result;
+    }
+
+    const structured =
+      parseLocalAgentStructuredOutput(fileOutput ?? result.content) ??
+      (await formatStructuredOutputWithClaude({
+        projectRoot: input.projectRoot,
+        workingDirectory: input.workingDirectory,
+        agent: input.agent,
+        rawDraft: fileOutput ?? result.content,
+        schemaContent: attempt.schemaContent,
+        timeoutMs: input.timeoutMs,
+        tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
+      }));
+
     return {
       host: result.host,
       stderr: result.stderr,
-      content: fileOutput
+      content: `${JSON.stringify(structured, null, 2)}\n`
     };
-  }
-  if (!schemaContent) {
-    return result;
-  }
-
-  const structured =
-    parseLocalAgentStructuredOutput(fileOutput ?? result.content) ??
-    (await formatStructuredOutputWithClaude({
-      rawDraft: fileOutput ?? result.content,
-      schemaContent,
-      workingDirectory: input.workingDirectory,
-      timeoutMs: input.timeoutMs
-    }));
-
-  return {
-    host: result.host,
-    stderr: result.stderr,
-    content: `${JSON.stringify(structured, null, 2)}\n`
   };
+
+  if (!schemaContent) {
+    return runClaudeAttempt({
+      prompt: input.prompt,
+      schemaContent: null,
+      traceSuffix: "draft"
+    });
+  }
+
+  try {
+    return await runClaudeAttempt({
+      prompt: input.prompt,
+      schemaContent,
+      traceSuffix: "strict"
+    });
+  } catch (error) {
+    const isTimeout = error instanceof CliError && error.code === "timeout";
+    if (!isTimeout) {
+      throw error;
+    }
+
+    return runClaudeAttempt({
+      prompt: input.prompt,
+      schemaContent: null,
+      traceSuffix: "draft-fallback"
+    });
+  }
 }
 
 async function formatStructuredOutputWithClaude(input: {
+  projectRoot: string;
   rawDraft: string;
   schemaContent: string;
+  agent: AgentRole;
   workingDirectory: string;
   timeoutMs?: number;
+  tracePrefixPath?: string;
 }): Promise<unknown> {
   const formatterPrompt = [
     "Convert the following draft into a JSON value that matches the provided schema.",
@@ -323,21 +455,24 @@ async function formatStructuredOutputWithClaude(input: {
     input.rawDraft
   ].join("\n");
 
-  const result = await runSpawnedCommand({
+  const launchPlan = planHostLaunch({
     host: "claude",
-    command: "claude",
-    args: [
-      "-p",
-      "--output-format",
-      "json",
-      "--json-schema",
-      input.schemaContent,
-      "--permission-mode",
-      "bypassPermissions",
-      formatterPrompt
-    ],
+    projectRoot: input.projectRoot,
+    workingDirectory: input.workingDirectory,
+    agent: input.agent,
+    prompt: formatterPrompt,
+    timeoutMs: input.timeoutMs,
+    schemaContent: input.schemaContent
+  });
+
+  const result = await runSpawnedCommand({
+    host: launchPlan.host,
+    command: launchPlan.command,
+    args: launchPlan.args,
     cwd: input.workingDirectory,
-    timeoutMs: input.timeoutMs
+    env: launchPlan.env,
+    timeoutMs: input.timeoutMs,
+    tracePrefixPath: input.tracePrefixPath
   });
 
   const structured = extractStructuredPayload(result.content);
@@ -386,7 +521,8 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       cwd: input.workingDirectory,
       env: launchPlan.env,
       timeoutMs: input.timeoutMs,
-      stopOnExpectedOutputPath: input.expectedOutputPath
+      stopOnExpectedOutputPath: input.expectedOutputPath,
+      tracePrefixPath: input.tracePrefixPath
     });
     const fileOutput = readFileIfPresent(input.expectedOutputPath);
     if (fileOutput) {
@@ -424,7 +560,9 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
     args: launchPlan.args,
     cwd: input.workingDirectory,
     env: launchPlan.env,
-    timeoutMs: input.timeoutMs
+    timeoutMs: input.timeoutMs,
+    stopOnExpectedOutputPath: input.expectedOutputPath,
+    tracePrefixPath: input.tracePrefixPath
   });
   const fileOutput = readFileIfPresent(input.expectedOutputPath);
   if (fileOutput) {
@@ -445,8 +583,28 @@ async function runSpawnedCommand(input: {
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   stopOnExpectedOutputPath?: string;
+  tracePrefixPath?: string;
 }): Promise<LocalAgentInvocationResult> {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const trace: HostInvocationTrace = {
+      host: input.host,
+      command: input.command,
+      args: input.args,
+      cwd: input.cwd,
+      ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
+      ...(input.stopOnExpectedOutputPath ? { expectedOutputPath: input.stopOnExpectedOutputPath } : {}),
+      startedAt: new Date(startedAt).toISOString(),
+      env: tracedEnvSubset(input.env),
+      events: []
+    };
+    if (input.tracePrefixPath) {
+      const paths = tracePaths(input.tracePrefixPath);
+      trace.stdoutPath = paths.stdout;
+      trace.stderrPath = paths.stderr;
+    }
+    recordTraceEvent(trace, input.tracePrefixPath, "spawn", `${input.command} ${input.args.join(" ")}`.trim());
+
     const child = spawn(input.command, input.args, {
       cwd: input.cwd,
       env: input.env ?? process.env,
@@ -487,6 +645,10 @@ async function runSpawnedCommand(input: {
         clearInterval(expectedOutputPoller);
         expectedOutputPoller = undefined;
       }
+      trace.completedAt = new Date().toISOString();
+      trace.durationMs = Date.now() - startedAt;
+      trace.completionReason = completedFromExpectedOutput ? "expected_output" : "exit";
+      writeTraceFile(trace, input.tracePrefixPath);
       resolve(result);
     };
 
@@ -496,6 +658,16 @@ async function runSpawnedCommand(input: {
       }
       settled = true;
       clearPendingTimers();
+      trace.completedAt = new Date().toISOString();
+      trace.durationMs = Date.now() - startedAt;
+      if (timedOut) {
+        trace.completionReason = "timeout";
+      } else {
+        trace.completionReason = error instanceof CliError && error.code === "command_failed"
+          ? "command_failed"
+          : "spawn_error";
+      }
+      writeTraceFile(trace, input.tracePrefixPath);
       reject(error);
     };
 
@@ -505,8 +677,13 @@ async function runSpawnedCommand(input: {
           return;
         }
         timedOut = true;
+        recordTraceEvent(trace, input.tracePrefixPath, "timeout", `Timed out after ${input.timeoutMs}ms.`);
         child.kill("SIGTERM");
-        setTimeout(() => child.kill("SIGKILL"), 1_000).unref();
+        recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGTERM after timeout.", { signal: "SIGTERM" });
+        setTimeout(() => {
+          recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGKILL after timeout grace period.", { signal: "SIGKILL" });
+          child.kill("SIGKILL");
+        }, 1_000).unref();
       }, input.timeoutMs);
     }
 
@@ -518,6 +695,9 @@ async function runSpawnedCommand(input: {
         }
 
         completedFromExpectedOutput = true;
+        recordTraceEvent(trace, input.tracePrefixPath, "artifact_detected", `Detected expected output at ${input.stopOnExpectedOutputPath}.`, {
+          bytes: Buffer.byteLength(fileOutput, "utf8")
+        });
         if (expectedOutputPoller) {
           clearInterval(expectedOutputPoller);
           expectedOutputPoller = undefined;
@@ -528,18 +708,26 @@ async function runSpawnedCommand(input: {
           stderr
         });
         child.kill("SIGTERM");
-        expectedOutputKillTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+        recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGTERM after expected output was detected.", { signal: "SIGTERM" });
+        expectedOutputKillTimer = setTimeout(() => {
+          recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGKILL after expected-output grace period.", { signal: "SIGKILL" });
+          child.kill("SIGKILL");
+        }, 1_000);
         expectedOutputKillTimer.unref();
       }, 250);
       expectedOutputPoller.unref();
     }
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text;
+      appendTraceStream(input.tracePrefixPath, "stdout", text);
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      appendTraceStream(input.tracePrefixPath, "stderr", text);
     });
 
     child.on("error", (error: NodeJS.ErrnoException) => {
@@ -548,6 +736,7 @@ async function runSpawnedCommand(input: {
         return;
       }
       if (error.code === "ENOENT") {
+        recordTraceEvent(trace, input.tracePrefixPath, "spawn_error", `Required command not found: ${input.command}`);
         settleReject(
           new CliError(`Required command not found: ${input.command}`, {
             code: "command_not_found"
@@ -555,21 +744,34 @@ async function runSpawnedCommand(input: {
         );
         return;
       }
+      recordTraceEvent(trace, input.tracePrefixPath, "spawn_error", error.message);
       settleReject(error);
     });
 
     child.on("close", (code) => {
       clearPendingTimers();
+      trace.exitCode = code;
+      recordTraceEvent(trace, input.tracePrefixPath, "close", `Process exited with code ${code ?? 1}.`, {
+        code: code ?? 1,
+        completedFromExpectedOutput
+      });
 
       if (settled) {
+        writeTraceFile(trace, input.tracePrefixPath);
         return;
       }
 
       if (timedOut) {
         settleReject(
-          new CliError(`${input.host} ${input.command} invocation timed out after ${input.timeoutMs}ms.`, {
-            code: "timeout"
-          })
+          new CliError(
+            [
+              `${input.host} ${input.command} invocation timed out after ${input.timeoutMs}ms.`,
+              input.tracePrefixPath ? `trace: ${tracePaths(input.tracePrefixPath).json}` : null
+            ].filter(Boolean).join("\n"),
+            {
+              code: "timeout"
+            }
+          )
         );
         return;
       }
@@ -588,6 +790,7 @@ async function runSpawnedCommand(input: {
           new CliError(
             [
               `${input.host} agent invocation failed with exit code ${code ?? 1}.`,
+              input.tracePrefixPath ? `trace: ${tracePaths(input.tracePrefixPath).json}` : null,
               stdout.trim() ? `stdout:\n${stdout.trim()}` : null,
               stderr.trim() ? `stderr:\n${stderr.trim()}` : null
             ]

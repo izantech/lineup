@@ -115,7 +115,11 @@ function resolveOllamaIntegrationDetail(host: HostName, strategy: "launch" | "ma
   if (strategy === "launch") {
     return {
       ok: true,
-      detail: host === "claude" ? "launch wrapper with Claude env fallback" : "launch wrapper"
+      detail: host === "claude"
+        ? "launch wrapper with Claude env fallback"
+        : host === "codex"
+          ? "local OSS provider via codex --oss --local-provider ollama"
+          : "launch wrapper"
     };
   }
 
@@ -149,7 +153,7 @@ function checkOllamaHost(host: HostName, cwd = process.cwd(), homeDir = os.homed
   }
 
   const strategy = config.hostIntegration.strategy === "auto"
-    ? host === "claude" ? "launch" : "managed"
+    ? host === "opencode" ? "managed" : "launch"
     : config.hostIntegration.strategy;
   const binary = checkCommand("ollama");
 

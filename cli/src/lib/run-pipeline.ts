@@ -42,7 +42,15 @@ import {
   savePipelineState,
   updatePipelineArtifactHashes
 } from "./state.js";
-import { parseWorkflowYaml, parseRestrictedYaml, validateTacticYaml, validateAgentOutputYaml, type AgentOutputKind } from "./validation.js";
+import {
+  parseWorkflowYaml,
+  parseRestrictedYaml,
+  selectRestrictedYamlDocument,
+  validateTacticYaml,
+  validateAgentOutputYaml,
+  validatePlanYaml,
+  type AgentOutputKind
+} from "./validation.js";
 import { tacticToWorkflow, type TacticDefinition } from "./tactic-convert.js";
 import { validateWorkflowDag, resolveExecutionOrder } from "./workflow.js";
 import { evaluateExpressionSafe, type ExpressionContext } from "./expression.js";
@@ -816,7 +824,8 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         agent: "developer",
         prompt: input.prompt,
         timeoutMs: input.timeoutMs,
-        addDirs: [input.runRoot, input.artifactDir]
+        addDirs: [input.runRoot, input.artifactDir],
+        tracePrefixPath: resolve(input.runRoot, "host", `implement-${taskTraceLabel(input.task.id)}-${localAgentRunner.host}`)
       });
       return JSON.parse(repairJsonOutput(result.content).content) as NativeTaskExecutionResult;
     },
@@ -829,7 +838,8 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         prompt: input.prompt,
         timeoutMs: input.timeoutMs,
         addDirs: [input.runRoot, input.artifactDir],
-        expectedOutputPath: reviewPath
+        expectedOutputPath: reviewPath,
+        tracePrefixPath: resolve(input.runRoot, "host", `verify-reviewer-${localAgentRunner.host}`)
       });
       return {
         reviewYaml: repairYamlOutput(result.content).content
@@ -981,21 +991,39 @@ function slugifyTopic(input: string): string {
     .slice(0, 80) || "task";
 }
 
-function normalizeResearchArtifact(raw: string, taskPrompt: string, source: string): string {
-  const parsed = parseRestrictedYaml(raw, source);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return raw;
-  }
+function taskTraceLabel(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "task";
+}
 
-  const doc = { ...(parsed as Record<string, unknown>) };
-  const today = new Date().toISOString().slice(0, 10);
-  doc.type = "research";
-  doc.agent = "researcher";
-  doc.date = typeof doc.date === "string" && doc.date.trim().length > 0 ? doc.date : today;
-  doc.topic = typeof doc.topic === "string" && doc.topic.trim().length > 0 ? doc.topic : slugifyTopic(taskPrompt);
-  doc.status = "complete";
-  doc.pipeline_stage = doc.pipeline_stage ?? 2;
-  return stringifyStructuredYaml(doc);
+function normalizeResearchArtifact(raw: string, taskPrompt: string, source: string): string {
+  const repaired = repairYamlOutput(raw).content;
+
+  try {
+    const normalized = normalizeResearchDocument(parseRestrictedYaml(repaired, source), taskPrompt);
+    return normalized ? stringifyStructuredYaml(normalized) : repaired;
+  } catch (error) {
+    if (!(error instanceof CliError) || error.code !== "yaml_parse_failed") {
+      throw error;
+    }
+
+    const recovered = selectRestrictedYamlDocument(repaired, source, {
+      describe: "research artifact",
+      normalize: (payload) => {
+        const normalized = normalizeResearchDocument(payload, taskPrompt);
+        return normalized ? stringifyStructuredYaml(normalized) : null;
+      }
+    });
+
+    if (recovered) {
+      return recovered;
+    }
+
+    throw error;
+  }
 }
 
 function stringifyStructuredYaml(payload: unknown): string {
@@ -1004,11 +1032,63 @@ function stringifyStructuredYaml(payload: unknown): string {
 
 function isStructuredPlanDraft(raw: string, source: string): boolean {
   try {
-    const parsed = parseRestrictedYaml(repairYamlOutput(raw).content, source);
+    const parsed = parseRestrictedYaml(normalizePlanDraftArtifact(raw, source), source);
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
   } catch {
     return false;
   }
+}
+
+function normalizePlanDraftArtifact(raw: string, source: string): string {
+  const repaired = repairYamlOutput(raw).content;
+
+  try {
+    parseRestrictedYaml(repaired, source);
+    return repaired;
+  } catch (error) {
+    if (!(error instanceof CliError) || error.code !== "yaml_parse_failed") {
+      throw error;
+    }
+
+    const recovered = selectRestrictedYamlDocument(repaired, source, {
+      describe: "plan artifact",
+      normalize: (payload) => {
+        if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+          return null;
+        }
+
+        const candidate = stringifyStructuredYaml(payload);
+        try {
+          validatePlanYaml(candidate, source);
+          return candidate;
+        } catch {
+          return null;
+        }
+      }
+    });
+
+    if (recovered) {
+      return recovered;
+    }
+
+    throw error;
+  }
+}
+
+function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record<string, unknown> | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+
+  const doc = { ...(payload as Record<string, unknown>) };
+  const today = new Date().toISOString().slice(0, 10);
+  doc.type = "research";
+  doc.agent = "researcher";
+  doc.date = typeof doc.date === "string" && doc.date.trim().length > 0 ? doc.date : today;
+  doc.topic = typeof doc.topic === "string" && doc.topic.trim().length > 0 ? doc.topic : slugifyTopic(taskPrompt);
+  doc.status = "complete";
+  doc.pipeline_stage = doc.pipeline_stage ?? 2;
+  return doc;
 }
 
 function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string): string {
@@ -1114,7 +1194,8 @@ async function executePreStage(
           timeoutMs: 300_000,
           addDirs: [artifactDir],
           outputSchemaPath: resolveArtifactSchemaPath(stage.agent, stage.agent === "researcher" ? "Research" : stage.agent),
-          expectedOutputPath: outputPath
+          expectedOutputPath: outputPath,
+          tracePrefixPath: resolve(dirname(artifactDir), "host", `${stage.id}-${localAgentRunner.host}`)
         })
       ).content;
     } else {
@@ -1437,9 +1518,10 @@ async function executePlannerPhase(
           timeoutMs: 300_000,
           addDirs: [artifactDir],
           outputSchemaPath: resolveArtifactSchemaPath(stage.agent ?? "architect", "Plan"),
-          expectedOutputPath: planPath
+          expectedOutputPath: planPath,
+          tracePrefixPath: resolve(dirname(artifactDir), "host", `${stage.id}-${localAgentRunner.host}`)
         });
-        const repaired = repairYamlOutput(result.content).content;
+        const repaired = normalizePlanDraftArtifact(result.content, planPath);
         writeFileSync(planPath, repaired, "utf8");
         if (isStructuredPlanDraft(repaired, planPath)) {
           break;
@@ -1474,7 +1556,7 @@ async function executePlannerPhase(
         })
       );
       const rawPlan = await waitForResponseFile(planPath, "Plan response", 300_000);
-      const repaired = repairYamlOutput(rawPlan).content;
+      const repaired = normalizePlanDraftArtifact(rawPlan, planPath);
       writeFileSync(planPath, repaired, "utf8");
       if (isStructuredPlanDraft(repaired, planPath)) {
         break;

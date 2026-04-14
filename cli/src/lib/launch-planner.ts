@@ -88,14 +88,14 @@ function resolveConfiguredStrategy(host: HostName, configured: OllamaHostIntegra
     return configured
   }
 
-  return host === "claude" ? "launch" : "managed"
+  return host === "opencode" ? "managed" : "launch"
 }
 
 export function resolveHostLaunchStrategy(host: HostName, ollama: OllamaConfig | null): HostLaunchStrategy {
   const configuredStrategy = ollama?.hostIntegration?.enabled ? ollama.hostIntegration.strategy : undefined
 
   if (!configuredStrategy) {
-    return host === "claude" ? "launch" : "managed"
+    return host === "opencode" ? "managed" : "launch"
   }
 
   return resolveConfiguredStrategy(host, configuredStrategy)
@@ -104,6 +104,7 @@ export function resolveHostLaunchStrategy(host: HostName, ollama: OllamaConfig |
 function buildClaudeDirectArgs(input: HostLaunchPlanInput, model: string): string[] {
   const args = [
     "-p",
+    "--bare",
     "--output-format",
     input.schemaContent ? "json" : "text",
     "--permission-mode",
@@ -140,6 +141,9 @@ function buildOpencodeDirectArgs(input: HostLaunchPlanInput, model: string): str
     "run",
     "--dir",
     input.workingDirectory,
+    "--pure",
+    "--format",
+    "json",
     "--dangerously-skip-permissions",
     input.prompt
   ]
@@ -147,6 +151,22 @@ function buildOpencodeDirectArgs(input: HostLaunchPlanInput, model: string): str
   return shouldPassLegacyModel("opencode", model)
     ? insertOptionBeforePrompt(args, "--model", model)
     : args
+}
+
+function buildCodexOllamaLaunchArgs(input: HostLaunchPlanInput, model: string): string[] {
+  const directArgs = buildCodexDirectArgs(input, model)
+
+  return [
+    directArgs[0] ?? "exec",
+    "--oss",
+    "--local-provider",
+    "ollama",
+    ...directArgs.slice(1)
+  ]
+}
+
+function qualifyOpencodeModel(providerName: string, model: string): string {
+  return `${providerName}/${model}`
 }
 
 function planDirectLaunch(input: HostLaunchPlanInput, effectiveModel: string, env: NodeJS.ProcessEnv): HostLaunchPlan {
@@ -248,8 +268,8 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
       return {
         host: input.host,
         strategy,
-        command: "ollama",
-        args: ["launch", "codex", "--model", ollama.model, "--yes", "--", ...directArgs],
+        command: "codex",
+        args: buildCodexOllamaLaunchArgs(input, ollama.model),
         env: normalizeWrapperEnv(env, ollama.baseUrl),
         effectiveModel: ollama.model,
         ollama,
@@ -297,13 +317,15 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
     baseUrl: ollama.baseUrl
   })
 
+  const qualifiedModel = qualifyOpencodeModel(LINEUP_OPENCODE_OLLAMA_PROVIDER, ollama.model)
+
   return {
     host: input.host,
     strategy,
     command: "opencode",
-    args: insertOptionBeforePrompt(directArgs, "--model", ollama.model),
+    args: insertOptionBeforePrompt(directArgs, "--model", qualifiedModel),
     env,
-    effectiveModel: ollama.model,
+    effectiveModel: qualifiedModel,
     ollama,
     integration: "ollama-managed"
   }

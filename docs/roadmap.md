@@ -181,6 +181,76 @@ Status:
   - a deterministic regression test now covers the artifact-written-but-process-still-alive case
 - remaining practical follow-up is a fresh real Codex multi-file implementation rerun to confirm the original `a1db54` scenario stays green under live quota
 
+### Ollama Host Stabilization
+
+Latest live Ollama validation on `qwen3.5:9b` is still failing, but the failure
+classes are now instrumented and no longer conflated:
+
+- Claude:
+  - both the `ollama launch claude` lane and the Anthropic-compatible env
+    fallback lane stall inside the strict research invocation
+  - the host trace records only a `spawn` event
+  - there is no stdout, no stderr, no close event, and no research artifact
+- OpenCode:
+  - the process starts and logs its one-time SQLite migration
+  - after startup it produces no stdout, no artifact, and no process exit
+- Codex:
+  - the process starts on `provider: ollama`
+  - stderr shows active reasoning and tool planning
+  - no research artifact is written, so the bridge sees no stage progress even
+    though the host is active
+
+Current instrumentation:
+
+- smoke runs now preserve the temp workspace on failure or stall
+- smoke summaries print the run roots plus:
+  - bridge event/log files
+  - host trace JSON
+  - host stdout/stderr logs
+- runner traces now flush at spawn time instead of only on process settlement,
+  so hung hosts still leave a `.trace.json`
+
+Comprehensive fix plan:
+
+1. Shared smoke/progress hardening
+   - treat host trace/log growth as progress in the smoke runner, not only
+     bridge events
+   - keep the current no-progress timeout for truly silent hosts, but stop
+     classifying actively logging hosts as stalled
+   - add deterministic coverage for trace-file emission and smoke progress
+     classification
+2. Claude stabilization
+   - create a direct minimal repro for the Ollama-backed strict
+     `claude --json-schema` path outside the full pipeline
+   - compare:
+     - minimal schema
+     - current researcher schema
+     - draft-only output
+   - if strict schema mode remains hung, switch Ollama-backed Claude to a
+     two-step strict path:
+     - get a draft from Claude
+     - immediately reformat it through a strict validated Claude pass
+     - only accept the result if final schema validation succeeds
+3. OpenCode stabilization
+   - reproduce the current `opencode run --pure --format json --model lineup-ollama/<model>`
+     command outside the pipeline with the same temp home
+   - determine whether the non-interactive path needs a different prompt/input
+     surface or a different output mode
+   - once the direct repro is reliable, update Lineup’s OpenCode invocation and
+     add a deterministic regression around that exact contract
+4. Codex stabilization
+   - keep `codex exec --oss --local-provider ollama` as the live provider path
+   - tighten the research artifact contract so the local model actually writes
+     the expected file instead of free-running in tool/reasoning mode
+   - if needed, add a Codex-specific completion helper that can recover a valid
+     research artifact from returned output when the file is not written
+   - update smoke classification so active Codex stderr/log activity extends the
+     progress window
+5. Final acceptance
+   - green deterministic suite
+   - green per-host live smoke for `claude`, `opencode`, and `codex`
+   - only after all three are green individually, run `--host all`
+
 ## 5. Run And Artifact Inspection Polish
 
 Goal: make finished runs easier to inspect and debug.
@@ -248,13 +318,17 @@ Status:
 
 Start here:
 
-1. Re-run the original-style live Codex multi-file bridge scenario now that artifact handoff resolves on file creation
-2. Optional broader real-host coverage after the Codex rerun is green
-3. Move on to the next roadmap item if no further Codex drift appears
+1. Fix smoke progress classification so active Codex stderr/trace activity is
+   not treated as a silent stall
+2. Build the direct minimal repro for the Claude strict-schema Ollama hang
+3. Build the direct minimal repro for the OpenCode non-interactive hang
+4. Turn those repros into host-specific runtime fixes before attempting another
+   `--host all` pass
 
 Concrete first step:
 
-- re-run an `a1db54`-style Codex bridge-backed multi-file implementation task and confirm research no longer stalls after the artifact is written
+- use the preserved Ollama smoke trace bundles to create direct per-host repro
+  commands, starting with the Claude strict research invocation
 
 ## Verification Checklist
 

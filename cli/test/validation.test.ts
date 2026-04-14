@@ -12,6 +12,7 @@ import {
   validatePlanYaml,
   validateProtocolJson,
   parseRestrictedYaml,
+  parseRestrictedYamlDocuments,
   validateReviewYaml,
   validateSpecYaml,
   validateHostAdapter,
@@ -58,6 +59,49 @@ describe("schema validation", () => {
   it("rejects malformed tactic YAML", () => {
     const malformed = "name: sample\ndescription: bad\nstages:\n  - type: research\n    agent: researcher\nverification\n  - check\n";
     expect(() => validateTacticYaml(malformed, "fixture/tactic.yaml")).toThrow(CliError);
+  });
+
+  it("parses a single restricted YAML document", () => {
+    const content = "name: sample\ndescription: x\nstages: []\nverification: []\n";
+    expect(parseRestrictedYamlDocuments(content, "fixture/tactic.yaml")).toEqual([
+      {
+        name: "sample",
+        description: "x",
+        stages: [],
+        verification: []
+      }
+    ]);
+  });
+
+  it("parses multiple restricted YAML documents", () => {
+    const content = "---\nname: first\ndescription: one\nstages: []\nverification: []\n---\nname: second\ndescription: two\nstages: []\nverification: []\n";
+    expect(parseRestrictedYamlDocuments(content, "fixture/tactic.yaml")).toEqual([
+      {
+        name: "first",
+        description: "one",
+        stages: [],
+        verification: []
+      },
+      {
+        name: "second",
+        description: "two",
+        stages: [],
+        verification: []
+      }
+    ]);
+  });
+
+  it("rejects anchors, aliases, and tags in multi-document YAML", () => {
+    const anchored = "---\nname: first\ndescription: one\nstages: &s []\nverification: []\n---\nname: second\ndescription: two\nstages: []\nverification: *s\n";
+    const tagged = "---\nname: sample\ndescription: x\nstages: []\nverification: []\n---\n!custom\nname: other\ndescription: y\nstages: []\nverification: []\n";
+
+    expect(() => parseRestrictedYamlDocuments(anchored, "fixture/tactic.yaml")).toThrow(CliError);
+    expect(() => parseRestrictedYamlDocuments(tagged, "fixture/tactic.yaml")).toThrow(CliError);
+  });
+
+  it("rejects malformed multi-document YAML", () => {
+    const malformed = "---\nname: first\ndescription: one\nstages: []\nverification: []\n---\nname: second\ndescription: two\nstages:\n  - type: research\n    agent: researcher\nverification\n  - check\n";
+    expect(() => parseRestrictedYamlDocuments(malformed, "fixture/tactic.yaml")).toThrow(CliError);
   });
 
   it("validates v3 artifact schemas with lineage metadata", () => {

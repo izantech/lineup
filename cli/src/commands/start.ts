@@ -98,5 +98,14 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     return;
   }
 
+  if (report.checks.project.next_commands.length > 0) {
+    printTableLine("Lineup found environment issues that should be fixed before starting this run.");
+    for (const recommendation of report.checks.project.next_commands) {
+      printTableLine(`next: ${recommendation.command}`);
+    }
+    printTableLine(`then: ${rerunCommand(options)}`);
+    return;
+  }
+
   await runRunCommand(options);
 }

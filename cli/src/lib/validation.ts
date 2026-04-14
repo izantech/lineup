@@ -4,7 +4,7 @@ import path from "node:path";
 import type { ValidateFunction } from "ajv";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { parseDocument } from "yaml";
+import { parseAllDocuments } from "yaml";
 
 import { CliError } from "./errors.js";
 import { packageRoot } from "./paths.js";
@@ -82,6 +82,19 @@ function validateJsonArtifact(schemaRelPath: string, payload: unknown, source: s
 }
 
 export function parseRestrictedYaml(content: string, source: string): unknown {
+  const parsed = parseRestrictedYamlDocuments(content, source);
+  if (parsed.length > 1) {
+    throw new CliError(
+      `${source}: YAML parse failed:\nSource contains multiple documents; please use YAML.parseAllDocuments().`,
+      {
+        code: "yaml_parse_failed"
+      }
+    );
+  }
+  return parsed[0];
+}
+
+export function parseRestrictedYamlDocuments(content: string, source: string): unknown[] {
   if (/(^|\s)&[A-Za-z0-9_-]+/m.test(content)) {
     throw new CliError(`${source}: YAML anchors are not allowed.`, {
       code: "yaml_anchor_not_allowed"
@@ -100,19 +113,51 @@ export function parseRestrictedYaml(content: string, source: string): unknown {
     });
   }
 
-  const doc = parseDocument(content, {
+  const docs = parseAllDocuments(content, {
     uniqueKeys: true,
     merge: false
   });
 
-  if (doc.errors.length > 0) {
-    const message = doc.errors.map((item) => item.message).join("\n");
+  const errors = docs.flatMap((doc) => doc.errors);
+  if (errors.length > 0) {
+    const message = errors.map((item) => item.message).join("\n");
     throw new CliError(`${source}: YAML parse failed:\n${message}`, {
       code: "yaml_parse_failed"
     });
   }
 
-  return doc.toJSON();
+  return docs.map((doc) => doc.toJSON());
+}
+
+export function selectRestrictedYamlDocument(
+  content: string,
+  source: string,
+  options: {
+    describe: string;
+    normalize: (payload: unknown, index: number) => string | null;
+  }
+): string | null {
+  const candidates = parseRestrictedYamlDocuments(content, source)
+    .map((payload, index) => ({
+      index,
+      content: options.normalize(payload, index)
+    }))
+    .filter((candidate): candidate is { index: number; content: string } => Boolean(candidate.content));
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  if (candidates.length > 1) {
+    throw new CliError(
+      `${source}: YAML parse failed:\nMultiple ${options.describe} YAML documents matched; cannot choose automatically.`,
+      {
+        code: "yaml_parse_failed"
+      }
+    );
+  }
+
+  return candidates[0].content;
 }
 
 export function validateTacticYaml(content: string, source: string): void {

@@ -70,7 +70,21 @@ Lineup optionally uses local Ollama-backed models. It supports three modes:
 
 - **Research assist**: `scope: research`. Researchers and architects get the Ollama appendix for summarization and compression help only. Host routing does not change.
 - **Legacy full routing**: `scope: full`. Compatibility mode that preserves the existing full-stage Ollama model-target routing without enabling host-native integration.
-- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex uses a managed Ollama profile, and OpenCode uses a managed Ollama provider. `lineup doctor` verifies model availability for every configured host integration before native runs start.
+- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex prefers the official local-OSS launch path when that is the active implementation, and OpenCode uses a managed Ollama provider with a provider-qualified model identifier. `lineup doctor` verifies model availability for every configured host integration before native runs start.
+
+The implementation is validated in three layers:
+
+- deterministic config, planner, managed-config, doctor, and runner tests
+- deterministic full-pipeline coverage for human/local mode, bridge mode, and bundled `explain`
+- a local-only live smoke command for real Claude/Codex/OpenCode hosts against a local Ollama daemon
+
+The smoke command is:
+
+```bash
+npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]
+```
+
+It uses the bridge contract for progress, questions, and completion, preserves temp workspaces on failure or stall, and it is not part of CI. Until all hosts are green, run per-host smoke lanes instead of `--host all`.
 
 Configuration is host-specific:
 

@@ -24,6 +24,7 @@ import { buildAgentSystemPrompt } from "./prompt-builder.js";
 import type { HostName } from "./constants.js";
 import {
   parseRestrictedYaml,
+  selectRestrictedYamlDocument,
   validatePlanYaml,
   validateReviewYaml,
   validateTasksJson
@@ -732,7 +733,30 @@ function normalizeReviewArtifact(raw: string, source: string): string {
   let parsed: unknown;
   try {
     parsed = parseRestrictedYaml(raw, source);
-  } catch {
+  } catch (error) {
+    if (error instanceof CliError && error.code === "yaml_parse_failed") {
+      const recovered = selectRestrictedYamlDocument(raw, source, {
+        describe: "review artifact",
+        normalize: (payload) => {
+          if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+            return null;
+          }
+
+          const candidate = stringifyYaml(payload);
+          try {
+            validateReviewYaml(candidate, source);
+            return candidate;
+          } catch {
+            return null;
+          }
+        }
+      });
+
+      if (recovered) {
+        return recovered;
+      }
+    }
+
     const markdownReview = normalizeMarkdownReviewArtifact(raw);
     if (markdownReview) {
       return stringifyYaml(markdownReview);

@@ -32,6 +32,22 @@ output (fenced payload repair, one planner retry when prose is returned, toleran
 developer/reviewer parsing), but keep generated skills and docs aligned with the
 bridge contract rather than relying on recovery behavior.
 
+Ollama host integration is validated in three layers:
+
+- deterministic unit and integration tests for config precedence, launch planning,
+  managed config writers, doctor readiness, and runner behavior
+- deterministic pipeline and bridge tests that cover full human/local runs,
+  bridge mode, and bundled `explain`
+- a local-only smoke lane for real Claude, Codex, and OpenCode hosts against a
+  real local Ollama daemon
+
+The smoke command is:
+
+- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]`
+
+It is local-only and should not be added to CI. Until all hosts are green, run
+the smoke lanes per host instead of relying on `--host all`.
+
 When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
 aligned on that contract.
 

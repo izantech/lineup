@@ -83,6 +83,9 @@ Recommended host integration:
 - if the repo uses Ollama research assist, keep it as an appendix-only optimization
 - if the repo uses legacy full routing or true host integration, run `lineup doctor --json` first and confirm Ollama readiness before starting the bridge
 - use [Ollama](./ollama.md) as the source of truth for `host_integration` examples and host-specific expectations
+- for validation work, prefer the deterministic suite plus the local-only smoke lane documented in [Ollama](./ollama.md); the smoke runner is `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]`
+- until all hosts are green, prefer per-host smoke runs over `--host all` so host-specific failures stay isolated
+- the validation suite covers full human/local runs, bridge mode, bundled `explain`, and legacy `scope: full` compatibility
 
 Built-in CLI tactics such as `explain` are resolvable by name even outside the
 Lineup repo. `lineup tactic list` remains focused on repo-local/project tactics
