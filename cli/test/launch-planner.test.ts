@@ -345,7 +345,7 @@ describe("launch planner", () => {
     expect(plan.args).toContain("qwen3-coder")
   })
 
-  it("resolves auto strategy to launch for Claude and managed for Codex and OpenCode", () => {
+  it("resolves auto strategy to launch for Claude, Codex, and OpenCode", () => {
     const ollama = {
       enabled: true as const,
       model: "local-qwen",
@@ -359,6 +359,6 @@ describe("launch planner", () => {
 
     expect(resolveHostLaunchStrategy("claude", ollama)).toBe("launch")
     expect(resolveHostLaunchStrategy("codex", ollama)).toBe("launch")
-    expect(resolveHostLaunchStrategy("opencode", ollama)).toBe("managed")
+    expect(resolveHostLaunchStrategy("opencode", ollama)).toBe("launch")
   })
 })

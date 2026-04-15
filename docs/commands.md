@@ -48,7 +48,7 @@
 - `lineup dag [--workflow <path>] [--json]`
 - `lineup waves [--run <id>] [--compact] [--json]`
 - `lineup history [--status <status>] [--limit <n>] [--json]`
-- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]` — local-only smoke lane that validates Ollama-backed Claude, Codex, and OpenCode host integrations end to end against a real local Ollama daemon; it creates an isolated temp home and repo, runs `lineup init`, `lineup doctor --json`, a deterministic tiny-repo pipeline task, and a bundled `explain` tactic task, then drives bridge questions through the bridge contract; the pipeline task now replaces a `README.md` placeholder with exactly one validation sentence, and the `explain` leg now also runs through the bridge contract instead of interactive human mode. The smoke lane preserves the temp workspace on failure or stall for debugging, treats host trace/log/artifact growth as progress, answers verify gates with `abort` when `retry` is also available, and prints the exact bridge/host trace files to inspect. For current local validation, prefer `qwen3-coder:30b` over `qwen3.5:9b`.
+- `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]` — local-only smoke lane that validates Ollama-backed Claude, Codex, and OpenCode host integrations end to end against a real local Ollama daemon; it creates an isolated temp home and repo, runs `lineup init`, copies the repo's canonical `.lineup-core/workflows/full-pipeline.yaml` into the temp repo, runs `lineup doctor --json`, a deterministic tiny-repo pipeline task, and a bundled `explain` tactic task, then drives bridge questions through the bridge contract; the pipeline task replaces a `README.md` placeholder with exactly one validation sentence, and the `explain` leg also runs through the bridge contract instead of interactive human mode. The smoke lane preserves the temp workspace on failure or stall for debugging, treats host trace/log/artifact growth as progress, answers verify gates with `abort` when `retry` is also available, and prints the exact bridge/host trace files to inspect. For current local validation, prefer `qwen3-coder:30b` over `qwen3.5:9b`.
 
 ## Entry Points
 
@@ -65,7 +65,7 @@ Practical split:
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
-- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it now uses a bounded deterministic placeholder-replacement task and file-activity-aware progress detection, routes the bundled `explain` tactic through the bridge API, automatically retries Claude through the env transport when the headless wrapper returns empty output, and until all hosts are green, run it per host instead of `--host all`
+- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task and file-activity-aware progress detection, routes the bundled `explain` tactic through the bridge API, automatically retries Claude through the env transport when the headless wrapper returns empty output, and until all hosts are green, run it per host instead of `--host all`
 
 ## Run Modes
 
@@ -139,7 +139,11 @@ Before the first full native run without `lineup start`, make sure:
 - fenced JSON/YAML payloads are unwrapped and revalidated
 - host planner output gets one stricter retry if it is prose instead of a structured `Plan`
 - pre-stage structured artifacts get one stricter retry if the first output is prose or malformed YAML
+- pre-stage research artifacts normalize scalar/list `constraints` and `gaps`
+  into schema-valid objects before validation
 - pre-stage retries clear the previous artifact path before re-invoking the host so stale malformed artifacts cannot short-circuit the retry
+- plan normalization now accepts common host variants such as `file_path`,
+  `what_to_change`, and `why_this_change_is_needed`
 - native developer responses accept common variants like `status: done`
 - markdown-style reviewer summaries are normalized into `Review` YAML
 

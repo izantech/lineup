@@ -75,7 +75,7 @@ Supported values:
 
 - Claude -> `launch`
 - Codex -> `launch`
-- OpenCode -> `managed`
+- OpenCode -> `launch`
 
 ## Host behavior
 
@@ -116,7 +116,11 @@ User config file:
 
 ### OpenCode
 
-Managed integration writes a Lineup-owned provider into:
+True host integration now defaults to the official wrapper launch path:
+
+- `ollama launch opencode --model <model> --yes -- run --pure --format json ...`
+
+Managed integration still writes a Lineup-owned provider into:
 
 - `~/.config/opencode/opencode.json`
 
@@ -124,8 +128,8 @@ Lineup uses the dedicated provider:
 
 - `lineup-ollama`
 
-Launch planning uses the provider-qualified model identifier expected by
-OpenCode when host integration is enabled.
+Managed launch planning uses the provider-qualified model identifier expected
+by OpenCode when the strategy is explicitly set to `managed`.
 
 User config file:
 
@@ -167,6 +171,9 @@ This command:
 
 - creates a temporary home directory and repository
 - runs `lineup init`
+- copies the repo's canonical `.lineup-core/workflows/full-pipeline.yaml` into
+  the temp repo so the smoke lane exercises the real workflow contract instead
+  of the minimal scaffolded version
 - writes host-specific Ollama configuration
 - runs `lineup doctor --json`
 - runs one full pipeline task and one bundled `explain` tactic task per selected host
@@ -234,6 +241,16 @@ Current live validation status is split by model family:
   used for real host smoke until a smaller model proves stable on the same
   endpoints.
 
+The current branch state also includes a few Lineup-side normalizations that
+are now part of the local Ollama checkpoint:
+
+- research `constraints` and `gaps` tolerate scalar and list outputs and are
+  normalized into schema-valid objects before validation
+- the native plan normalizer accepts Claude-style change keys such as
+  `file_path`, `what_to_change`, and `why_this_change_is_needed`
+- the smoke lane copies the canonical full-pipeline workflow into the temp repo
+  so plan prompts receive the same triage and research inputs as a real run
+
 The hosts are still failing in different ways on the current branch state:
 
 ### Claude
@@ -244,37 +261,36 @@ The hosts are still failing in different ways on the current branch state:
   Claude for a second formatter pass
 - headless `ollama launch claude` can return immediately with no output, so the
   runner now retries automatically through the Anthropic-compatible env path
-- even after that change, the remaining live Claude failure is outside the
-  Lineup contract: the wrapper still exits quickly with no artifact, and the
-  env fallback still hangs on minimal direct prompts across both
-  `qwen3-coder-next:q4_K_M` and `qwen3.5:9b`
-- Ollama's Anthropic-compatible wiring is already aligned with the documented
-  manual setup, so the remaining blocker now looks like Claude Code runtime
-  compatibility with the available local models in this environment
+- `qwen3-coder:30b` can complete direct minimal prompts over both the wrapper
+  and the env transport, so the remaining failures are no longer explained by
+  a generic transport mismatch
+- the next active Claude work is stage-by-stage live stabilization of the full
+  pipeline on `qwen3-coder:30b`, not another change to the original strict
+  schema transport contract
 
 Implication:
 
-- the remaining Claude blocker is not Lineup prompt shape or schema handling
-- until a Claude-compatible local model path is proven here, the remaining work
-  is upstream host/runtime validation rather than another Lineup-side contract
-  change
+- the remaining Claude blocker is no longer the old strict-schema launch shape
+- the right next work is concrete live-pipeline debugging on
+  `qwen3-coder:30b` rather than another broad transport redesign
 
 ### OpenCode
 
-- OpenCode is now past the original model-selection and generic-startup issues
-- Lineup now launches OpenCode with the canonical `ollama/<model>` selector and
-  injects the wrapper-style `OPENCODE_CONFIG_CONTENT` payload inline
-- even with that corrected runtime contract, OpenCode still hangs after
-  migration and provider resolution on both the tiny smoke task and a direct
-  minimal “reply with OK” prompt
-- that same post-stream-start hang reproduces across `qwen3-coder:30b`,
-  `qwen3-coder-next:q4_K_M`, and `qwen3.5:9b`
+- OpenCode auto/default host integration now uses the official wrapper launch
+  path instead of the managed provider path
+- the wrapper contract is known-good for minimal prompts when invoked as
+  `ollama launch opencode --model <model> -- run ...`
+- managed provider support remains available for explicit `strategy: managed`,
+  using `lineup-ollama/<model>` as the qualified selector
+- the remaining OpenCode work is full-pipeline stabilization on the wrapper
+  launch path, not provider lookup or config injection
 
 Implication:
 
-- OpenCode is no longer blocked on provider selection or config injection
-- the remaining issue is upstream host/runtime compatibility in this local
-  Ollama setup, not the bounded smoke prompt or the Lineup launch contract
+- OpenCode is no longer blocked on provider selection or on the default host
+  launch contract
+- any remaining failures should now be debugged against the wrapper path's live
+  pipeline behavior rather than the older managed-mode contract
 
 ### Codex
 

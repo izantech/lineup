@@ -190,6 +190,14 @@ Latest live Ollama validation is split into two layers:
   treated as the primary real-host acceptance target right now
 - `qwen3-coder:30b` is the current viable local validation model and is the
   right baseline for ongoing smoke work
+- OpenCode auto/default host integration now uses the official
+  `ollama launch opencode -- ... run` wrapper path instead of the older managed
+  provider path, while explicit `strategy: managed` still keeps the
+  `lineup-ollama/<model>` selector available
+- the smoke runner now copies the canonical repo workflow into its temp repo,
+  and Lineup now normalizes scalar/list research `constraints` and `gaps` plus
+  Claude-style plan change keys (`file_path`, `what_to_change`,
+  `why_this_change_is_needed`) before validation
 
 Failure classes are now instrumented and no longer conflated:
 
@@ -197,20 +205,18 @@ Failure classes are now instrumented and no longer conflated:
   - structured runs now go draft-first, then strict formatter
   - if the headless `ollama launch claude` wrapper exits with empty output, the
     runner now retries automatically through the Anthropic-compatible env lane
-  - a preserved `qwen3-coder:30b` run (`4ebd39`) proves the env lane can
-    produce a valid `research.yaml`
-  - the latest `0868fe` rerun still times out at the 300000ms invocation
-    boundary, so the blocker is now env-lane completion time/reliability
-  - the next likely incompatibility is request shape against Ollama's
-    Anthropic-compatible endpoint, not the old strict-schema-first launch shape
+  - direct minimal prompts now succeed on `qwen3-coder:30b` over both the
+    wrapper and the Anthropic-compatible env transport
+  - the remaining work is live full-pipeline stabilization on
+    `qwen3-coder:30b`, not another redesign of the old strict-schema-first
+    launch path
 - OpenCode:
-  - the process starts and logs its one-time SQLite migration
-  - it is past the old provider-selection error, but still drifts or emits
-    malformed research output on some runs
-  - prompt/tool guidance is now tighter about read-only research, bounded file
-    inspection, and not pasting rendered `read` output back into edits
-  - the next likely issue is the exact non-interactive headless contract rather
-    than provider selection or simple model-flag wiring
+  - auto/default execution now uses the wrapper launch path instead of managed
+    provider mode
+  - the wrapper contract is confirmed for minimal prompts when invoked as
+    `ollama launch opencode --model qwen3-coder:30b -- run ...`
+  - any remaining failures should now be debugged against the live wrapper
+    pipeline behavior rather than provider selection or config injection
 - Codex:
   - the process starts on `provider: ollama`
   - stderr shows active reasoning and tool planning
@@ -221,9 +227,10 @@ Failure classes are now instrumented and no longer conflated:
     previously invalid YAML
   - reviewer normalization now accepts both `**Status: PASS**` and
     `**Status**: PASS` markdown output
-  - the latest live failure is no longer parsing: implement/verify can finish,
-    but the final patch no longer applies because the host touched the source
-    repo path instead of staying fully inside the isolated worktree
+  - the smoke task now uses a deterministic placeholder-replacement contract,
+    and Codex main-pipeline smoke is green on `qwen3-coder:30b`
+  - the remaining Codex follow-up is explain-tactic validation and general
+    throughput confirmation, not a known main-pipeline contract bug
 
 Current instrumentation:
 

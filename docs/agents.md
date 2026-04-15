@@ -76,7 +76,7 @@ Lineup optionally uses local Ollama-backed models. It supports three modes:
 
 - **Research assist**: `scope: research`. Researchers and architects get the Ollama appendix for summarization and compression help only. Host routing does not change.
 - **Legacy full routing**: `scope: full`. Compatibility mode that preserves the existing full-stage Ollama model-target routing without enabling host-native integration.
-- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex defaults to the local OSS launch path (`codex exec --oss --local-provider ollama`) unless explicitly pinned to managed mode, and OpenCode uses a managed Ollama provider with a provider-qualified model identifier. `lineup doctor` verifies model availability for every configured host integration before native runs start.
+- **True host integration**: `host_integration.enabled: true`. Lineup switches to host-native Ollama launch strategies: Claude uses `ollama launch` with Anthropic-compatible env fallback, Codex defaults to the local OSS launch path (`codex exec --oss --local-provider ollama`) unless explicitly pinned to managed mode, and OpenCode now defaults to the official `ollama launch opencode -- ... run` wrapper path while keeping managed provider mode available as an explicit strategy. `lineup doctor` verifies model availability for every configured host integration before native runs start.
 
 The implementation is validated in three layers:
 
@@ -92,12 +92,13 @@ npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --mo
 
 It uses the bridge contract for progress, questions, and completion. The live
 runner also tracks host trace/log/artifact file activity so active local-model
-runs are not misclassified as silent stalls, and Claude can automatically fall
-back from the headless `ollama launch claude` wrapper path to the Anthropic-
-compatible env path when the wrapper exits without emitting a draft. It
-preserves temp workspaces on failure or stall, and it is not part of CI. Until
-all hosts are green, run per-host smoke lanes instead of `--host all`. For
-current real-host validation, prefer `qwen3-coder:30b`.
+runs are not misclassified as silent stalls, copies the repo's canonical full
+pipeline workflow into the temp repo before the run starts, and Claude can
+automatically fall back from the headless `ollama launch claude` wrapper path
+to the Anthropic-compatible env path when the wrapper exits without emitting a
+draft. It preserves temp workspaces on failure or stall, and it is not part of
+CI. Until all hosts are green, run per-host smoke lanes instead of `--host
+all`. For current real-host validation, prefer `qwen3-coder:30b`.
 
 Configuration is host-specific:
 

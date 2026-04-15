@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -151,7 +151,7 @@ const PIPELINE_SMOKE_PROMPT = [
 function parseArgs(argv: string[]): SmokeOptions {
   const result: SmokeOptions = {
     host: "all",
-    model: "local-qwen",
+    model: "qwen3-coder:30b",
     baseUrl: "http://127.0.0.1:11434/v1",
     keepTemp: false
   };
@@ -372,41 +372,17 @@ function writeHostOllamaConfig(homeDir: string, host: HostName, options: SmokeOp
   return filePath;
 }
 
-function writeWorkflow(repoDir: string): string {
+function resolveWorkflowPath(repoDir: string): string {
+  const sourceWorkflowPath = path.resolve(packageRoot(), "..", ".lineup-core", "workflows", "full-pipeline.yaml");
+  if (!existsSync(sourceWorkflowPath)) {
+    throw new CliError(`Expected source workflow was not found: ${sourceWorkflowPath}`, {
+      code: "smoke_ollama_missing_source_workflow"
+    });
+  }
+
   const workflowPath = path.join(repoDir, ".lineup-core", "workflows", "full-pipeline.yaml");
   ensureDir(workflowPath);
-  writeFileSync(
-    workflowPath,
-    [
-      "apiVersion: lineup/v3",
-      "kind: Workflow",
-      "name: ollama-smoke",
-      "stages:",
-      "  - id: triage",
-      "    type: builtin",
-      "  - id: research",
-      "    type: agent",
-      "    agent: researcher",
-      "    depends_on: [triage]",
-      "  - id: plan",
-      "    type: agent",
-      "    agent: architect",
-      "    depends_on: [research]",
-      "  - id: plan-approval",
-      "    type: approval",
-      "    depends_on: [plan]",
-      "  - id: implement",
-      "    type: agent",
-      "    agent: developer",
-      "    depends_on: [plan-approval]",
-      "  - id: verify",
-      "    type: agent",
-      "    agent: reviewer",
-      "    depends_on: [implement]",
-      ""
-    ].join("\n"),
-    "utf8"
-  );
+  copyFileSync(sourceWorkflowPath, workflowPath);
   return workflowPath;
 }
 
@@ -677,7 +653,7 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
     const lineupInit = runDistCli(["init", "--workflow", "full-pipeline", "--json"], repoDir, homeDir);
     assertExitZero(`lineup init --workflow full-pipeline --json (${host})`, lineupInit);
 
-    const workflowPath = writeWorkflow(repoDir);
+    const workflowPath = resolveWorkflowPath(repoDir);
 
     const doctorResult = runDistCli(["doctor", "--json"], repoDir, homeDir);
     assertExitZero(`lineup doctor --json (${host})`, doctorResult);
@@ -877,7 +853,9 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
       }
     }
 
-    const managedConfig = collectManagedConfig(homeDir, host);
+  const managedConfig = summary.integrationMode === "managed"
+    ? collectManagedConfig(homeDir, host)
+    : "";
 
     process.stdout.write(
       [

@@ -153,7 +153,7 @@ function checkOllamaHost(host: HostName, cwd = process.cwd(), homeDir = os.homed
   }
 
   const strategy = config.hostIntegration.strategy === "auto"
-    ? host === "opencode" ? "managed" : "launch"
+    ? "launch"
     : config.hostIntegration.strategy;
   const binary = checkCommand("ollama");
 

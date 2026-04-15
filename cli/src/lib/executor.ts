@@ -343,8 +343,8 @@ function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPl
     }
 
     const item = entry as Record<string, unknown>;
-    const file = normalizeDraftPath(firstNonEmptyString(item.file), projectRoot);
-    const change = firstNonEmptyString(item.change, item.description, item.action);
+    const file = normalizeDraftPath(firstNonEmptyString(item.file, item.path, item.file_path), projectRoot);
+    const change = firstNonEmptyString(item.change, item.description, item.action, item.what_to_change);
     if (!file || !change) {
       return [];
     }
@@ -354,7 +354,13 @@ function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPl
         file,
         change,
         rationale:
-          firstNonEmptyString(item.rationale, item.description, item.reason, "Required to satisfy the approved plan.") ??
+          firstNonEmptyString(
+            item.rationale,
+            item.description,
+            item.reason,
+            item.why_this_change_is_needed,
+            "Required to satisfy the approved plan."
+          ) ??
           "Required to satisfy the approved plan.",
         ...(normalizeDraftPaths(normalizeStringArray(item.reads), projectRoot).length > 0
           ? { reads: normalizeDraftPaths(normalizeStringArray(item.reads), projectRoot) }

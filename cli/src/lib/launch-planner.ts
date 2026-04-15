@@ -90,14 +90,14 @@ function resolveConfiguredStrategy(host: HostName, configured: OllamaHostIntegra
     return configured
   }
 
-  return host === "opencode" ? "managed" : "launch"
+  return "launch"
 }
 
 export function resolveHostLaunchStrategy(host: HostName, ollama: OllamaConfig | null): HostLaunchStrategy {
   const configuredStrategy = ollama?.hostIntegration?.enabled ? ollama.hostIntegration.strategy : undefined
 
   if (!configuredStrategy) {
-    return host === "opencode" ? "managed" : "launch"
+    return "launch"
   }
 
   return resolveConfiguredStrategy(host, configuredStrategy)

@@ -436,6 +436,83 @@ risks:
     expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("tests_run: 2");
   });
 
+  it("normalizes plan changes that use Claude-style field names", async () => {
+    const claudeStylePlan = `summary: Replace the README placeholder with the validation sentence.
+approaches:
+  - strategy: Direct replacement
+    pros: Minimal change
+    cons: None for this smoke task
+    estimated_scope: 1 file
+recommendation: Use the direct replacement approach because the task is isolated.
+changes:
+  - file_path: ${join(projectRoot, "README.md")}
+    what_to_change: Replace REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION with "This repo validates Ollama host execution."
+    why_this_change_is_needed: The smoke task requires the README placeholder replacement.
+acceptance_criteria:
+  - README.md contains the validation sentence exactly once
+risks:
+  - risk: The placeholder text may already be absent
+    mitigation: Verify the current README contents before editing
+`;
+
+    writeFileSync(join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"), claudeStylePlan, "utf8");
+
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        return {
+          status: "complete",
+          summary: `completed ${input.task.id}`,
+          changes_made: [
+            {
+              file: input.task.write_scope?.[0] ?? "README.md",
+              description: "updated file",
+              task_id: input.task.id
+            }
+          ]
+        };
+      },
+      async executeReview() {
+        return { reviewYaml: PASS_REVIEW };
+      }
+    };
+
+    const result = await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts"),
+      planPath: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      },
+      driver
+    });
+
+    const normalizedPlan = readFileSync(result.planRecord.path, "utf8");
+    expect(normalizedPlan).toContain("status: approved");
+    expect(normalizedPlan).toContain("file: README.md");
+    expect(normalizedPlan).toContain("change: Replace REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION");
+    expect(normalizedPlan).toContain('validates Ollama host execution."');
+    expect(normalizedPlan).toContain("rationale: The smoke task requires the README placeholder replacement.");
+    expect(result.implementResult.outputs.task_results).toHaveLength(1);
+    expect(result.verifyResult.outputs.status).toBe("PASS");
+  });
+
   it("applies captured workspace patches back to the source repository", async () => {
     const patchPath = join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native", "workspace.patch");
     mkdirSync(join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native"), { recursive: true });

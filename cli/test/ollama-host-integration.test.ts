@@ -600,10 +600,10 @@ function assertHostLaunchPath(
   trace: TraceEntry[],
   homeDir: string,
   model: string,
-  claudeIntegration: "launch" | "env" = "launch"
+  expectedIntegration: "launch" | "env" | "managed" = "launch"
 ): void {
   if (host === "claude") {
-    if (claudeIntegration === "launch") {
+    if (expectedIntegration === "launch") {
       expect(trace.some((entry) => entry.command === "ollama" && entry.wrapperTarget === "claude")).toBe(true)
       expect(
         trace.some(
@@ -633,6 +633,16 @@ function assertHostLaunchPath(
     expect(codexInvocation?.args).toContain("-m")
     expect(codexInvocation?.args).toContain(model)
     expect(codexInvocation?.env?.OLLAMA_HOST).toBe("http://127.0.0.1:11434")
+    return
+  }
+
+  if (expectedIntegration === "launch") {
+    const wrapperInvocation = trace.find((entry) => entry.command === "ollama" && entry.wrapperTarget === "opencode")
+    expect(wrapperInvocation?.args).toContain("--model")
+    expect(wrapperInvocation?.args).toContain(model)
+    const opencodeInvocation = trace.find((entry) => entry.command === "opencode")
+    expect(opencodeInvocation?.args).toContain("run")
+    expect(opencodeInvocation?.env?.LINEUP_WRAPPED_VIA_OLLAMA).toBe("1")
     return
   }
 

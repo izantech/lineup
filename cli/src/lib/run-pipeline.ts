@@ -1235,6 +1235,8 @@ function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record
   if (normalizedWhatFound) {
     doc.what_found = normalizedWhatFound;
   }
+  doc.constraints = normalizeResearchObjectField(doc.constraints);
+  doc.gaps = normalizeResearchObjectField(doc.gaps);
   const today = new Date().toISOString().slice(0, 10);
   doc.type = "research";
   doc.agent = "researcher";
@@ -1279,6 +1281,27 @@ function normalizeResearchWhatFound(value: unknown): Record<string, unknown> | n
   return {
     key_files: keyFiles
   };
+}
+
+function normalizeResearchObjectField(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (Array.isArray(value)) {
+    return { items: value };
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? { note: trimmed } : {};
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return { value };
+  }
+
+  return {};
 }
 
 function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string): string {

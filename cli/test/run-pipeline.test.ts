@@ -1490,6 +1490,79 @@ gaps:
     }
   });
 
+  it("normalizes scalar and list research fields into schema-valid objects", async () => {
+    const projectRoot = join(tempDir, "project-research-normalization");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-normalization
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke() {
+        return {
+          host: "claude",
+          stderr: "",
+          content: `what_found:
+  files:
+    - README.md
+how_it_works: The research payload was normalized.
+constraints:
+  - README.md must change
+  - Only one sentence should be added
+gaps: none
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsnorm1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        constraints: {
+          items: ["README.md must change", "Only one sentence should be added"]
+        },
+        gaps: {
+          note: "none"
+        }
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("removes the previous stage artifact before retrying a malformed researcher response", async () => {
     const projectRoot = join(tempDir, "project-research-retry-artifact-cleanup");
     writeTemplatesTo(projectRoot);
