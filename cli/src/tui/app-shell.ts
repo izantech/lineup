@@ -10,6 +10,11 @@ export type TuiAppShellProps = {
   callbacks?: TuiCallbacks
 }
 
+function hasConcreteRunSelection(viewModel: TuiAppViewModel): boolean {
+  const runId = viewModel.chrome.runId ?? viewModel.liveRun?.runId
+  return typeof runId === 'string' && runId.trim().length > 0 && runId !== 'pending' && runId !== 'unknown'
+}
+
 function routeTitle(viewModel: TuiAppViewModel): string {
   const modal = viewModel.route.modal ? ` + ${viewModel.route.modal}` : ''
   return `${viewModel.route.screen}${modal}`
@@ -18,11 +23,12 @@ function routeTitle(viewModel: TuiAppViewModel): string {
 function renderWorkspaceOverview(viewModel: TuiAppViewModel): ReturnType<typeof Box> {
   const quickCommands = viewModel.home.quickActions.map((action) => `${action.label}${action.description ? ` - ${action.description}` : ''}`)
   const latestRun = viewModel.home.latestRun
+  const subtitle = viewModel.chrome.subtitle ?? viewModel.home.subtitle
 
   return panel('Workspace', [
     titleText('Lineup', 'Type a task in the input panel below and press Enter to start a run.'),
     viewModel.home.repoPath ? kvRow('folder', viewModel.home.repoPath) : null,
-    viewModel.home.subtitle ? Text({ children: [viewModel.home.subtitle] }) : null,
+    subtitle ? Text({ children: [subtitle] }) : null,
     viewModel.chrome.status ? kvRow('status', String(viewModel.chrome.status)) : null,
     section(
       'Quick commands',
@@ -49,11 +55,13 @@ function renderScreen(viewModel: TuiAppViewModel): ReturnType<typeof Box> {
     return GateModal({ viewModel: viewModel.gate })
   }
 
+  const hasRun = hasConcreteRunSelection(viewModel)
+
   switch (viewModel.route.screen) {
     case 'live':
-      return LiveRunView({ viewModel: viewModel.liveRun })
+      return hasRun ? LiveRunView({ viewModel: viewModel.liveRun }) : renderWorkspaceOverview(viewModel)
     case 'inspect':
-      return InspectionView({ viewModel: viewModel.inspection })
+      return hasRun ? InspectionView({ viewModel: viewModel.inspection }) : renderWorkspaceOverview(viewModel)
     case 'home':
     case 'compose':
     default:

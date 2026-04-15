@@ -6,7 +6,7 @@ question event arrives, and answers back through the CLI.
 
 Before starting a bridge session, the project should have:
 
-- a default workflow (`lineup init` scaffolds one)
+- a default workflow (`lineup init` scaffolds one when an explicit setup step is needed)
 - a git repository (`lineup init` creates one if missing)
 - at least one git commit before native implementation stages run
 

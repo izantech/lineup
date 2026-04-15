@@ -26,7 +26,7 @@ lineup
 
 Use `lineup tui` when you want the explicit TUI entrypoint, and `--no-tui` when you want classic text output in an interactive shell. Non-interactive shells stay on the operator surface automatically. The TUI should surface readiness checks, recent runs, the selected run, and the same persistent state that powers inspection and recovery commands.
 
-If the repo is new, `lineup init` still scaffolds the workflow/runtime files and initializes git when needed.
+Human launches now auto-initialize a repo on first run. If the project does not have Lineup scaffolding yet, Lineup creates the workflow/runtime files and initializes git when needed before starting the pipeline. `lineup init` remains available when you want to do that setup explicitly.
 
 ## Common operator commands
 
@@ -77,7 +77,7 @@ The interactive TUI is the same human entrypoint that should let you start a run
 ./dev build                     # Build CLI
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
-./dev tui                       # Launch the local-source TUI without a global install
+./dev tui                       # Launch the local-source TUI in the caller's project without a global install
 ./dev install local             # Build from source and install CLI + detected host skills
 ./dev install remote            # Install latest from npm
 ./dev install clean [--purge]   # Remove CLI and host skills

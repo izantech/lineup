@@ -15,7 +15,6 @@ execution. Skills are host-native entrypoints, not separate runtimes.
 Direct terminal users interact with the engine themselves:
 
 - `lineup start "<task>"` for first-run setup plus the initial native run
-- `lineup init`
 - `lineup run "<task>"` for interactive local use
 - `lineup run "<task>" --mode host` for low-level raw protocol consumers
 - inspection and control commands like `lineup show`, `lineup logs`, `lineup runs`, `lineup artifacts show`, `lineup resume`, and `lineup cancel`
@@ -23,9 +22,9 @@ Direct terminal users interact with the engine themselves:
 This path is appropriate when the user is already working in a shell or when an
 external integration wants the raw runtime contract directly.
 
-For first-run local usage, prefer `lineup start "<task>"`. It scaffolds Lineup,
-checks workflow and git readiness, and stops with exact next commands if the
-repo still needs an initial commit before native isolation can run.
+For first-run local usage, prefer `lineup start "<task>"` or the TUI. Human launches
+auto-initialize Lineup scaffolding when needed, then stop with exact next commands if
+the repo still needs an initial commit before native isolation can run.
 
 ### Host skill use
 
@@ -37,7 +36,7 @@ Host users stay inside the assistant session:
 
 The host skill should:
 
-1. Preflight with `lineup init` and `lineup doctor`
+1. Preflight with `lineup doctor`
 2. Start a detached bridge session with `lineup bridge start`
 3. Poll `lineup bridge events`
 4. Show `status` events as progress
@@ -61,7 +60,7 @@ protocol and is prepared to supervise low-level runtime events like `agent/spawn
 
 Skills are thin CLI wrappers (~12 KB total, down from ~100 KB). The kick-off skill:
 
-1. Preflights workflow and git readiness (`lineup init` if needed, `lineup doctor --json`)
+1. Preflights workflow and git readiness (`lineup doctor --json`, explicit `lineup init` only when the wrapper wants a separate setup step)
 2. Launches `lineup bridge start "<user request>" --executor-host <host>` (or adds `--tactic <name>` / `--workflow <path>`)
 3. Polls `lineup bridge events <run-id> --after <seq> --wait <seconds> --json`
 4. Uses `pendingQuestion` for reconnect-safe gate handling
@@ -99,9 +98,9 @@ project tactics are both available for selection.
 This keeps the host session responsive instead of treating the pipeline as a single
 opaque blocking Bash call.
 
-`lineup init` now scaffolds the workflow/runtime directories and initializes git if
-needed, but host wrappers should still check that the repository has an initial
-commit before starting native implementation.
+Human launches now scaffold the workflow/runtime directories and initialize git if
+needed automatically, but host wrappers should still check that the repository has an
+initial commit before starting native implementation.
 
 The CLI is tolerant of several common host-side formatting mistakes, but wrappers
 should still aim to emit the correct artifacts on the first try:

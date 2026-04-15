@@ -263,7 +263,8 @@ Command groups:
   program
     .command("tui")
     .description("Launch the interactive Lineup terminal UI")
-    .action(commandHandlers.tui);
+    .option("--cwd <path>", "Working directory to use for TUI project state")
+    .action((opts: { cwd?: string }) => commandHandlers.tui(opts));
 
   const bridge = program.command("bridge").description("Detached host bridge commands");
 

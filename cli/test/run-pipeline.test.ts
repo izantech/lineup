@@ -176,6 +176,36 @@ stages:
     }
   });
 
+  it("resolves the default workflow from an explicit cwd instead of process cwd", async () => {
+    const projectRoot = join(tempDir, "project-explicit-cwd");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(join(workflowDir, "full-pipeline.yaml"), `
+apiVersion: lineup/v3
+kind: Workflow
+name: explicit-cwd
+stages:
+  - id: triage
+    type: builtin
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+
+    try {
+      process.chdir(tempDir);
+      const result = await runPipeline({
+        cwd: projectRoot
+      });
+
+      expect(result.status).toBe("success");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("fails fast with a clear message when native execution is launched outside git", async () => {
     const projectRoot = join(tempDir, "project-requires-git");
     mkdirSync(projectRoot, { recursive: true });

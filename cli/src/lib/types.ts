@@ -364,6 +364,7 @@ export type PipelineState = {
 };
 
 export type RunOptions = {
+  cwd?: string;
   workflow?: string;
   tactic?: string;
   host?: HostName;

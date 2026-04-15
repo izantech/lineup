@@ -108,7 +108,7 @@ export type RunPipelineHooks = {
  */
 export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks = {}): Promise<PipelineResult> {
   const runMode = options.mode ?? (process.stdin.isTTY && process.stdout.isTTY ? "human" : "host");
-  const projectRoot = resolve(".");
+  const projectRoot = resolve(options.cwd ?? ".");
   const localAgentRunner = hooks.localAgentRunner;
   const shouldEmitHumanText = runMode === "human" && hooks.emitHumanTextToStderr !== false;
   const resolveHumanGate = async (gate: PendingGate): Promise<GateResponse> =>
@@ -118,14 +118,14 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   let workflowPath: string;
 
   if (options.tactic) {
-    const tacticPath = resolveTacticPath(options.tactic);
+    const tacticPath = resolveTacticPath(options.tactic, projectRoot);
     const tacticRaw = readFileSync(tacticPath, "utf-8");
     validateTacticYaml(tacticRaw, tacticPath);
     const tacticDef = parseRestrictedYaml(tacticRaw, tacticPath) as TacticDefinition;
     workflow = tacticToWorkflow(tacticDef);
     workflowPath = tacticPath;
   } else {
-    workflowPath = options.workflow ?? findDefaultWorkflow();
+    workflowPath = options.workflow ? resolve(projectRoot, options.workflow) : findDefaultWorkflow(projectRoot);
     const raw = readFileSync(workflowPath, "utf-8");
     workflow = parseWorkflowYaml(raw, workflowPath);
   }
@@ -669,10 +669,10 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
 // --- Internal functions ---
 
-function findDefaultWorkflow(): string {
+function findDefaultWorkflow(cwd: string): string {
   const candidates = [
-    resolve(".lineup-core", "workflows", "full-pipeline.yaml"),
-    resolve(".lineup", "workflows", "full-pipeline.yaml"),
+    resolve(cwd, ".lineup-core", "workflows", "full-pipeline.yaml"),
+    resolve(cwd, ".lineup", "workflows", "full-pipeline.yaml"),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -683,10 +683,10 @@ function findDefaultWorkflow(): string {
   );
 }
 
-function resolveTacticPath(name: string): string {
+function resolveTacticPath(name: string, cwd: string): string {
   const candidates = [
-    resolve(".lineup", "tactics", `${name}.yaml`),
-    resolve("tactics", `${name}.yaml`),
+    resolve(cwd, ".lineup", "tactics", `${name}.yaml`),
+    resolve(cwd, "tactics", `${name}.yaml`),
     resolve(packageRoot(), "tactics", `${name}.yaml`),
   ];
   for (const c of candidates) {

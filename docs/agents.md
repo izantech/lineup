@@ -59,8 +59,9 @@ skills launch `lineup bridge start "<user request>" --executor-host <host>`, pol
 questions with `lineup bridge answer <run-id> <request-id> --choice <value>`.
 Interactive terminal use stays on `lineup run --mode human`.
 
-Fresh projects still need `lineup init` before native implementation can run. It
-scaffolds the workflow/runtime files and initializes git if needed. Host wrappers
+Human launches now auto-run the equivalent of `lineup init` when a project has not
+been scaffolded yet. `lineup init` still scaffolds the workflow/runtime files and
+initializes git if needed when an explicit setup step is preferred. Host wrappers
 should still verify that the repo has at least one commit before launching
 the bridge or `lineup run --mode host`.
 

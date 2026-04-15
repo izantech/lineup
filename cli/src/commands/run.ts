@@ -5,6 +5,7 @@ import { CliError } from "../lib/errors.js";
 import { isInteractive } from "../lib/prompts.js";
 import { runPipeline } from "../lib/run-pipeline.js";
 import type { RunMode, RunOptions } from "../lib/types.js";
+import { initializeLineupProject } from "./init.js";
 
 export type RunCommandOptions = RunOptions;
 
@@ -48,6 +49,10 @@ export async function runRunCommand(options: RunCommandOptions): Promise<void> {
     throw new CliError("Task description required. Pass it as a positional argument or pipe it on stdin.", {
       code: "invalid_args"
     });
+  }
+
+  if (mode === "human") {
+    initializeLineupProject({}, process.cwd());
   }
 
   if (mode === "human" && localAgentRunner) {

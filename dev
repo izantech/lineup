@@ -195,7 +195,7 @@ run_check() {
 
 run_tui() {
     ensure_cli_deps
-    npm --prefix "$ROOT_DIR/cli" run dev -- tui "$@"
+    npm --prefix "$ROOT_DIR/cli" run dev -- tui --cwd "$PWD" "$@"
 }
 
 run_setup() {

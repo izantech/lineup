@@ -7,6 +7,8 @@ Lineup has two frontends:
 
 The TUI is a renderer over the same CLI engine, run state, bridge data, and artifacts that power the command surface. It should not change the bridge contract or the raw `lineup run --mode host` path.
 
+Human launches are task-first. Opening `lineup` or `lineup tui` starts on the idle home/input flow, not by auto-reattaching to an older run. The TUI only moves into a live run once a real run has started or the user explicitly selects a persisted run to inspect or resume.
+
 ## Views
 
 - Home: repo readiness, host readiness, latest run, recent runs, quick actions
@@ -38,7 +40,7 @@ The TUI is designed to make the common human flows obvious:
 - answer gates without reading raw protocol output
 - inspect what changed during the run while the run is still visible
 - jump from a blocked or failed run to the next concrete action
-- reattach to the latest relevant persisted run when one already exists
+- inspect or resume persisted runs explicitly when needed
 
 The same run data powers the terminal views and the existing read-only commands like `lineup doctor`, `lineup status`, `lineup runs`, `lineup show`, `lineup logs`, and `lineup artifacts ...`.
 
@@ -47,7 +49,8 @@ The same run data powers the terminal views and the existing read-only commands 
 - Non-interactive shells should bypass the TUI and stay on the operator surface
 - `--no-tui` forces the text path in an interactive terminal
 - Unsupported terminals should degrade to readable text instead of blocking the user
-- When persisted run state exists, the TUI should attach to the latest relevant run first, then expose the inspection and recovery actions for that run
+- Human launches auto-initialize project scaffolding when needed before starting a run
+- Persisted run state stays available for explicit inspect and recovery actions
 
 ## What Does Not Change
 

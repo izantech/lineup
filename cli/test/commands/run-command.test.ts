@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockedRunPipeline = vi.hoisted(() => vi.fn());
 const mockedCreateLocalAgentRunner = vi.hoisted(() => vi.fn());
 const mockedIsInteractive = vi.hoisted(() => vi.fn());
+const mockedInitializeLineupProject = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/lib/run-pipeline.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/lib/run-pipeline.js")>("../../src/lib/run-pipeline.js");
@@ -28,6 +29,14 @@ vi.mock("../../src/lib/prompts.js", async () => {
   };
 });
 
+vi.mock("../../src/commands/init.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/commands/init.js")>("../../src/commands/init.js");
+  return {
+    ...actual,
+    initializeLineupProject: mockedInitializeLineupProject
+  };
+});
+
 import { runRunCommand } from "../../src/commands/run.js";
 
 describe("run command", () => {
@@ -42,6 +51,8 @@ describe("run command", () => {
     mockedIsInteractive.mockReturnValue(true);
     mockedCreateLocalAgentRunner.mockReturnValue({ host: "codex" });
     mockedRunPipeline.mockReset();
+    mockedInitializeLineupProject.mockReset();
+    mockedInitializeLineupProject.mockReturnValue({ entries: [], gitProject: { isRepository: true, hasHeadCommit: true } });
   });
 
   afterEach(() => {
@@ -59,5 +70,18 @@ describe("run command", () => {
 
     expect(stderr.join("")).toContain("lineup resume run-blocked");
     expect(stderr.join("")).toContain("lineup show run-blocked");
+    expect(mockedInitializeLineupProject).toHaveBeenCalled();
+  });
+
+  it("does not auto-initialize for host mode", async () => {
+    mockedRunPipeline.mockResolvedValue({
+      runId: "run-host",
+      status: "success",
+      stageResults: new Map()
+    });
+
+    await runRunCommand({ prompt: "Ship it", mode: "host" });
+
+    expect(mockedInitializeLineupProject).not.toHaveBeenCalled();
   });
 });

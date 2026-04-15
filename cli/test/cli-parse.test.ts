@@ -252,6 +252,17 @@ describe("run command", () => {
     expect(handlers.tui).toHaveBeenCalled();
   });
 
+  it("parses the tui cwd option", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "tui", "--cwd", "/tmp/workspace"]);
+    expect(handlers.tui).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/tmp/workspace"
+      })
+    );
+  });
+
   it("parses bridge start options", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);

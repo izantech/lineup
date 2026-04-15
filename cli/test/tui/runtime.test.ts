@@ -109,4 +109,61 @@ describe('runTuiApp', () => {
     expect(session.text).toContain('Input unavailable')
     expect(session.text).toContain('Lineup is executing the pipeline.')
   })
+
+  it('does not render the live placeholder when no concrete run exists yet', async () => {
+    const session = await runTuiApp({
+      viewModel: {
+        route: { screen: 'live' },
+        chrome: {
+          title: 'Lineup',
+          subtitle: 'Starting run…',
+          modeSummary: 'interactive · codex · busy',
+          hints: []
+        },
+        home: {
+          title: 'Home',
+          subtitle: 'Starting run…',
+          repoPath: '/tmp/repo',
+          focusedSection: 'quickActions',
+          readiness: [],
+          latestRun: null,
+          recentRuns: [],
+          quickActions: [],
+          notes: []
+        }
+      }
+    })
+
+    expect(session.snapshot).toContain('Workspace')
+    expect(session.text).not.toContain('run: pending')
+    expect(session.text).not.toContain('status: idle')
+  })
+
+  it('shows the current chrome subtitle when the workspace falls back after a failed start', async () => {
+    const session = await runTuiApp({
+      viewModel: {
+        route: { screen: 'home' },
+        chrome: {
+          title: 'Lineup',
+          subtitle: 'No workflow file found. Run lineup init first.',
+          modeSummary: 'interactive · codex · ready',
+          hints: []
+        },
+        home: {
+          title: 'Home',
+          subtitle: 'Repository overview',
+          repoPath: '/tmp/repo',
+          focusedSection: 'quickActions',
+          readiness: [],
+          latestRun: null,
+          recentRuns: [],
+          quickActions: [],
+          notes: []
+        }
+      }
+    })
+
+    expect(session.text).toContain('No workflow file found. Run lineup init first.')
+    expect(session.text).not.toContain('Repository overview')
+  })
 })

@@ -42,6 +42,48 @@ export type TuiAppStateInput = {
   liveEventsByRunId: Record<string, StateLogEvent[]>;
 };
 
+export type TuiAppDataSnapshot = {
+  preferences: ReturnType<typeof loadTuiPreferences>;
+  home: StateHomeViewModel;
+  inspection: StateInspectionViewModel | null;
+  liveRun: StateLiveRunViewModel | null;
+  liveEvents: StateLogEvent[];
+  composerDefaults: ReturnType<typeof buildRunComposerViewModel>;
+  workflowOptions: string[];
+  tacticOptions: string[];
+  artifactContent: {
+    title: string;
+    kind: string;
+    path: string;
+    summary?: string;
+    lines: string[];
+  } | null;
+  logDetails: Array<{
+    id: string;
+    label: string;
+    lines: string[];
+    selected: boolean;
+  }>;
+  replayEntries: Array<{
+    id: string;
+    label: string;
+    detail: string;
+    selected: boolean;
+  }>;
+  historyEntries: Array<{
+    runId: string;
+    status: "pending" | "running" | "blocked" | "succeeded" | "failed" | "canceled" | "idle" | "unknown";
+    workflow?: string;
+    currentStage?: string;
+    startedAt?: string;
+    finishedAt?: string;
+    duration?: string;
+    retryCount?: number;
+    selected: boolean;
+  }>;
+  bridgeRecovery: Awaited<ReturnType<typeof readBridgeRecovery>>;
+};
+
 const INSPECTABLE_ARTIFACT_KINDS = new Set(["plan", "tasks", "review", "protocol", "pipeline-state"]);
 
 function summarizeTextContent(content: string): string | undefined {
@@ -196,8 +238,11 @@ function buildGateChoices(gate: PendingGate | null | undefined): TuiGateChoice[]
   }));
 }
 
-function buildPaletteCommands(query: string | undefined, recentCommandIds: string[] = []): TuiPaletteCommand[] {
-  const preferences = loadTuiPreferences();
+function buildPaletteCommands(
+  preferences: ReturnType<typeof loadTuiPreferences>,
+  query: string | undefined,
+  recentCommandIds: string[] = []
+): TuiPaletteCommand[] {
   const items = buildCommandPaletteItems(preferences);
   const filtered = query
     ? items.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()) || item.description.toLowerCase().includes(query.toLowerCase()))
@@ -556,21 +601,18 @@ function mapInspectionViewWithState(model: StateInspectionViewModel | null, sess
   }
 }
 
-export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<TuiAppViewModel> {
+export async function buildTuiAppDataSnapshot(input: Omit<TuiAppStateInput, "session"> & { selectedRunId?: string }): Promise<TuiAppDataSnapshot> {
   const preferences = loadTuiPreferences();
   const home = await buildHomeViewModel(input.cwd);
-  const selectedRunId = input.session.selectedRunId;
+  const selectedRunId = input.selectedRunId;
   const inspection = selectedRunId ? await buildInspectionViewModel(selectedRunId, input.cwd) : null;
   const liveEvents = selectedRunId ? input.liveEventsByRunId[selectedRunId] ?? [] : [];
   const liveRun = selectedRunId ? buildLiveRunViewModel(selectedRunId, liveEvents, input.cwd) : null;
   const composerDefaults = buildRunComposerViewModel();
   const workflowOptions = listWorkflowEntries(input.cwd).map((entry) => entry.file)
   const tacticOptions = listTacticEntries(input.cwd, true).map((entry) => entry.name)
-  const paletteCommands = buildPaletteCommands(input.session.helpQuery, input.session.recentCommandIds);
-  const paletteGroups = [...new Set(paletteCommands.map((command) => command.category ?? "Actions"))];
-  const homeView = mapHomeViewWithState(home, input.session)
-  const inspectionView = mapInspectionViewWithState(inspection, input.session)
-  const selectedArtifactKind = inspectionView.selectedArtifactKind
+  const inspectionView = mapInspectionView(inspection)
+  const selectedArtifactKind = inspectionView.artifacts[0]?.kind
   const artifactContent =
     selectedRunId && selectedArtifactKind && INSPECTABLE_ARTIFACT_KINDS.has(selectedArtifactKind)
       ? (() => {
@@ -630,21 +672,45 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
     selected: index === 0
   }))
   const bridgeRecovery = selectedRunId ? await readBridgeRecovery(selectedRunId, input.cwd) : { session: null, events: null, recovery: null }
-  const recoverySummary = bridgeRecovery.recovery
+
+  return {
+    preferences,
+    home,
+    inspection,
+    liveRun,
+    liveEvents,
+    composerDefaults,
+    workflowOptions,
+    tacticOptions,
+    artifactContent,
+    logDetails,
+    replayEntries,
+    historyEntries,
+    bridgeRecovery
+  }
+}
+
+export function composeTuiAppViewModel(snapshot: TuiAppDataSnapshot, session: TuiSessionState): TuiAppViewModel {
+  const selectedRunId = session.selectedRunId;
+  const paletteCommands = buildPaletteCommands(snapshot.preferences, session.helpQuery, session.recentCommandIds);
+  const paletteGroups = [...new Set(paletteCommands.map((command) => command.category ?? "Actions"))];
+  const homeView = mapHomeViewWithState(snapshot.home, session)
+  const inspectionView = mapInspectionViewWithState(snapshot.inspection, session)
+  const recoverySummary = snapshot.bridgeRecovery.recovery
     ? {
-        action: bridgeRecovery.recovery.action,
-        message: bridgeRecovery.recovery.message,
-        command: bridgeRecovery.recovery.command
+        action: snapshot.bridgeRecovery.recovery.action,
+        message: snapshot.bridgeRecovery.recovery.message,
+        command: snapshot.bridgeRecovery.recovery.command
       }
     : null
   const latestRunExtras =
-    home.latestRun && home.latestRun.runId === selectedRunId
+    snapshot.home.latestRun && snapshot.home.latestRun.runId === selectedRunId
       ? {
-          recoveryAction: bridgeRecovery.recovery?.action,
-          recoveryCommand: bridgeRecovery.recovery?.command,
-          expiresAt: bridgeRecovery.session?.pending_question?.expiresAt,
-          artifactLabel: artifactContent?.title,
-          artifactSummary: artifactContent?.summary,
+          recoveryAction: snapshot.bridgeRecovery.recovery?.action,
+          recoveryCommand: snapshot.bridgeRecovery.recovery?.command,
+          expiresAt: snapshot.bridgeRecovery.session?.pending_question?.expiresAt,
+          artifactLabel: snapshot.artifactContent?.title,
+          artifactSummary: snapshot.artifactContent?.summary,
           actions: inspectionView.actions
         }
       : {}
@@ -652,56 +718,56 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
     homeView.readiness.find((item) => item.status !== "ready")?.id ?? homeView.readiness[0]?.id
 
   return createTuiAppViewModel({
-    route: input.session.route,
-    theme: buildTheme(preferences.compact),
+    route: session.route,
+    theme: buildTheme(snapshot.preferences.compact),
     chrome: {
       title: "Lineup",
-      subtitle: input.session.statusLine ?? home.readiness.summary,
-      modeSummary: `interactive · ${input.session.composer.host} · ${input.session.busy ? "busy" : "ready"}`,
+      subtitle: session.statusLine ?? snapshot.home.readiness.summary,
+      modeSummary: `interactive · ${session.composer.host} · ${session.busy ? "busy" : "ready"}`,
       focusSummary:
-        input.session.route.modal === "help"
-          ? `palette · ${input.session.helpQuery || "all commands"}`
-          : input.session.route.modal === "gate"
-            ? `gate · choice ${input.session.gateSelectionIndex + 1}`
-            : input.session.route.screen === "home"
-              ? `home · ${input.session.homeFocus}`
-              : input.session.route.screen === "compose"
-                ? `compose · ${input.session.composerFocus}`
-                : input.session.route.screen === "live"
-                  ? `live · ${input.session.liveFocus}`
-                  : `inspect · ${input.session.inspectFocus}`,
+        session.route.modal === "help"
+          ? `palette · ${session.helpQuery || "all commands"}`
+          : session.route.modal === "gate"
+            ? `gate · choice ${session.gateSelectionIndex + 1}`
+            : session.route.screen === "home"
+              ? `home · ${session.homeFocus}`
+              : session.route.screen === "compose"
+                ? `compose · ${session.composerFocus}`
+                : session.route.screen === "live"
+                  ? `live · ${session.liveFocus}`
+                  : `inspect · ${session.inspectFocus}`,
       selectionSummary: selectedRunId ? `selected run ${selectedRunId}` : undefined,
-      inputLabel: buildInputLabel(input.session),
-      inputValue: buildInputValue(input.session),
-      inputHint: buildInputHint(input.session),
-      inputPlaceholder: input.session.pendingGate
+      inputLabel: buildInputLabel(session),
+      inputValue: buildInputValue(session),
+      inputHint: buildInputHint(session),
+      inputPlaceholder: session.pendingGate
         ? "Respond to the pending gate"
         : "Describe the task you want Lineup to make progress on",
-      runId: input.session.attachedRunId ?? selectedRunId,
-      status: liveRun?.status as TuiAppViewModel["chrome"]["status"],
-      routeLabel: input.session.route.screen,
+      runId: session.attachedRunId ?? selectedRunId,
+      status: snapshot.liveRun?.status as TuiAppViewModel["chrome"]["status"],
+      routeLabel: session.route.screen,
       hints: [
-        `${preferences.keybindings.commandPalette} palette`,
-        `${preferences.keybindings.resume} resume`,
-        `${preferences.keybindings.artifacts} inspect`,
-        `${preferences.keybindings.logs} logs`,
-        `${preferences.keybindings.quit} quit`
+        `${snapshot.preferences.keybindings.commandPalette} palette`,
+        `${snapshot.preferences.keybindings.resume} resume`,
+        `${snapshot.preferences.keybindings.artifacts} inspect`,
+        `${snapshot.preferences.keybindings.logs} logs`,
+        `${snapshot.preferences.keybindings.quit} quit`
       ]
     },
     input: {
       title: "Input",
-      label: buildInputLabel(input.session),
-      value: buildInputValue(input.session),
-      placeholder: input.session.pendingGate
+      label: buildInputLabel(session),
+      value: buildInputValue(session),
+      placeholder: session.pendingGate
         ? "Respond to the pending gate"
         : "Describe the task you want Lineup to make progress on",
-      context: input.session.pendingGate
-        ? input.session.pendingGate.question
+      context: session.pendingGate
+        ? session.pendingGate.question
         : selectedRunId
           ? `Current run ${selectedRunId}`
-          : home.cwd,
-      hint: buildInputHint(input.session),
-      visible: showInputPanel(input.session, liveRun?.status)
+          : snapshot.home.cwd,
+      hint: buildInputHint(session),
+      visible: showInputPanel(session, snapshot.liveRun?.status)
     },
     home: {
       ...homeView,
@@ -710,11 +776,11 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
     },
     composer: {
       title: "Compose run",
-      prompt: input.session.composer.prompt,
+      prompt: session.composer.prompt,
       focusedFieldId:
-        input.session.composerFocus === "actions"
+        session.composerFocus === "actions"
           ? undefined
-          : input.session.composerFocus === "prompt"
+          : session.composerFocus === "prompt"
             ? "prompt"
             : [
                 "prompt",
@@ -730,163 +796,163 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
                 "forceRerun",
                 "approvePlan",
                 "maxParallel"
-              ][input.session.composerFieldIndex],
-      selectedActionId: input.session.composerFocus === "actions"
-        ? ["start-run", "back-home"][input.session.composerActionIndex]
+              ][session.composerFieldIndex],
+      selectedActionId: session.composerFocus === "actions"
+        ? ["start-run", "back-home"][session.composerActionIndex]
         : undefined,
-      modeSummary: `host ${input.session.composer.host} · isolation ${input.session.composer.isolation} · implement ${input.session.composer.implementMethod}`,
-      workflowOptions,
-      tacticOptions,
+      modeSummary: `host ${session.composer.host} · isolation ${session.composer.isolation} · implement ${session.composer.implementMethod}`,
+      workflowOptions: snapshot.workflowOptions,
+      tacticOptions: snapshot.tacticOptions,
       fields: [
         {
           id: "prompt",
           label: "Prompt",
-          value: input.session.composer.prompt || "Describe the change you want Lineup to make.",
+          value: session.composer.prompt || "Describe the change you want Lineup to make.",
           hint: "Type directly to edit the prompt.",
           editable: true,
-          focused: input.session.composerFocus === "prompt",
-          selected: input.session.composerFocus === "prompt",
+          focused: session.composerFocus === "prompt",
+          selected: session.composerFocus === "prompt",
           index: 0,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "host",
           label: "Host",
-          value: input.session.composer.host,
-          hint: `available: ${composerDefaults.hosts.join(", ")}`,
+          value: session.composer.host,
+          hint: `available: ${snapshot.composerDefaults.hosts.join(", ")}`,
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 1,
-          selected: input.session.composerFieldIndex === 1,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 1,
+          selected: session.composerFieldIndex === 1,
           index: 1,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "workflow",
           label: "Workflow",
-          value: input.session.composer.workflow ?? "default",
-          hint: workflowOptions.length > 0 ? `available: ${workflowOptions.join(", ")}` : "No workflow files discovered.",
+          value: session.composer.workflow ?? "default",
+          hint: snapshot.workflowOptions.length > 0 ? `available: ${snapshot.workflowOptions.join(", ")}` : "No workflow files discovered.",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 2,
-          selected: input.session.composerFieldIndex === 2,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 2,
+          selected: session.composerFieldIndex === 2,
           index: 2,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "tactic",
           label: "Tactic",
-          value: input.session.composer.tactic ?? "none",
-          hint: tacticOptions.length > 0 ? `available: ${tacticOptions.join(", ")}` : "No tactics discovered.",
+          value: session.composer.tactic ?? "none",
+          hint: snapshot.tacticOptions.length > 0 ? `available: ${snapshot.tacticOptions.join(", ")}` : "No tactics discovered.",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 3,
-          selected: input.session.composerFieldIndex === 3,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 3,
+          selected: session.composerFieldIndex === 3,
           index: 3,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "isolation",
           label: "Isolation",
-          value: input.session.composer.isolation,
+          value: session.composer.isolation,
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 4,
-          selected: input.session.composerFieldIndex === 4,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 4,
+          selected: session.composerFieldIndex === 4,
           index: 4,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "implementMethod",
           label: "Implement method",
-          value: input.session.composer.implementMethod,
+          value: session.composer.implementMethod,
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 5,
-          selected: input.session.composerFieldIndex === 5,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 5,
+          selected: session.composerFieldIndex === 5,
           index: 5,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "fromStage",
           label: "From stage",
-          value: input.session.composer.fromStage ?? "start",
+          value: session.composer.fromStage ?? "start",
           hint: "Used for rerun or resume flows.",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 6,
-          selected: input.session.composerFieldIndex === 6,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 6,
+          selected: session.composerFieldIndex === 6,
           index: 6,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "timeout",
           label: "Timeout",
-          value: input.session.composer.timeout !== undefined ? String(input.session.composer.timeout) : "default",
+          value: session.composer.timeout !== undefined ? String(session.composer.timeout) : "default",
           hint: "Stage timeout hint in seconds.",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 7,
-          selected: input.session.composerFieldIndex === 7,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 7,
+          selected: session.composerFieldIndex === 7,
           index: 7,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "gateTimeout",
           label: "Gate timeout",
-          value: input.session.composer.gateTimeout !== undefined ? String(input.session.composer.gateTimeout) : "default",
+          value: session.composer.gateTimeout !== undefined ? String(session.composer.gateTimeout) : "default",
           hint: "Gate timeout in seconds.",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 8,
-          selected: input.session.composerFieldIndex === 8,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 8,
+          selected: session.composerFieldIndex === 8,
           index: 8,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "dryRun",
           label: "Dry run",
-          value: input.session.composer.dryRun ? "yes" : "no",
+          value: session.composer.dryRun ? "yes" : "no",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 9,
-          selected: input.session.composerFieldIndex === 9,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 9,
+          selected: session.composerFieldIndex === 9,
           index: 9,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "forceRerun",
           label: "Force rerun",
-          value: input.session.composer.forceRerun ? "yes" : "no",
+          value: session.composer.forceRerun ? "yes" : "no",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 10,
-          selected: input.session.composerFieldIndex === 10,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 10,
+          selected: session.composerFieldIndex === 10,
           index: 10,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "approvePlan",
           label: "Approve plan",
-          value: input.session.composer.approvePlan ? "yes" : "no",
+          value: session.composer.approvePlan ? "yes" : "no",
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 11,
-          selected: input.session.composerFieldIndex === 11,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 11,
+          selected: session.composerFieldIndex === 11,
           index: 11,
           total: COMPOSER_FIELD_COUNT
         },
         {
           id: "maxParallel",
           label: "Max parallel",
-          value: String(input.session.composer.maxParallel),
+          value: String(session.composer.maxParallel),
           editable: true,
-          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 12,
-          selected: input.session.composerFieldIndex === 12,
+          focused: session.composerFocus === "fields" && session.composerFieldIndex === 12,
+          selected: session.composerFieldIndex === 12,
           index: 12,
           total: COMPOSER_FIELD_COUNT
         }
       ],
       validation: [
-        ...(input.session.composer.prompt.trim() ? [] : ["Prompt is required to start a run."]),
-        ...(input.session.composer.workflow && input.session.composer.tactic ? ["Workflow and tactic are mutually exclusive."] : [])
+        ...(session.composer.prompt.trim() ? [] : ["Prompt is required to start a run."]),
+        ...(session.composer.workflow && session.composer.tactic ? ["Workflow and tactic are mutually exclusive."] : [])
       ],
       suggestedActions: [
         createTuiAction({
           id: "start-run",
           label: "Start run",
           kind: "primary",
-          focused: input.session.composerFocus === "actions" && input.session.composerActionIndex === 0,
-          selected: input.session.composerActionIndex === 0,
+          focused: session.composerFocus === "actions" && session.composerActionIndex === 0,
+          selected: session.composerActionIndex === 0,
           index: 0,
           total: 2
         }),
@@ -894,66 +960,66 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           id: "back-home",
           label: "Back to home",
           kind: "ghost",
-          focused: input.session.composerFocus === "actions" && input.session.composerActionIndex === 1,
-          selected: input.session.composerActionIndex === 1,
+          focused: session.composerFocus === "actions" && session.composerActionIndex === 1,
+          selected: session.composerActionIndex === 1,
           index: 1,
           total: 2
         })
       ],
-      help: buildComposerHelp(input.session.composer)
+      help: buildComposerHelp(session.composer)
     },
-    liveRun: mapLiveRunViewWithState(liveRun, input.session.composer, liveEvents, input.session),
+    liveRun: mapLiveRunViewWithState(snapshot.liveRun, session.composer, snapshot.liveEvents, session),
     gate: {
       title: "Gate",
-      requestId: input.session.pendingGate?.requestId ?? "pending",
-      gateType: input.session.pendingGate?.gateType ?? "custom",
-      question: input.session.pendingGate?.question ?? "No gate is waiting.",
-      context: input.session.pendingGate?.context,
-      statusLine: input.session.pendingGate ? "Choose an option or enter a free-text response." : "No pending gate.",
-      expiresAt: bridgeRecovery.session?.pending_question?.expiresAt,
-      recoveryAction: bridgeRecovery.recovery?.action,
-      recoveryCommand: bridgeRecovery.recovery?.command,
-      focusedChoiceIndex: input.session.pendingGate ? input.session.gateSelectionIndex : undefined,
-      selectedChoiceValue: input.session.pendingGate?.choices[input.session.gateSelectionIndex],
-      freeTextValue: input.session.gateInput || undefined,
-      choices: buildGateChoices(input.session.pendingGate).map((choice, index, all) => ({
+      requestId: session.pendingGate?.requestId ?? "pending",
+      gateType: session.pendingGate?.gateType ?? "custom",
+      question: session.pendingGate?.question ?? "No gate is waiting.",
+      context: session.pendingGate?.context,
+      statusLine: session.pendingGate ? "Choose an option or enter a free-text response." : "No pending gate.",
+      expiresAt: snapshot.bridgeRecovery.session?.pending_question?.expiresAt,
+      recoveryAction: snapshot.bridgeRecovery.recovery?.action,
+      recoveryCommand: snapshot.bridgeRecovery.recovery?.command,
+      focusedChoiceIndex: session.pendingGate ? session.gateSelectionIndex : undefined,
+      selectedChoiceValue: session.pendingGate?.choices[session.gateSelectionIndex],
+      freeTextValue: session.gateInput || undefined,
+      choices: buildGateChoices(session.pendingGate).map((choice, index, all) => ({
         ...choice,
-        focused: index === input.session.gateSelectionIndex,
-        selected: index === input.session.gateSelectionIndex,
+        focused: index === session.gateSelectionIndex,
+        selected: index === session.gateSelectionIndex,
         index,
         total: all.length
       })),
-      allowFreeText: input.session.pendingGate?.allowFreeText ?? false,
+      allowFreeText: session.pendingGate?.allowFreeText ?? false,
       freeTextLabel: "Type your response and press Enter.",
-      artifactPreview: artifactContent
+      artifactPreview: snapshot.artifactContent
         ? {
-            kind: artifactContent.kind,
-            label: artifactContent.title,
-            path: artifactContent.path,
-            summary: artifactContent.summary,
-            contentLabel: artifactContent.title,
-            contentSummary: artifactContent.lines.slice(0, 3).join(" ")
+            kind: snapshot.artifactContent.kind,
+            label: snapshot.artifactContent.title,
+            path: snapshot.artifactContent.path,
+            summary: snapshot.artifactContent.summary,
+            contentLabel: snapshot.artifactContent.title,
+            contentSummary: snapshot.artifactContent.lines.slice(0, 3).join(" ")
           }
-        : liveRun?.artifacts[0]
-          ? mapArtifactLine(liveRun.artifacts[0])
+        : snapshot.liveRun?.artifacts[0]
+          ? mapArtifactLine(snapshot.liveRun.artifacts[0])
           : null,
       help: ["Esc closes the modal.", "Arrow keys move between choices.", "Enter submits the current selection."]
     },
     inspection: {
       ...inspectionView,
-      artifactContent,
-      logs: logDetails,
-      replay: replayEntries,
-      history: historyEntries,
+      artifactContent: snapshot.artifactContent,
+      logs: snapshot.logDetails,
+      replay: snapshot.replayEntries,
+      history: snapshot.historyEntries,
       recovery: recoverySummary
     },
     help: {
       title: "Command palette",
-      query: input.session.helpQuery ?? "",
+      query: session.helpQuery ?? "",
       placeholder: "Search commands",
       focusedSection: "commands",
-      selectedCommandId: paletteCommands[input.session.helpSelectedIndex]?.id,
-      selectedSectionTitle: paletteCommands[input.session.helpSelectedIndex]?.category,
+      selectedCommandId: paletteCommands[session.helpSelectedIndex]?.id,
+      selectedSectionTitle: paletteCommands[session.helpSelectedIndex]?.category,
       selectedKeyBindingIndex: 0,
       sections: paletteGroups.map((group) => ({
         title: group,
@@ -961,36 +1027,36 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           .filter((command) => (command.category ?? "Actions") === group)
           .map((command, index, all) => ({
             ...command,
-            focused: command.id === paletteCommands[input.session.helpSelectedIndex]?.id,
-            selected: command.id === paletteCommands[input.session.helpSelectedIndex]?.id,
+            focused: command.id === paletteCommands[session.helpSelectedIndex]?.id,
+            selected: command.id === paletteCommands[session.helpSelectedIndex]?.id,
             index,
             total: all.length
           }))
       })),
       commands: paletteCommands.map((command, index, all) => ({
         ...command,
-        focused: index === input.session.helpSelectedIndex,
-        selected: index === input.session.helpSelectedIndex,
+        focused: index === session.helpSelectedIndex,
+        selected: index === session.helpSelectedIndex,
         index,
         total: all.length
       })),
       keyBindings: [
-        { keys: [preferences.keybindings.commandPalette], label: "Open palette" },
-        { keys: [preferences.keybindings.resume], label: "Resume selected run" },
-        { keys: [preferences.keybindings.artifacts], label: "Inspect selected run" },
-        { keys: [preferences.keybindings.logs], label: "Toggle logs" },
-        { keys: [preferences.keybindings.quit], label: "Quit" }
+        { keys: [snapshot.preferences.keybindings.commandPalette], label: "Open palette" },
+        { keys: [snapshot.preferences.keybindings.resume], label: "Resume selected run" },
+        { keys: [snapshot.preferences.keybindings.artifacts], label: "Inspect selected run" },
+        { keys: [snapshot.preferences.keybindings.logs], label: "Toggle logs" },
+        { keys: [snapshot.preferences.keybindings.quit], label: "Quit" }
       ],
       slashCommands: paletteCommands.map((command, index, all) => ({
         ...command,
         slashCommand: command.id,
-        focused: index === input.session.helpSelectedIndex,
-        selected: index === input.session.helpSelectedIndex,
+        focused: index === session.helpSelectedIndex,
+        selected: index === session.helpSelectedIndex,
         index,
         total: all.length
       })),
       recentCommands: paletteCommands
-        .filter((command) => input.session.recentCommandIds.includes(command.id))
+        .filter((command) => session.recentCommandIds.includes(command.id))
         .slice(0, 3)
         .map((command, index, all) => ({
           ...command,
@@ -999,4 +1065,14 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
         }))
     }
   });
+}
+
+export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<TuiAppViewModel> {
+  const snapshot = await buildTuiAppDataSnapshot({
+    cwd: input.cwd,
+    selectedRunId: input.session.selectedRunId,
+    liveEventsByRunId: input.liveEventsByRunId
+  })
+
+  return composeTuiAppViewModel(snapshot, input.session)
 }

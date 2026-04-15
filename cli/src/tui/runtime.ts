@@ -5,6 +5,7 @@ import { Box as InkBox, Text as InkText, render, useApp, useInput } from 'ink'
 
 import { createLocalAgentRunner } from '../lib/agent-runner.js'
 import { SUPPORTED_HOSTS } from '../lib/constants.js'
+import { asErrorMessage } from '../lib/errors.js'
 import type { GateResponse } from '../lib/gate-store.js'
 import { readBridgeEvents } from '../lib/bridge.js'
 import { readStatus } from '../lib/operations.js'
@@ -14,7 +15,7 @@ import { listTacticEntries, listWorkflowEntries } from '../lib/tui-services.js'
 import { cancelPipelineRun, resumePipelineRun } from '../lib/run-control.js'
 import { initializeLineupProject } from '../commands/init.js'
 import { protocolMessageToTuiEvent, type TuiLogEvent } from '../lib/tui-models.js'
-import { buildTuiAppViewModel } from '../lib/tui-app-state.js'
+import { buildTuiAppDataSnapshot, composeTuiAppViewModel, buildTuiAppViewModel, type TuiAppDataSnapshot } from '../lib/tui-app-state.js'
 import { runPipeline } from '../lib/run-pipeline.js'
 import { TuiAppShell } from './app-shell'
 import {
@@ -257,6 +258,10 @@ function bridgeEventToTuiEvent(event: { type: string; seq?: number; stageId?: st
   }
 }
 
+function tuiOperationStatusLine(error: unknown): string {
+  return asErrorMessage(error)
+}
+
 type InteractiveTuiAppProps = {
   cwd: string
 }
@@ -265,7 +270,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
   const { cwd } = props
   const { exit } = useApp()
   const [session, dispatch] = useReducer(reduceTuiSessionState, undefined, () => createDefaultTuiSessionState(defaultComposerState()))
-  const [viewModel, setViewModel] = useState<TuiAppViewModel | null>(null)
+  const [appData, setAppData] = useState<TuiAppDataSnapshot | null>(null)
   const [liveEventsByRunId, setLiveEventsByRunId] = useState<Record<string, TuiLogEvent[]>>({})
   const gateResolverRef = useRef<((response: GateResponse) => void) | null>(null)
 
@@ -288,18 +293,18 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
     }
   }, [cwd])
 
-  const refreshViewModel = useCallback(async () => {
-    const next = await buildTuiAppViewModel({
+  const refreshAppData = useCallback(async () => {
+    const next = await buildTuiAppDataSnapshot({
       cwd,
-      session,
+      selectedRunId: session.selectedRunId,
       liveEventsByRunId
     })
-    setViewModel(next)
-  }, [cwd, liveEventsByRunId, session])
+    setAppData(next)
+  }, [cwd, liveEventsByRunId, session.selectedRunId])
 
   useEffect(() => {
-    void refreshViewModel()
-  }, [refreshViewModel])
+    void refreshAppData()
+  }, [refreshAppData])
 
   const humanHooks = useCallback(() => ({
     emitHumanTextToStderr: false,
@@ -309,6 +314,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       if (event && runId) {
         appendEvent(runId, event)
         dispatch({ type: 'select-run', runId, attach: true })
+        dispatch({ type: 'open-screen', screen: 'live' })
       }
     },
     handleHumanGate(gate: Parameters<NonNullable<NonNullable<Parameters<typeof runPipeline>[1]>['handleHumanGate']>>[0]) {
@@ -360,12 +366,13 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       return
     }
 
+    initializeLineupProject({}, cwd)
     dispatch({ type: 'set-busy', busy: true, statusLine: 'Starting run…' })
-    dispatch({ type: 'open-screen', screen: 'live' })
 
     try {
       const result = await runPipeline(
         {
+          cwd,
           prompt: session.composer.prompt,
           mode: 'human',
           host: session.composer.host,
@@ -391,9 +398,13 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       dispatch({ type: 'open-screen', screen: 'inspect' })
       dispatch({ type: 'record-command', commandId: 'new-run' })
       void loadRunHistory(result.runId)
+    } catch (error) {
+      dispatch({ type: 'open-screen', screen: 'home' })
+      dispatch({ type: 'set-status-line', statusLine: tuiOperationStatusLine(error) })
+      return
     } finally {
       dispatch({ type: 'set-pending-gate', gate: null })
-      dispatch({ type: 'set-busy', busy: false, statusLine: 'Run finished.' })
+      dispatch({ type: 'set-busy', busy: false })
     }
   }, [humanHooks, loadRunHistory, session.busy, session.composer])
 
@@ -407,6 +418,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
 
     try {
       const resumed = await resumePipelineRun({
+        cwd,
         runId: session.selectedRunId,
         retryFailed,
         localAgentRunner: createLocalAgentRunner(session.composer.host),
@@ -420,9 +432,13 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       dispatch({ type: 'open-screen', screen: 'inspect' })
       dispatch({ type: 'record-command', commandId: retryFailed ? 'retry' : 'resume' })
       void loadRunHistory(resumed.result.runId)
+    } catch (error) {
+      dispatch({ type: 'open-screen', screen: session.selectedRunId ? 'inspect' : 'home' })
+      dispatch({ type: 'set-status-line', statusLine: tuiOperationStatusLine(error) })
+      return
     } finally {
       dispatch({ type: 'set-pending-gate', gate: null })
-      dispatch({ type: 'set-busy', busy: false, statusLine: 'Resume complete.' })
+      dispatch({ type: 'set-busy', busy: false })
     }
   }, [humanHooks, loadRunHistory, session.busy, session.composer.host, session.selectedRunId])
 
@@ -548,12 +564,12 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       case 'refresh':
       case 'doctor':
         dispatch({ type: 'set-status-line', statusLine: 'Refreshing readiness…' })
-        await refreshViewModel()
+        await refreshAppData()
         return
       case 'init-project':
         initializeLineupProject({}, cwd)
         dispatch({ type: 'set-status-line', statusLine: 'Initialized Lineup project scaffolding.' })
-        await refreshViewModel()
+        await refreshAppData()
         dispatch({ type: 'open-screen', screen: 'home' })
         return
       case 'show-status': {
@@ -563,7 +579,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
           type: 'set-status-line',
           statusLine: `Host status: ${installed}/${SUPPORTED_HOSTS.length} installed · state ${status.state_file}`
         })
-        await refreshViewModel()
+        await refreshAppData()
         dispatch({ type: 'open-screen', screen: 'home' })
         return
       }
@@ -573,7 +589,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
       default:
         return
     }
-  }, [cancelSelectedRun, cwd, exit, refreshViewModel, resumeSelectedRun, session.route.screen, startRun])
+  }, [cancelSelectedRun, cwd, exit, refreshAppData, resumeSelectedRun, session.route.screen, startRun])
 
   useInput((input, key) => {
     if (key.escape) {
@@ -634,6 +650,7 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
     }
   }, { isActive: true })
 
+  const viewModel = useMemo(() => (appData ? composeTuiAppViewModel(appData, session) : null), [appData, session])
   const tree = useMemo(() => (viewModel ? buildTree(viewModel) : null), [viewModel])
 
   if (!tree || !viewModel) {

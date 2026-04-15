@@ -25,9 +25,10 @@ NDJSON:
 - `lineup bridge events <run-id> --after <seq> --wait <seconds>`
 - `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>]`
 
-Before the first native run in a new project, run `lineup init`. It scaffolds the
-workflow/runtime directories and initializes a git repository if needed. Native
-implementation still requires at least one commit because isolation uses git worktrees.
+Human and TUI launches now auto-initialize a new project on first run. They scaffold
+the workflow/runtime directories and initialize a git repository if needed. `lineup init`
+still remains available as an explicit setup command, and native implementation still
+requires at least one commit because isolation uses git worktrees.
 
 In bridge mode, treat the compact event stream as the skill contract:
 - `status` events carry progress updates

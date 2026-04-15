@@ -6,7 +6,7 @@ This page is the operator reference. If you want the human frontend, start with 
 
 - `./dev check` - run all checks
 - `./dev build`, `./dev typecheck`, `./dev test` - individual checks
-- `./dev tui` - launch the local-source TUI without installing `lineup` globally
+- `./dev tui` - launch the local-source TUI in the caller's current working directory without installing `lineup` globally
 - `./dev install local` - rebuild and reinstall from the current source tree
 - `./dev install remote` - install latest from npm
 - `./dev install clean [--purge]` - remove CLI and host skills
@@ -74,7 +74,7 @@ This page is the operator reference. If you want the human frontend, start with 
 - `human` - interactive terminal use. The TUI is the normal human surface.
 - `host` - NDJSON protocol output for skills, automation, and CI.
 
-If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
+If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise. Human-mode runs auto-initialize Lineup project scaffolding when needed before pipeline startup. Host-mode runs do not.
 
 Generated skills should prefer the detached bridge API:
 
@@ -113,6 +113,7 @@ Keep `lineup run --mode host` for advanced integrations and CI that need the low
 ## Notes
 
 - `lineup doctor --json` reports readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, installing a supported host CLI when no local executor is available, and Ollama readiness when host integration is enabled for Claude, Codex, or OpenCode
+- `lineup init` remains useful as an explicit setup command, but human launches no longer require the user to run it manually before the first run
 - the Ollama validation suite is split across deterministic tests, pipeline/bridge tests, and a local-only smoke lane; see [Ollama](./ollama.md) for the suite layout and the `smoke:ollama-hosts` command
 - `lineup run` repairs common host/runtime output issues before failing, including fenced JSON/YAML repair, one stricter retry for prose planner output, and normalization of common artifact shapes
 - blocked or failed runs should be recovered with `lineup resume`, `lineup show`, `lineup logs`, or `lineup cancel` depending on state
