@@ -24,6 +24,24 @@
       "type": "string",
       "minLength": 1
     },
+    "task_prompt": {
+      "type": "string"
+    },
+    "execution_host": {
+      "type": "string",
+      "enum": ["claude", "codex", "opencode", "ollama"]
+    },
+    "runner_host": {
+      "type": "string",
+      "enum": ["claude", "codex", "opencode"]
+    },
+    "force_ollama_backend": {
+      "type": "boolean"
+    },
+    "ollama_model": {
+      "type": "string",
+      "minLength": 1
+    },
     "gate_timeout_seconds": {
       "type": "integer",
       "minimum": 1

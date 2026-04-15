@@ -19,8 +19,9 @@ NDJSON:
 - `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>]`
 
 Before the first native run in a new project, run `lineup init`. It scaffolds the
-workflow/runtime directories and initializes a git repository if needed. Native
-implementation still requires at least one commit because isolation uses git worktrees.
+workflow/runtime directories, initializes a git repository if needed, and on the
+first interactive init now opens the project config editor for `.lineup/config.yaml`.
+Native implementation still requires at least one commit because isolation uses git worktrees.
 
 In bridge mode, treat the compact event stream as the skill contract:
 - `status` events carry progress updates

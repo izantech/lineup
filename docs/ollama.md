@@ -11,13 +11,15 @@ These are separate on purpose. `ollama.scope` keeps its existing meaning, and `o
 You can now enter that path explicitly from the CLI:
 
 ```bash
-lineup run "your task" --host ollama --runner codex
-lineup run "your task" --host ollama --runner claude
-lineup run "your task" --host ollama --runner opencode
+lineup run "your task" --host ollama --runner codex --model qwen3-coder:30b
+lineup run "your task" --host ollama --runner claude --model qwen3-coder:30b
+lineup run "your task" --host ollama --runner opencode --model qwen3-coder:30b
 ```
 
 That explicit `--host ollama` path forces the selected runner through the local
 Ollama backend and does not rely on nested runner host-integration strategy.
+There is no implicit default model anymore: pass `--model <name>` or set
+`ollama.model` in `.lineup/config.yaml`.
 
 ## Modes
 

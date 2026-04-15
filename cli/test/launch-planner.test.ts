@@ -223,6 +223,61 @@ describe("launch planner", () => {
     expect(plan.args).toContain("qwen3.5:9b")
   })
 
+  it("fails when the execution host is ollama and no model is configured", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+
+    expect(() => planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect",
+      forceOllamaBackend: true
+    })).toThrow("Pass --model <name> or set ollama.model in .lineup/config.yaml")
+  })
+
+  it("fails when project config enables Ollama without a model", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      "ollama:\n  enabled: true\n  scope: research\n"
+    )
+
+    expect(() => planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect"
+    })).toThrow("Pass --model <name> or set ollama.model in .lineup/config.yaml")
+  })
+
+  it("uses the explicit Ollama CLI model override when the execution host is ollama", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+
+    const plan = planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect",
+      forceOllamaBackend: true,
+      ollamaModel: "qwen3-coder:30b"
+    })
+
+    expect(plan.command).toBe("codex")
+    expect(plan.integration).toBe("ollama-launch")
+    expect(plan.args).toContain("-m")
+    expect(plan.args).toContain("qwen3-coder:30b")
+    expect(plan.env.OLLAMA_HOST).toBe("http://127.0.0.1:11434")
+  })
+
   it("does not force Claude bare mode for direct launches", () => {
     root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
     home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))

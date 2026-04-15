@@ -4,6 +4,7 @@
 
 - `./dev check` — run all checks (typecheck, test, schema, generate, build)
 - `./dev build` / `./dev typecheck` / `./dev test` — individual checks
+- `./dev cli -- <args...>` — run the Lineup CLI directly from source without installing it
 - `./dev install local` — clean-replace the global CLI and managed host skills from the current source tree; auto-installs missing CLI deps first
 - `./dev install remote` — install latest from npm
 - `./dev install clean [--purge]` — remove CLI and host skills
@@ -26,8 +27,8 @@ them to `site/public/diagrams/*.svg` before serving or building the site.
 - `lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]`
 - `lineup config [show] [--host claude|codex|opencode] [--json]`
 - `lineup doctor [--json]`
-- `lineup start [task] [--workflow <path>] [--tactic <name>] [--host claude|codex|opencode|ollama] [--runner claude|codex|opencode] [--mode human|host] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
-- `lineup run [task] [--workflow <path>] [--tactic <name>] [--host claude|codex|opencode|ollama] [--runner claude|codex|opencode] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--mode human|host] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
+- `lineup start [task] [--workflow <path>] [--tactic <name>] [--host claude|codex|opencode|ollama] [--runner claude|codex|opencode] [--model <name>] [--mode human|host] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
+- `lineup run [task] [--workflow <path>] [--tactic <name>] [--host claude|codex|opencode|ollama] [--runner claude|codex|opencode] [--model <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation index|full|sparse] [--mode human|host] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>]`
 - `lineup bridge start [task] --executor-host <host> [--workflow <path>] [--tactic <name>] [--timeout <seconds>] [--max-parallel <n>] [--isolation index|full|sparse] [--implement-method phase|task|single-session] [--approve-plan] [--gate-timeout <seconds>] [--json]`
 - `lineup bridge events <run-id> [--after <seq>] [--wait <seconds>] [--json]`
 - `lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>] [--json]`
@@ -72,7 +73,7 @@ Practical split:
 
 - `lineup start "<task>"` is the best first native entrypoint in a new repo because it scaffolds Lineup, checks readiness, and only starts the run once the repo is actually ready
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
-- `lineup run "<task>" --host ollama --runner codex` is the explicit local-Ollama path when you want Ollama as the execution host and Codex/Claude/OpenCode only as the runner adapter
+- `lineup run "<task>" --host ollama --runner codex --model qwen3-coder:30b` is the explicit local-Ollama path when you want Ollama as the execution host and Codex/Claude/OpenCode only as the runner adapter
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
 - `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task with `README.md` as the first research target, routes the bundled `explain` tactic through the bridge API, can force Claude onto the env transport internally when the wrapper lane needs to be bypassed, and now supports both per-host validation and the combined `--host all` matrix on the current `qwen3-coder:30b` baseline
@@ -134,9 +135,12 @@ For first-run onboarding:
 
 - `lineup start "<task>"` runs `init`-style scaffolding automatically, checks readiness, and only hands off to the native pipeline when the repo is ready
 - if the repo still needs an initial commit, `lineup start` stops with the exact `git add -A && git commit -m "Initial commit"` command and a rerun command
-- `lineup config` shows the resolved local host, alias routing, per-agent model targets, and any host-specific Ollama configuration that a human run would use
+- the first interactive `lineup init` opens the project config editor after scaffolding finishes
+- `lineup config` opens the project config editor for `.lineup/config.yaml`
+- `lineup config show` shows the resolved local host, alias routing, per-agent model targets, and any host-specific Ollama configuration that a human run would use
 - `lineup run --host claude|codex|opencode` keeps the normal native path and may still use Ollama integration if config enables it
-- `lineup run --host ollama --runner claude|codex|opencode` forces the selected runner through the local Ollama backend and does not depend on nested runner host-integration config
+- `lineup run --host ollama --runner claude|codex|opencode --model <name>` forces the selected runner through the local Ollama backend and does not depend on nested runner host-integration config
+- any Ollama-enabled path now fails fast unless the model is set explicitly with `--model <name>` or in `.lineup/config.yaml`
 - `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, installing a supported host CLI when no local executor is available, and Ollama readiness when host integration is enabled for Claude, Codex, or OpenCode
 - see [Ollama](./ollama.md) for the exact `host_integration` config shape and host-specific launch behavior
 - the Ollama validation suite is split across deterministic tests, pipeline/bridge tests, and a local-only smoke lane; see [Ollama](./ollama.md) for the suite layout and the `smoke:ollama-hosts` command

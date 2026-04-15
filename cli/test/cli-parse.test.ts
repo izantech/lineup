@@ -160,7 +160,8 @@ describe("CLI command parsing", () => {
     expect(handlers.config).toHaveBeenCalledWith(
       expect.objectContaining({
         host: "codex",
-        json: true
+        json: true,
+        mode: "show"
       })
     );
   });
@@ -170,12 +171,13 @@ describe("run command", () => {
   it("parses start options", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);
-    await program.parseAsync(["node", "lineup", "start", "Ship the fix", "--tactic", "explain", "--host", "codex"]);
+    await program.parseAsync(["node", "lineup", "start", "Ship the fix", "--tactic", "explain", "--host", "codex", "--model", "qwen3-coder:30b"]);
     expect(handlers.start).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: "Ship the fix",
         tactic: "explain",
-        host: "codex"
+        host: "codex",
+        model: "qwen3-coder:30b"
       })
     );
   });
@@ -183,12 +185,13 @@ describe("run command", () => {
   it("parses ollama host with explicit runner", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);
-    await program.parseAsync(["node", "lineup", "run", "Ship the fix", "--host", "ollama", "--runner", "codex"]);
+    await program.parseAsync(["node", "lineup", "run", "Ship the fix", "--host", "ollama", "--runner", "codex", "--model", "qwen3-coder:30b"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: "Ship the fix",
         host: "ollama",
-        runner: "codex"
+        runner: "codex",
+        model: "qwen3-coder:30b"
       })
     );
   });
@@ -275,7 +278,7 @@ describe("run command", () => {
     const program = buildProgram(handlers);
     await program.parseAsync(["node", "lineup", "config", "show", "--host", "claude"]);
     expect(handlers.config).toHaveBeenCalledWith(
-      expect.objectContaining({ host: "claude" })
+      expect.objectContaining({ host: "claude", mode: "show" })
     );
   });
 

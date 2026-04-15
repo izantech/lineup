@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 
 import { createLocalAgentRunner } from "../lib/agent-runner.js";
+import type { HostName } from "../lib/constants.js";
 import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { isInteractive } from "../lib/prompts.js";
@@ -56,7 +57,17 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
   let mode: "resume" | "retry" = "resume";
   let guidance = buildResumeGuidance(state, options, completedStages);
   const runMode = isInteractive() ? "human" : "host";
-  const localAgentRunner = runMode === "human" ? createLocalAgentRunner() : undefined;
+  const savedRunnerHost = state.runner_host ?? (state.execution_host && state.execution_host !== "ollama" ? state.execution_host as HostName : undefined);
+  const forceOllamaBackend = Boolean(state.force_ollama_backend || state.execution_host === "ollama");
+  if (forceOllamaBackend && !state.ollama_model) {
+    throw new CliError(
+      `Run ${options.runId} requires an Ollama model to resume, but no persisted model was recorded. Re-run with \`lineup run --host ollama --runner ${(savedRunnerHost ?? "codex")} --model <name> "..."\` or inspect the project config.`,
+      { code: "invalid_args" }
+    );
+  }
+  const localAgentRunner = runMode === "human"
+    ? createLocalAgentRunner(savedRunnerHost, { forceOllamaBackend })
+    : undefined;
 
   if (options.retryFailed && state.status === "failed" && state.current_stage) {
     const maxRetries = options.maxRetries ?? 3;
@@ -82,6 +93,10 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
     }
   } else {
     fromStage = state.current_stage ?? findFirstIncompleteStage(completedStages);
+    if (options.retryFailed && state.status === "failed") {
+      mode = "retry";
+      guidance = buildRetryFallbackGuidance(state, completedStages);
+    }
     if (!options.json) {
       printTableLine(guidance);
     }
@@ -89,7 +104,12 @@ export async function runResumeCommand(options: ResumeCommandOptions): Promise<v
 
   const result = await runPipeline({
     workflow: state.workflow,
+    prompt: state.task_prompt,
+    executionHost: state.execution_host,
+    runnerHost: savedRunnerHost,
+    model: state.ollama_model,
     fromStage: fromStage ?? undefined,
+    forceOllamaBackend,
     gateTimeout: state.gate_timeout_seconds,
     mode: runMode,
     host: localAgentRunner?.host
@@ -174,6 +194,14 @@ function buildRetryGuidance(
   const target = fromStage ?? state.current_stage ?? "the beginning";
   const suffix = lastError ? ` Last error: ${lastError}` : "";
   return `Retrying stage '${target}' (attempt ${attempt}/${maxRetries}).${suffix}`;
+}
+
+function buildRetryFallbackGuidance(
+  state: NonNullable<ReturnType<typeof loadPipelineState>>,
+  completedStages: Set<string>
+): string {
+  const target = describeResumeTarget(state, completedStages);
+  return `Retrying the failed run from ${target} because the exact failed stage was not recorded.`;
 }
 
 function describeResumeTarget(

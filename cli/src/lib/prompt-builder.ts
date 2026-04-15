@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parseDocument } from "yaml";
 
-import { AGENT_NAMES, readOllamaConfig, shouldAppendOllamaAppendix, type AgentName, type ResolveConfigOptions } from "./config.js";
+import { AGENT_NAMES, readOllamaConfig, requireOllamaModel, shouldAppendOllamaAppendix, type AgentName, type ResolveConfigOptions } from "./config.js";
 import { CliError } from "./errors.js";
 import { packageRoot } from "./paths.js";
 
@@ -144,6 +144,7 @@ function buildOllamaSections(agentName: AgentName | null, resolvedPromptPath: st
   if (!ollama) {
     return [];
   }
+  requireOllamaModel(options);
 
   const sections: string[] = [];
   if (ollama.scope === "full") {
@@ -182,6 +183,7 @@ function resolveAgentBody(
   if (!ollama?.hostIntegration?.enabled) {
     return { body: parsed.body.trimEnd(), usedCompactPrompt: false };
   }
+  requireOllamaModel(options);
 
   const compactPromptPath = resolveOllamaCompactPromptPath(agentName, resolvedPromptPath);
   if (!compactPromptPath) {

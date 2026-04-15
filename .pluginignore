@@ -1,11 +1,13 @@
 # Documentation website (hosted separately at lineup.izantech.app)
 docs/
+site/
 
 # Development files
 .git/
 .github/
 .local/
 *.md.backup
+dev
 
 # Other AI tool instructions
 CODEX.md

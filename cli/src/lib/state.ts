@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { HostName } from "./constants";
 import { CliError } from "./errors";
 import { lineupProjectRoot, lineupRunStateFile, lineupStateFile } from "./paths";
+import type { ExecutionHostName, HostName } from "./constants";
 import type { HostState, InstallerState } from "./types";
 import { validateInstallerState, validatePipelineStateJson } from "./validation";
 
@@ -29,6 +29,11 @@ export type PipelineStateRecord = {
   run_id: string;
   status: PipelineRunStatus;
   workflow?: string;
+  task_prompt?: string;
+  execution_host?: ExecutionHostName;
+  runner_host?: HostName;
+  force_ollama_backend?: boolean;
+  ollama_model?: string;
   gate_timeout_seconds?: number;
   git_tree_sha?: string;
   current_stage?: string;
@@ -112,6 +117,11 @@ export function updateHostState(
 export function defaultPipelineState(input: {
   runId: string;
   workflow: string;
+  taskPrompt?: string;
+  executionHost?: ExecutionHostName;
+  runnerHost?: HostName;
+  forceOllamaBackend?: boolean;
+  ollamaModel?: string;
   gateTimeoutSeconds?: number;
   gitTreeSha?: string | null;
   status?: PipelineRunStatus;
@@ -130,6 +140,26 @@ export function defaultPipelineState(input: {
 
   if (input.gitTreeSha) {
     state.git_tree_sha = input.gitTreeSha;
+  }
+
+  if (input.taskPrompt && input.taskPrompt.trim().length > 0) {
+    state.task_prompt = input.taskPrompt;
+  }
+
+  if (input.executionHost) {
+    state.execution_host = input.executionHost;
+  }
+
+  if (input.runnerHost) {
+    state.runner_host = input.runnerHost;
+  }
+
+  if (input.forceOllamaBackend) {
+    state.force_ollama_backend = true;
+  }
+
+  if (input.ollamaModel && input.ollamaModel.trim().length > 0) {
+    state.ollama_model = input.ollamaModel.trim();
   }
 
   if (input.gateTimeoutSeconds !== undefined) {

@@ -1,4 +1,4 @@
-import type { HostName } from "./constants";
+import type { ExecutionHostName, HostName } from "./constants";
 
 export type HostState = {
   installed: boolean;
@@ -367,9 +367,13 @@ export type RunOptions = {
   workflow?: string;
   tactic?: string;
   host?: HostName;
+  executionHost?: ExecutionHostName;
+  runnerHost?: HostName;
+  model?: string;
   fromStage?: string;
   dryRun?: boolean;
   forceRerun?: boolean;
+  forceOllamaBackend?: boolean;
   timeout?: number;
   maxParallel?: number;
   isolation?: IsolationMode;

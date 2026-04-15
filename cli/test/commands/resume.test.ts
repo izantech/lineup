@@ -134,7 +134,11 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("lineup cancel resume-blocked");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
       fromStage: "plan-approval",
+      forceOllamaBackend: false,
       gateTimeout: undefined,
       mode: "host",
       host: undefined
@@ -175,7 +179,11 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("Run resume-failed completed successfully.");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
       fromStage: "implement",
+      forceOllamaBackend: false,
       gateTimeout: undefined,
       mode: "host",
       host: undefined
@@ -207,7 +215,11 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("Run resume-canceled completed successfully.");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
       fromStage: "research",
+      forceOllamaBackend: false,
       gateTimeout: undefined,
       mode: "host",
       host: undefined
@@ -250,6 +262,42 @@ describe("lineup resume", () => {
     expect(payload.message).toContain("Retrying stage 'implement'");
   });
 
+  it("avoids generic resume guidance when retrying a failed run without a recorded current stage", async () => {
+    const state: PipelineStateRecord = {
+      apiVersion: "lineup/v3",
+      kind: "PipelineState",
+      run_id: "resume-retry-fallback",
+      status: "failed",
+      workflow: "workflows/full.yaml",
+      completed_stages: ["triage", "clarify"],
+      artifact_hashes: {},
+      updated_at: "2026-04-12T12:00:00.000Z"
+    };
+
+    mkdirSync(lineupRunDir("resume-retry-fallback", tempDir), { recursive: true });
+    savePipelineState(state, tempDir);
+
+    await runResumeCommand({ runId: "resume-retry-fallback", retryFailed: true });
+
+    expect(stdout.join("")).toContain(
+      "Retrying the failed run from the first incomplete stage after triage, clarify because the exact failed stage was not recorded."
+    );
+    expect(stdout.join("")).not.toContain("Use `lineup resume resume-retry-fallback --retry-failed`");
+    expect(mockedRunPipeline).toHaveBeenCalledWith({
+      workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
+      fromStage: undefined,
+      forceOllamaBackend: false,
+      gateTimeout: undefined,
+      mode: "host",
+      host: undefined
+    }, {
+      emitProtocolToStdout: false
+    });
+  });
+
   it("surfaces gate-timeout recovery context for blocked runs", async () => {
     const state: PipelineStateRecord = {
       apiVersion: "lineup/v3",
@@ -275,7 +323,11 @@ describe("lineup resume", () => {
     expect(stdout.join("")).toContain("lineup cancel resume-timeout");
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
       fromStage: "plan-approval",
+      forceOllamaBackend: false,
       gateTimeout: 5,
       mode: "host",
       host: undefined
@@ -311,7 +363,11 @@ describe("lineup resume", () => {
 
     expect(mockedRunPipeline).toHaveBeenCalledWith({
       workflow: "workflows/full.yaml",
+      prompt: undefined,
+      executionHost: undefined,
+      runnerHost: undefined,
       fromStage: "research",
+      forceOllamaBackend: false,
       gateTimeout: undefined,
       mode: "human",
       host: "claude"
@@ -319,5 +375,75 @@ describe("lineup resume", () => {
       emitProtocolToStdout: false,
       localAgentRunner: { host: "claude" }
     });
+  });
+
+  it("reuses the saved prompt and explicit ollama runner when resuming interactively", async () => {
+    mockedIsInteractive.mockReturnValue(true);
+    mockedCreateLocalAgentRunner.mockReturnValue({ host: "codex" });
+
+    const state: PipelineStateRecord = {
+      apiVersion: "lineup/v3",
+      kind: "PipelineState",
+      run_id: "resume-ollama",
+      status: "failed",
+      workflow: "workflows/full.yaml",
+      task_prompt: "Add the run command to the dev script",
+      execution_host: "ollama",
+      runner_host: "codex",
+      force_ollama_backend: true,
+      ollama_model: "qwen3-coder:30b",
+      current_stage: "research",
+      artifact_hashes: {},
+      updated_at: "2026-04-12T12:00:00.000Z"
+    };
+
+    mkdirSync(lineupRunDir("resume-ollama", tempDir), { recursive: true });
+    savePipelineState(state, tempDir);
+
+    await runResumeCommand({ runId: "resume-ollama", retryFailed: true });
+
+    expect(mockedCreateLocalAgentRunner).toHaveBeenCalledWith("codex", { forceOllamaBackend: true });
+    expect(mockedRunPipeline).toHaveBeenCalledWith({
+      workflow: "workflows/full.yaml",
+      prompt: "Add the run command to the dev script",
+      executionHost: "ollama",
+      runnerHost: "codex",
+      fromStage: "research",
+      forceOllamaBackend: true,
+      model: "qwen3-coder:30b",
+      gateTimeout: undefined,
+      mode: "human",
+      host: "codex"
+    }, {
+      emitProtocolToStdout: false,
+      localAgentRunner: { host: "codex" }
+    });
+  });
+
+  it("fails clearly when an Ollama resume lacks a persisted model", async () => {
+    mockedIsInteractive.mockReturnValue(true);
+
+    const state: PipelineStateRecord = {
+      apiVersion: "lineup/v3",
+      kind: "PipelineState",
+      run_id: "resume-ollama-missing-model",
+      status: "failed",
+      workflow: "workflows/full.yaml",
+      task_prompt: "Add the run command to the dev script",
+      execution_host: "ollama",
+      runner_host: "codex",
+      force_ollama_backend: true,
+      current_stage: "research",
+      artifact_hashes: {},
+      updated_at: "2026-04-12T12:00:00.000Z"
+    };
+
+    mkdirSync(lineupRunDir("resume-ollama-missing-model", tempDir), { recursive: true });
+    savePipelineState(state, tempDir);
+
+    await expect(runResumeCommand({ runId: "resume-ollama-missing-model", retryFailed: true })).rejects.toThrow(
+      "requires an Ollama model to resume"
+    );
+    expect(mockedRunPipeline).not.toHaveBeenCalled();
   });
 });

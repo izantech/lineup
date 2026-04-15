@@ -1,8 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { parseDocument } from "yaml";
+import { parseDocument, stringify } from "yaml";
 
 import { CliError } from "./errors.js";
 import { projectRoot } from "./paths.js";
@@ -98,9 +98,9 @@ const DEFAULT_AGENT_CONFIGS: Record<AgentName, AgentConfig> = {
   teacher: { model: "opus", memory: "project", tools: "Read, Grep, Glob, LS, WebFetch, WebSearch" }
 };
 
-const DEFAULT_OLLAMA: OllamaConfig = {
+export const DEFAULT_OLLAMA: OllamaConfig = {
   enabled: false,
-  model: "llama3.1:8b",
+  model: "",
   scope: "research",
   baseUrl: "http://127.0.0.1:11434/v1",
   hostIntegration: null
@@ -244,6 +244,15 @@ function readProjectConfig(filePath: string): { config: LineupConfigFile; warnin
       warnings: [`Warning: ${filePath} is malformed. Ignoring project config. ${error instanceof Error ? error.message : String(error)}`]
     };
   }
+}
+
+export function readProjectConfigFile(filePath: string): { config: LineupConfigFile; warnings: string[] } {
+  return readProjectConfig(filePath);
+}
+
+export function writeProjectConfigFile(filePath: string, config: LineupConfigFile): void {
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${stringify(config)}\n`, "utf8");
 }
 
 function readOllamaLayer(
@@ -545,7 +554,7 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
   const ollama = ollamaCandidate.enabled
     ? {
         enabled: true,
-        model: typeof ollamaCandidate.model === "string" && ollamaCandidate.model.trim().length > 0 ? ollamaCandidate.model.trim() : DEFAULT_OLLAMA.model,
+        model: typeof ollamaCandidate.model === "string" ? ollamaCandidate.model.trim() : "",
         scope: isOllamaScope(ollamaCandidate.scope) ? ollamaCandidate.scope : DEFAULT_OLLAMA.scope,
         baseUrl: typeof ollamaCandidate.baseUrl === "string" && ollamaCandidate.baseUrl.trim().length > 0 ? normalizeBaseUrl(ollamaCandidate.baseUrl) : DEFAULT_OLLAMA.baseUrl,
         hostIntegration: hostIntegrationCandidate
@@ -657,9 +666,26 @@ export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConf
 
   return {
     enabled: true,
-    model: typeof merged.model === "string" && merged.model.trim().length > 0 ? merged.model.trim() : DEFAULT_OLLAMA.model,
+    model: typeof merged.model === "string" ? merged.model.trim() : "",
     scope: isOllamaScope(merged.scope) ? merged.scope : DEFAULT_OLLAMA.scope,
     baseUrl: typeof merged.baseUrl === "string" && merged.baseUrl.trim().length > 0 ? normalizeBaseUrl(merged.baseUrl) : DEFAULT_OLLAMA.baseUrl,
     hostIntegration: hostIntegrationCandidate
   };
+}
+
+export function requireOllamaModel(options: ResolveConfigOptions = {}, reason = "Ollama is enabled but no model is configured. Pass --model <name> or set ollama.model in .lineup/config.yaml."): OllamaConfig {
+  const ollama = readOllamaConfig(options);
+  if (!ollama) {
+    throw new CliError(reason, {
+      code: "invalid_args"
+    });
+  }
+
+  if (!ollama.model.trim()) {
+    throw new CliError(reason, {
+      code: "invalid_args"
+    });
+  }
+
+  return ollama;
 }

@@ -2,10 +2,9 @@ import { execSync } from "node:child_process"
 import os from "node:os"
 
 import { type HostName } from "./constants.js"
-import { readOllamaConfig, resolveAgentModelTarget, type OllamaConfig, type OllamaHostIntegrationStrategy } from "./config.js"
+import { DEFAULT_OLLAMA, readOllamaConfig, requireOllamaModel, resolveAgentModelTarget, type OllamaConfig, type OllamaHostIntegrationStrategy } from "./config.js"
 import { LINEUP_CODEX_OLLAMA_PROFILE, LINEUP_CODEX_OLLAMA_PROVIDER, codexConfigPath, upsertLineupCodexConfig } from "./codex-config.js"
 import { LINEUP_OPENCODE_OLLAMA_PROVIDER, opencodeConfigPath, upsertLineupOpencodeConfig } from "./opencode-config.js"
-import { CliError } from "./errors.js"
 import type { AgentRole } from "./types.js"
 
 export type HostLaunchStrategy = "launch" | "managed"
@@ -16,6 +15,7 @@ export type HostLaunchPlanInput = {
   workingDirectory: string
   agent: AgentRole
   prompt: string
+  ollamaModel?: string
   timeoutMs?: number
   addDirs?: string[]
   outputPath?: string
@@ -245,27 +245,37 @@ function planDirectLaunch(input: HostLaunchPlanInput, effectiveModel: string, en
 
 export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
   const env = { ...process.env, ...(input.env ?? {}) }
+  const cliOllamaOverride = input.ollamaModel || input.forceOllamaBackend
+    ? {
+        enabled: true,
+        ...(input.ollamaModel ? { model: input.ollamaModel } : {}),
+        ...(input.forceOllamaBackend
+          ? {
+              scope: "full" as const,
+              hostIntegration: {
+                enabled: true,
+                strategy: "launch" as const
+              }
+            }
+          : {})
+      }
+    : undefined
   const configuredOllama = input.ollama ?? readOllamaConfig({
     projectRoot: input.projectRoot,
     host: input.host,
     homeDir: input.homeDir ?? os.homedir(),
-    env
+    env,
+    ...(cliOllamaOverride ? { cli: { ollama: cliOllamaOverride } } : {})
   })
   const ollama = input.forceOllamaBackend
-    ? configuredOllama
-      ? {
-          ...configuredOllama,
-          hostIntegration: {
-            enabled: true,
-            strategy: "launch" as const
-          }
+    ? {
+        ...(configuredOllama ?? { ...DEFAULT_OLLAMA, enabled: true }),
+        enabled: true,
+        hostIntegration: {
+          enabled: true,
+          strategy: "launch" as const
         }
-      : (() => {
-          throw new CliError(
-            "Execution host 'ollama' requires Ollama to be enabled in Lineup config. Set ollama.enabled: true and choose a model.",
-            { code: "invalid_args" }
-          )
-        })()
+      }
     : configuredOllama
   const effectiveModel = resolveAgentModelTarget(input.agent, {
     projectRoot: input.projectRoot,
@@ -277,12 +287,23 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
           cli: {
             ollama: {
               enabled: true,
-              scope: "full"
+              scope: "full",
+              ...(input.ollamaModel ? { model: input.ollamaModel } : {})
             }
           }
         }
       : {})
   })
+
+  if (ollama?.enabled) {
+    requireOllamaModel({
+      projectRoot: input.projectRoot,
+      host: input.host,
+      homeDir: input.homeDir ?? os.homedir(),
+      env,
+      ...(cliOllamaOverride ? { cli: { ollama: cliOllamaOverride } } : {})
+    }, "Ollama is enabled but no model is configured. Pass --model <name> or set ollama.model in .lineup/config.yaml.")
+  }
 
   if (!ollama?.hostIntegration?.enabled) {
     return planDirectLaunch({ ...input, ollama }, effectiveModel, env)

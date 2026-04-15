@@ -155,6 +155,31 @@ You are the architect body.
     expect(built.prompt).not.toContain("## Context-Efficient Research Protocol");
   });
 
+  it("uses the compact researcher body when Ollama is forced through CLI overrides", () => {
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "researcher.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "codex",
+        cli: {
+          ollama: {
+            enabled: true,
+            model: "llama3.1:8b",
+            scope: "full",
+            hostIntegration: {
+              enabled: true,
+              strategy: "launch"
+            }
+          }
+        }
+      }
+    });
+
+    expect(built.prompt).toContain("Inspect only the minimum code and config needed to answer the task");
+    expect(built.prompt).toContain("Treat the task as a tiny smoke run, not a workspace-wide investigation.");
+  });
+
   it("uses the compact architect body for Ollama host integration runs", () => {
     writeProjectConfig(
       tempDir,

@@ -23,6 +23,8 @@ The `./dev` script at the repo root is the main entry point for development task
 ./dev build                     # Build CLI
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
+./dev cli -- run "<task>"       # Run lineup CLI from source
+./dev cli -- config             # Run lineup config from source
 ./dev install local             # Build from source and install CLI + all host skills
 ./dev web                       # Start website dev server
 ```

@@ -195,7 +195,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
 
   program
     .command("init")
-    .description("Initialize Lineup project structure")
+    .description("Initialize Lineup project structure and open project config on first interactive run")
     .option("--json", "Emit machine-readable JSON output")
     .option("--workflow <name>", "Workflow template name", "full-pipeline")
     .action(commandHandlers.init);
@@ -207,6 +207,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--tactic <name>", "Run a specific tactic", undefined)
     .option("--host <host>", "Execution host for human mode: claude|codex|opencode|ollama")
     .option("--runner <host>", "Runner adapter when --host ollama: claude|codex|opencode")
+    .option("--model <name>", "Ollama model override when Ollama is enabled")
     .option("--timeout <seconds>", "Apply a default stage timeout hint", parseInt)
     .option("--max-parallel <n>", "Max concurrent tasks in a wave", parseInt)
     .option("--isolation <mode>", "Isolation mode: index|full|sparse")
@@ -225,6 +226,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .option("--tactic <name>", "Run a specific tactic", undefined)
     .option("--host <host>", "Execution host for human mode: claude|codex|opencode|ollama")
     .option("--runner <host>", "Runner adapter when --host ollama: claude|codex|opencode")
+    .option("--model <name>", "Ollama model override when Ollama is enabled")
     .option("--from-stage <id>", "Resume from a specific stage", undefined)
     .option("--dry-run", "Parse and validate without executing", false)
     .option("--force-rerun", "Ignore cache, re-run all stages", false)
@@ -447,7 +449,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
 
   program
     .command("config [subcommand]")
-    .description("Show the effective Lineup runtime configuration")
+    .description("Edit project config or inspect the effective Lineup runtime configuration")
     .option("--host <host>", "Inspect config for a specific local execution host: claude|codex|opencode")
     .option("--json", "Emit machine-readable JSON output")
     .action((subcommand: string | undefined, opts: ConfigCommandOptions) => {
@@ -456,7 +458,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
           code: "invalid_args"
         });
       }
-      return commandHandlers.config(opts);
+      return commandHandlers.config({ ...opts, mode: subcommand === "show" || opts.json ? "show" : "edit" });
     });
 
   program
@@ -524,6 +526,9 @@ export function formatCliErrorMessage(error: unknown, argv: string[] = process.a
 }
 
 export function printCliError(error: unknown): void {
+  if (error instanceof CliError && error.alreadyReported) {
+    return;
+  }
   const message = formatCliErrorMessage(error);
   process.stderr.write(`${message}\n`);
 }
@@ -565,7 +570,11 @@ function isDirectExecution(argv: string[]): boolean {
     return false;
   }
 
-  return path.resolve(entry) === path.resolve(packageRoot(), "dist", "cli.js");
+  const resolved = path.resolve(entry);
+  return (
+    resolved === path.resolve(packageRoot(), "dist", "cli.js") ||
+    resolved === path.resolve(packageRoot(), "src", "cli.ts")
+  );
 }
 
 if (isDirectExecution(process.argv)) {

@@ -35,6 +35,11 @@ describe("pipeline state", () => {
     const state = defaultPipelineState({
       runId,
       workflow: workflowPath,
+      taskPrompt: "Ship the dev runner",
+      executionHost: "ollama",
+      runnerHost: "codex",
+      forceOllamaBackend: true,
+      ollamaModel: "qwen3-coder:30b",
       gateTimeoutSeconds: 15,
       gitTreeSha: "tree-abc123"
     });
@@ -50,6 +55,11 @@ describe("pipeline state", () => {
 
     expect(saved.run_id).toBe(runId);
     expect(saved.workflow).toBe(workflowPath);
+    expect(saved.task_prompt).toBe("Ship the dev runner");
+    expect(saved.execution_host).toBe("ollama");
+    expect(saved.runner_host).toBe("codex");
+    expect(saved.force_ollama_backend).toBe(true);
+    expect(saved.ollama_model).toBe("qwen3-coder:30b");
     expect(saved.gate_timeout_seconds).toBe(15);
     expect(saved.git_tree_sha).toBe("tree-abc123");
     expect(readFileSync(pipelineStateFile(runId, tempDir), "utf8")).toContain('"run_id": "run-123"');

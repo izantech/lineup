@@ -40,7 +40,8 @@ lineup install --host all
 lineup update --host all
 lineup status --host all
 lineup status --host all --artifacts
-lineup config --host codex
+lineup config
+lineup config show --host codex
 lineup doctor
 lineup uninstall --host opencode
 ```
@@ -54,9 +55,9 @@ lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup config [show] [--host claude|codex|opencode] [--json]
 lineup doctor [--json]
-lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
+lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--model <name>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup init [--workflow <name>] [--json]
-lineup run [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
+lineup run [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--model <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup bridge start <task> --executor-host <host> [--workflow <path>] [--tactic <name>] [--approve-plan] [--gate-timeout <seconds>] [--json]
 lineup bridge events <run-id> --after <seq> --wait <seconds> [--json]
 lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>] [--json]
@@ -92,6 +93,7 @@ For local execution:
 
 - `--host claude|codex|opencode` uses the normal runner directly, with optional Ollama integration if enabled in config
 - `--host ollama --runner claude|codex|opencode` forces that runner through the local Ollama backend
+- any Ollama-backed path now requires an explicit model, either via `--model <name>` or `ollama.model` in `.lineup/config.yaml`
 
 Generated skills should prefer the bridge API:
 
@@ -105,7 +107,8 @@ Use `lineup gate respond` only for raw host-mode consumers; generated skills sho
 For first-run local usage, prefer `lineup start "<task>"`. It runs `init`-style
 scaffolding automatically, checks workflow and git readiness, and only hands off to
 the pipeline when the repo is ready. `lineup init` remains available when you want
-manual control over scaffolding.
+manual control over scaffolding, and the first interactive `lineup init` opens the
+project config editor automatically once scaffolding is in place.
 
 `./dev install local` is a clean replace flow: it removes the previously installed
 global CLI, clears managed host installs, installs missing CLI build dependencies if
@@ -172,6 +175,8 @@ Lineup uses canonical templates plus host adapters:
 ./dev build                     # Build CLI
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
+./dev cli -- run "<task>"       # Run lineup CLI from source
+./dev cli -- config             # Run lineup config from source
 ./dev install local             # Build from source and install CLI + detected host skills
 ./dev install remote            # Install latest from npm
 ./dev install clean [--purge]   # Remove CLI and host skills

@@ -3,12 +3,14 @@ import type { ErrorCode } from "./types.js";
 export class CliError extends Error {
   code: string;
   exitCode: number;
+  alreadyReported: boolean;
 
-  constructor(message: string, options?: { code?: string; exitCode?: number }) {
+  constructor(message: string, options?: { code?: string; exitCode?: number; alreadyReported?: boolean }) {
     super(message);
     this.name = "CliError";
     this.code = options?.code ?? "cli_error";
     this.exitCode = options?.exitCode ?? 1;
+    this.alreadyReported = options?.alreadyReported ?? false;
   }
 }
 

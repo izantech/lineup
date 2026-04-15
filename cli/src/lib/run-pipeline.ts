@@ -62,7 +62,7 @@ import { notifyPipelineComplete } from "./notify.js";
 import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
 import { CliError } from "./errors.js";
 import { inspectGitProject } from "./git.js";
-import { readOllamaConfig } from "./config.js";
+import { DEFAULT_OLLAMA, readOllamaConfig, requireOllamaModel } from "./config.js";
 import { buildAgentSystemPrompt } from "./prompt-builder.js";
 
 
@@ -158,6 +158,11 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       defaultPipelineState({
         runId,
         workflow: workflowPath,
+        taskPrompt: options.prompt,
+        executionHost: options.executionHost ?? options.host,
+        runnerHost: options.runnerHost ?? options.host,
+        forceOllamaBackend: options.forceOllamaBackend,
+        ollamaModel: options.model,
         gateTimeoutSeconds: options.gateTimeout,
         gitTreeSha,
         status: "running"
@@ -211,6 +216,35 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   try {
     acquireRuntimeLock(projectRoot, runId, workflowPath);
     lockAcquired = true;
+
+    const cliOllamaOverride = options.model || options.forceOllamaBackend
+      ? {
+          ollama: {
+            ...(options.forceOllamaBackend ? { enabled: true, scope: "full" as const } : {}),
+            ...(options.model ? { model: options.model } : {}),
+            ...(options.forceOllamaBackend
+              ? {
+                  hostIntegration: {
+                    enabled: true,
+                    strategy: "launch" as const
+                  }
+                }
+              : {})
+          }
+        }
+      : undefined;
+    const ollama = readOllamaConfig({
+      projectRoot,
+      ...(localAgentRunner?.host ?? options.host ? { host: localAgentRunner?.host ?? options.host } : {}),
+      ...(cliOllamaOverride ? { cli: cliOllamaOverride } : {})
+    });
+    if (ollama?.enabled) {
+      requireOllamaModel({
+        projectRoot,
+        ...(localAgentRunner?.host ?? options.host ? { host: localAgentRunner?.host ?? options.host } : {}),
+        ...(cliOllamaOverride ? { cli: cliOllamaOverride } : {})
+      }, "Ollama is enabled but no model is configured. Pass --model <name> or set ollama.model in .lineup/config.yaml.");
+    }
 
     // 5. Resolve execution order
     const waves = resolveExecutionOrder(workflow);
@@ -275,6 +309,8 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             options.validateOutputs !== false,
             runMode,
             localAgentRunner,
+            options.forceOllamaBackend ?? false,
+            options.model,
             (error, blockedStageId, timeoutMs) => {
               pipelineState = recordGateTimeout(
                 pipelineState,
@@ -308,7 +344,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             emitStatus,
             hooks,
             runMode,
-            localAgentRunner
+            localAgentRunner,
+            options.forceOllamaBackend ?? false,
+            options.model
           );
           stageResults.set(stageId, planResult);
           expressionCtx.stages[stageId] = { outputs: planResult.outputs };
@@ -655,11 +693,12 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     // Cleanup on error (keep cache for debugging)
     cleanup(artifactDir, cacheDir, false);
     if (preserveRecoveryMessage && error instanceof CliError) {
+      error.alreadyReported = runMode === "human";
       throw error;
     }
     throw error instanceof CliError
-      ? new CliError(failureMessage, { code: error.code, exitCode: error.exitCode })
-      : new CliError(failureMessage, { code: "command_failed" });
+      ? new CliError(failureMessage, { code: error.code, exitCode: error.exitCode, alreadyReported: runMode === "human" })
+      : new CliError(failureMessage, { code: "command_failed", alreadyReported: runMode === "human" });
   } finally {
     if (lockAcquired) {
       releaseRuntimeLock(projectRoot, runId);
@@ -1043,6 +1082,8 @@ function buildStageAgentPrompt(input: {
   stage: WorkflowStage;
   projectRoot: string;
   host?: HostName;
+  forceOllamaBackend?: boolean;
+  ollamaModel?: string;
   taskPrompt: string;
   ctx: ExpressionContext;
   outputSchema: string;
@@ -1050,7 +1091,7 @@ function buildStageAgentPrompt(input: {
 }): string {
   const agentName = input.stage.agent ?? "architect";
   const outputTemplate = loadOutputTemplate(input.projectRoot, agentName);
-  const useCompactContract = shouldUseCompactOllamaHostPrompt(input.projectRoot, input.host);
+  const useCompactContract = input.forceOllamaBackend || shouldUseCompactOllamaHostPrompt(input.projectRoot, input.host);
   const extraInstructions = useCompactContract
     ? buildCompactStageExtraInstructions({
         stage: input.stage,
@@ -1093,7 +1134,27 @@ function buildStageAgentPrompt(input: {
     promptTemplate: "{{AGENT_BODY}}",
     configOptions: {
       projectRoot: input.projectRoot,
-      ...(input.host ? { host: input.host } : {})
+      ...(input.host ? { host: input.host } : {}),
+      ...((input.forceOllamaBackend || input.ollamaModel)
+        ? {
+            cli: {
+              ollama: {
+                ...(input.forceOllamaBackend ? { enabled: true } : {}),
+                ...(input.ollamaModel ? { model: input.ollamaModel } : {}),
+                ...(input.forceOllamaBackend
+                  ? {
+                      scope: "full",
+                      baseUrl: DEFAULT_OLLAMA.baseUrl,
+                      hostIntegration: {
+                        enabled: true,
+                        strategy: "launch"
+                      }
+                    }
+                  : {})
+              }
+            }
+          }
+        : {})
     },
     extraInstructions
   });
@@ -1333,9 +1394,8 @@ function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record
   if (normalizedWhatFound === null) {
     return null;
   }
-  if (normalizedWhatFound) {
-    doc.what_found = normalizedWhatFound;
-  }
+  doc.what_found = normalizedWhatFound ?? inferMissingResearchWhatFound(doc);
+  doc.how_it_works = normalizeResearchHowItWorks(doc);
   doc.constraints = normalizeResearchObjectField(doc.constraints);
   doc.gaps = normalizeResearchObjectField(doc.gaps);
   const today = new Date().toISOString().slice(0, 10);
@@ -1346,6 +1406,25 @@ function normalizeResearchDocument(payload: unknown, taskPrompt: string): Record
   doc.status = "complete";
   doc.pipeline_stage = doc.pipeline_stage ?? 2;
   return doc;
+}
+
+function inferMissingResearchWhatFound(doc: Record<string, unknown>): Record<string, unknown> {
+  const fieldNames = Object.keys(doc).filter((key) => !["type", "agent", "date", "topic", "status", "pipeline_stage"].includes(key));
+  return fieldNames.length > 0
+    ? { observed_fields: fieldNames }
+    : {};
+}
+
+function normalizeResearchHowItWorks(doc: Record<string, unknown>): string {
+  if (typeof doc.how_it_works === "string" && doc.how_it_works.trim().length > 0) {
+    return doc.how_it_works.trim();
+  }
+
+  if (typeof doc.name === "string" && doc.name.trim().length > 0) {
+    return `Recovered research output from a ${doc.name.trim()}-shaped payload.`;
+  }
+
+  return "Recovered research output from a partially structured payload.";
 }
 
 function normalizeResearchWhatFound(value: unknown): Record<string, unknown> | null | undefined {
@@ -1552,6 +1631,8 @@ async function executePreStage(
   validateOutputs = true,
   runMode: "human" | "host" = "human",
   localAgentRunner?: LocalAgentRunner,
+  forceOllamaBackend = false,
+  ollamaModel?: string,
   onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
@@ -1612,6 +1693,8 @@ async function executePreStage(
       stage,
       projectRoot,
       host,
+      forceOllamaBackend,
+      ollamaModel,
       taskPrompt,
       ctx,
       outputSchema: stage.agent === "researcher" ? "Research" : stage.agent,
@@ -1630,6 +1713,7 @@ async function executePreStage(
             workingDirectory: projectRoot,
             agent: stage.agent,
             prompt,
+            ollamaModel,
             timeoutMs: localAgentTimeoutMs,
             addDirs: [artifactDir],
             outputSchemaPath: resolveArtifactSchemaPath(stage.agent, schemaLabel),
@@ -1970,13 +2054,17 @@ async function executePlannerPhase(
   emitStatus: (stageId: string, chunk: string, final?: boolean) => void,
   hooks: RunPipelineHooks,
   runMode: "human" | "host",
-  localAgentRunner?: LocalAgentRunner
+  localAgentRunner?: LocalAgentRunner,
+  forceOllamaBackend = false,
+  ollamaModel?: string
 ): Promise<StageResult> {
   const planPath = resolve(artifactDir, "plan.yaml");
   const basePrompt = buildStageAgentPrompt({
     stage,
     projectRoot,
     host,
+    forceOllamaBackend,
+    ollamaModel,
     taskPrompt,
     ctx,
     outputSchema: "Plan",
@@ -1999,6 +2087,7 @@ async function executePlannerPhase(
           workingDirectory: projectRoot,
           agent: stage.agent ?? "architect",
           prompt,
+          ollamaModel,
           timeoutMs: localAgentTimeoutMs,
           addDirs: [artifactDir],
           outputSchemaPath: resolveArtifactSchemaPath(stage.agent ?? "architect", "Plan"),

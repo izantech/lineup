@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import process from "node:process";
 import { createLocalAgentRunner } from "../lib/agent-runner.js";
 import type { ExecutionHostName, HostName } from "../lib/constants.js";
+import { readOllamaConfig } from "../lib/config.js";
 import { CliError } from "../lib/errors.js";
 import { isInteractive } from "../lib/prompts.js";
 import { runPipeline } from "../lib/run-pipeline.js";
@@ -85,6 +86,30 @@ export async function runRunCommand(options: RunCommandOptions): Promise<void> {
     });
   }
 
+  const pipelineHost = localAgentRunner?.host ?? runnerResolution.runnerHost ?? (options.host === "ollama" ? undefined : options.host);
+  const ollamaConfig = mode === "human"
+    ? readOllamaConfig({
+        projectRoot: process.cwd(),
+        ...(pipelineHost ? { host: pipelineHost } : {}),
+        ...(options.model
+          ? {
+              cli: {
+                ollama: {
+                  enabled: true,
+                  model: options.model
+                }
+              }
+            }
+          : {})
+      })
+    : null;
+  const usesOllama = mode === "human" && (options.host === "ollama" || Boolean(ollamaConfig));
+  if (options.model && !usesOllama) {
+    throw new CliError("--model is only valid when Ollama is enabled for the selected run.", {
+      code: "invalid_args"
+    });
+  }
+
   if (mode === "human" && localAgentRunner) {
     if (options.host === "ollama") {
       process.stderr.write(`Using local host 'ollama' with runner '${localAgentRunner.host}' for Lineup agent stages.\n`);
@@ -93,10 +118,15 @@ export async function runRunCommand(options: RunCommandOptions): Promise<void> {
     }
   }
 
-  const pipelineHost = localAgentRunner?.host ?? runnerResolution.runnerHost ?? (options.host === "ollama" ? undefined : options.host);
-
   const result = await runPipeline(
-    { ...options, mode, host: pipelineHost },
+    {
+      ...options,
+      mode,
+      host: pipelineHost,
+      executionHost: options.host,
+      runnerHost: localAgentRunner?.host ?? runnerResolution.runnerHost,
+      forceOllamaBackend: runnerResolution.forceOllama
+    },
     localAgentRunner ? { localAgentRunner } : {}
   );
 

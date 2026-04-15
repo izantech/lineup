@@ -4,7 +4,10 @@ import path from "node:path";
 import { initializeGitRepository, inspectGitProject } from "../lib/git.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { lineupProjectRoot, projectRoot } from "../lib/paths.js";
+import { projectConfigPath } from "../lib/config.js";
+import { isInteractive } from "../lib/prompts.js";
 import type { GitProjectStatus } from "../lib/git.js";
+import { runConfigCommand } from "./config.js";
 
 export type InitCommandOptions = {
   json?: boolean;
@@ -156,6 +159,8 @@ export function initializeLineupProject(options: InitCommandOptions, cwd = proce
 }
 
 export async function runInitCommand(options: InitCommandOptions): Promise<void> {
+  const root = projectRoot(process.cwd());
+  const hadProjectConfig = existsSync(projectConfigPath(root));
   const { entries, gitProject } = initializeLineupProject(options);
 
   if (options.json) {
@@ -170,5 +175,18 @@ export async function runInitCommand(options: InitCommandOptions): Promise<void>
 
   if (!gitProject.hasHeadCommit) {
     printTableLine('note: native Lineup runs require at least one git commit. Run `git add -A && git commit -m "Initial commit"` before `lineup run`.')
+  }
+
+  const createdEntries = entries.filter((entry) => entry.status === "created");
+  const firstInitialization =
+    !hadProjectConfig &&
+    createdEntries.some((entry) =>
+      entry.path.includes(".lineup-core/workflows/") ||
+      entry.path.includes(`${path.sep}.lineup${path.sep}.runs`) ||
+      entry.kind === "repository"
+    );
+
+  if (!options.json && firstInitialization && isInteractive()) {
+    await runConfigCommand({ mode: "edit" });
   }
 }

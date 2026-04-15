@@ -2401,6 +2401,84 @@ gaps:
     }
   });
 
+  it("fills missing required research fields from a partially structured payload", async () => {
+    const projectRoot = join(tempDir, "project-research-missing-required-fields");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-missing-required-fields
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke() {
+        return {
+          host: "codex",
+          stderr: "",
+          content: `name: exec_command
+parameters:
+  cmd:
+    - npm
+    - --prefix cli run
+    - add
+    - human-run-command
+type: research
+agent: researcher
+date: 2026-04-15
+topic: add-a-run-command
+status: complete
+pipeline_stage: 2
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsmis1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        what_found: {
+          observed_fields: ["name", "parameters"]
+        },
+        how_it_works: "Recovered research output from a exec_command-shaped payload.",
+        constraints: {},
+        gaps: {}
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("removes the previous stage artifact before retrying a malformed researcher response", async () => {
     const projectRoot = join(tempDir, "project-research-retry-artifact-cleanup");
     writeTemplatesTo(projectRoot);

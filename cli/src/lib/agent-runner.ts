@@ -16,6 +16,7 @@ export type LocalAgentInvocationInput = {
   workingDirectory: string;
   agent: AgentRole;
   prompt: string;
+  ollamaModel?: string;
   timeoutMs?: number;
   addDirs?: string[];
   outputSchemaPath?: string;
@@ -494,6 +495,7 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       workingDirectory: input.workingDirectory,
       agent: input.agent,
       prompt: attempt.prompt,
+      ollamaModel: input.ollamaModel,
       timeoutMs: input.timeoutMs,
       addDirs: input.addDirs,
       schemaContent: attempt.schemaContent,
@@ -603,8 +605,9 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
     projectRoot: input.projectRoot,
     workingDirectory: input.workingDirectory,
     agent: input.agent,
-    prompt: input.prompt,
-    timeoutMs: input.timeoutMs,
+      prompt: input.prompt,
+      ollamaModel: input.ollamaModel,
+      timeoutMs: input.timeoutMs,
     addDirs: input.addDirs,
     schemaContent
   }).integration)) {
@@ -692,8 +695,9 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
     projectRoot: input.projectRoot,
     workingDirectory: input.workingDirectory,
     agent: input.agent,
-    prompt: input.prompt,
-    timeoutMs: input.timeoutMs,
+      prompt: input.prompt,
+      ollamaModel: input.ollamaModel,
+      timeoutMs: input.timeoutMs,
     addDirs: input.addDirs,
     outputPath,
     forceOllamaBackend: input.forceOllamaBackend ?? false
@@ -709,8 +713,9 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
         projectRoot: input.projectRoot,
         workingDirectory: input.workingDirectory,
         agent: input.agent,
-        prompt: input.prompt,
-      timeoutMs: input.timeoutMs,
+          prompt: input.prompt,
+          ollamaModel: input.ollamaModel,
+          timeoutMs: input.timeoutMs,
       addDirs: input.addDirs,
       outputPath,
       schemaPath: normalizedSchemaPath,
@@ -766,8 +771,9 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
     projectRoot: input.projectRoot,
     workingDirectory: input.workingDirectory,
     agent: input.agent,
-    prompt: input.prompt,
-    timeoutMs: input.timeoutMs,
+      prompt: input.prompt,
+      ollamaModel: input.ollamaModel,
+      timeoutMs: input.timeoutMs,
     addDirs: input.addDirs,
     forceOllamaBackend: input.forceOllamaBackend ?? false
   });

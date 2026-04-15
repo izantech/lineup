@@ -37,6 +37,9 @@ ${GREEN}Install:${NC}
   install clean           Remove CLI and host skills
   install clean --purge   Also remove custom agent config and memory
 
+${GREEN}CLI:${NC}
+  cli -- <args...>        Run the source CLI directly (no install needed)
+
 ${GREEN}Build:${NC}
   build                   Build CLI
   typecheck               Run TypeScript type checks
@@ -200,6 +203,14 @@ run_setup() {
     echo -e "\n${GREEN}Setup complete${NC}"
 }
 
+run_cli() {
+    ensure_cli_deps
+    if [[ "${1:-}" == "--" ]]; then
+        shift
+    fi
+    exec "$ROOT_DIR/cli/node_modules/.bin/tsx" "$ROOT_DIR/cli/src/cli.ts" "$@"
+}
+
 run_clean() {
     local dry_run=false
     [[ "${1:-}" == "--dry-run" ]] && dry_run=true
@@ -299,6 +310,7 @@ main() {
                 python3 "$ROOT_DIR/scripts/benchmark-ollama.py" "$@"
             fi
             ;;
+        cli)       run_cli "$@" ;;
         setup)     run_setup ;;
         help)      usage ;;
         *)         die "unknown command '$command' — run ./dev help" ;;

@@ -53,6 +53,10 @@ function rerunCommand(options: StartCommandOptions): string {
     parts.push("--runner", options.runner);
   }
 
+  if (options.model) {
+    parts.push("--model", shellQuote(options.model));
+  }
+
   if (options.mode) {
     parts.push("--mode", options.mode);
   }
