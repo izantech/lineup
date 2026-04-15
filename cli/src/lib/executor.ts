@@ -722,7 +722,7 @@ function normalizeYamlArtifact(
   }
 }
 
-function normalizeReviewArtifact(raw: string, source: string): string {
+export function normalizeReviewArtifact(raw: string, source: string): string {
   try {
     validateReviewYaml(raw, source);
     return raw;
@@ -735,25 +735,31 @@ function normalizeReviewArtifact(raw: string, source: string): string {
     parsed = parseRestrictedYaml(raw, source);
   } catch (error) {
     if (error instanceof CliError && error.code === "yaml_parse_failed") {
-      const recovered = selectRestrictedYamlDocument(raw, source, {
-        describe: "review artifact",
-        normalize: (payload) => {
-          if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-            return null;
-          }
+      try {
+        const recovered = selectRestrictedYamlDocument(raw, source, {
+          describe: "review artifact",
+          normalize: (payload) => {
+            if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+              return null;
+            }
 
-          const candidate = stringifyYaml(payload);
-          try {
-            validateReviewYaml(candidate, source);
-            return candidate;
-          } catch {
-            return null;
+            const candidate = stringifyYaml(payload);
+            try {
+              validateReviewYaml(candidate, source);
+              return candidate;
+            } catch {
+              return null;
+            }
           }
+        });
+
+        if (recovered) {
+          return recovered;
         }
-      });
-
-      if (recovered) {
-        return recovered;
+      } catch (recoveryError) {
+        if (!(recoveryError instanceof CliError) || recoveryError.code !== "yaml_parse_failed") {
+          throw recoveryError;
+        }
       }
     }
 
@@ -790,14 +796,23 @@ function normalizeReviewArtifact(raw: string, source: string): string {
 }
 
 function normalizeMarkdownReviewArtifact(raw: string): Record<string, unknown> | undefined {
-  const statusMatch = raw.match(/\*\*Status:\s*([A-Z_ ]+)\*\*/i);
-  const summaryMatch = raw.match(/\*\*Summary:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
+  const statusMatch =
+    raw.match(/\*\*Status:\s*([A-Z_ ]+)\*\*/i) ??
+    raw.match(/\*\*Status:\*\*\s*([A-Z_ ]+)(?:\n|$)/i) ??
+    raw.match(/\*\*Status\*\*:\s*([A-Z_ ]+)(?:\n|$)/i);
+  const summaryMatch =
+    raw.match(/\*\*Summary:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i) ??
+    raw.match(/\*\*Summary\*\*:\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
   if (!statusMatch && !summaryMatch) {
     return undefined;
   }
 
-  const issuesMatch = raw.match(/\*\*Issues:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
-  const testsMatch = raw.match(/\*\*Test results:\*\*\s*([\s\S]*)$/i);
+  const issuesMatch =
+    raw.match(/\*\*Issues:\*\*\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i) ??
+    raw.match(/\*\*Issues\*\*:\s*([\s\S]*?)(?:\n\s*\n\*\*|\n\*\*|$)/i);
+  const testsMatch =
+    raw.match(/\*\*Test results:\*\*\s*([\s\S]*)$/i) ??
+    raw.match(/\*\*Test results\*\*:\s*([\s\S]*)$/i);
   const testLines = (testsMatch?.[1] ?? "")
     .split("\n")
     .map((line) => line.trim())
@@ -1011,13 +1026,84 @@ function normalizeImplementationIssues(value: unknown): ImplementationIssue[] {
   });
 }
 
-function normalizeTaskExecutionResult(raw: string, task: CompiledTask, source: string): NativeTaskExecutionResult {
-  const parsed = JSON.parse(repairJsonOutput(raw).content) as Record<string, unknown>;
-  const summary = firstNonEmptyString(parsed.summary, parsed.result, parsed.message);
+function extractMarkdownSection(raw: string, heading: string): string | null {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = raw.match(new RegExp(`\\*\\*${escaped}:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\s*\\*\\*[^\\n]+:\\*\\*|$)`, "i"));
+  return match?.[1]?.trim() ?? null;
+}
+
+function summarizeProseTaskResult(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const [firstBlock] = trimmed.split(/\n\s*\n\*\*/);
+  const summary = firstBlock?.trim();
+  return summary && summary.length > 0 ? summary : null;
+}
+
+function parseProseListSection(section: string | null): string[] {
+  if (!section) {
+    return [];
+  }
+
+  const trimmed = section.trim();
+  if (!trimmed || /^none\.?$/i.test(trimmed)) {
+    return [];
+  }
+
+  const bulletItems = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+
+  if (bulletItems.length > 0) {
+    return bulletItems;
+  }
+
+  return [trimmed.replace(/\s+/g, " ")];
+}
+
+function normalizeTaskExecutionResultFromProse(raw: string, task: CompiledTask, source: string): NativeTaskExecutionResult {
+  const summary = summarizeProseTaskResult(raw);
   if (!summary) {
     throw new CliError(`Task response ${source} is invalid.`, {
       code: "malformed_output"
     });
+  }
+
+  const defaultFile = task.write_scope?.[0] ?? task.deliverables?.[0] ?? task.id;
+  const changes_made = parseProseListSection(extractMarkdownSection(raw, "Changes made")).map((description) => ({
+    file: defaultFile,
+    description,
+    task_id: task.id
+  }));
+  const issues_encountered = parseProseListSection(extractMarkdownSection(raw, "Issues encountered")).map((issue) => ({
+    issue,
+    impact: "none" as const
+  }));
+
+  return {
+    status: "complete",
+    summary,
+    changes_made,
+    issues_encountered
+  };
+}
+
+export function normalizeTaskExecutionResult(raw: string, task: CompiledTask, source: string): NativeTaskExecutionResult {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(repairJsonOutput(raw).content) as Record<string, unknown>;
+  } catch {
+    return normalizeTaskExecutionResultFromProse(raw, task, source);
+  }
+  const summary = firstNonEmptyString(parsed.summary, parsed.result, parsed.message);
+  if (!summary) {
+    return normalizeTaskExecutionResultFromProse(raw, task, source);
   }
 
   return {

@@ -659,6 +659,86 @@ gaps:
     }
   });
 
+  it("repairs colon-heavy research summaries into a valid YAML scalar without retrying", async () => {
+    const projectRoot = join(tempDir, "project-research-colon-scalar");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-colon-scalar
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    let attempts = 0;
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        attempts += 1;
+        const content = `what_found:
+  files:
+    - README.md
+    - .lineup-core/workflows/full-pipeline.yaml
+how_it_works: The Lineup smoke pipeline is defined by a workflow that consists of multiple stages: triage, research, plan, plan-approval, implement, and verify.
+constraints:
+  dependencies:
+    - Workflow file must exist at .lineup-core/workflows/full-pipeline.yaml
+gaps:
+  pending: []
+`;
+
+        if (input.expectedOutputPath) {
+          writeFileSync(input.expectedOutputPath, content, "utf8");
+        }
+
+        return {
+          host: "codex",
+          stderr: "",
+          content
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rscln1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(attempts).toBe(1);
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        how_it_works:
+          "The Lineup smoke pipeline is defined by a workflow that consists of multiple stages: triage, research, plan, plan-approval, implement, and verify."
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("runs plan, implement, and verify through the local human agent runner", async () => {
     const projectRoot = join(tempDir, "project-human-runner");
     writeTemplatesTo(projectRoot);
@@ -892,6 +972,114 @@ further_exploration: []
     }
   });
 
+  it("normalizes prose developer task summaries through the local native driver", async () => {
+    const projectRoot = join(tempDir, "project-human-runner-prose");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: human-prose
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+  - id: plan
+    type: agent
+    agent: architect
+  - id: implement
+    type: agent
+    agent: developer
+  - id: verify
+    type: agent
+    agent: reviewer
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        if (input.agent === "researcher") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: prose-task
+status: complete
+pipeline_stage: research
+what_found: {}
+how_it_works: Research completed through the local runner.
+constraints: {}
+gaps: {}
+`
+          };
+        }
+
+        if (input.agent === "architect") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: APPROVED_PLAN
+          };
+        }
+
+        if (input.agent === "developer") {
+          return {
+            host: "codex",
+            stderr: "",
+            content: `I reviewed the requested task and updated the workspace accordingly.
+
+**Changes made:** None
+
+**Issues encountered:** None
+
+**Verification results:** The requested condition was already satisfied.`
+          };
+        }
+
+        return {
+          host: "codex",
+          stderr: "",
+          content: REVIEW_YAML
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Make the deterministic README update"
+        },
+        {
+          runId: "humpr1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("implement")?.outputs).toHaveProperty("task_results");
+      expect(result.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("rewrites OpenCode stage prompts to use lower-case tool names", async () => {
     const projectRoot = join(tempDir, "project-opencode-prompt");
     writeTemplatesTo(projectRoot);
@@ -1089,12 +1277,92 @@ gaps:
       expect(prompts[0]).toContain("Do not wrap the response in markdown, prose, code fences, or commentary.");
       expect(prompts[0]).toContain("This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.");
       expect(prompts[0]).toContain("Do not make the requested code change during research. Only inspect and report.");
+      expect(prompts[0]).toContain("`what_found`, `constraints`, and `gaps` must be YAML mappings.");
       expect(prompts[0]).toContain("When reusing file contents in a later `edit`, copy only the raw file text");
       expect(prompts[1]).toContain("Previous output was invalid because it did not produce exactly one YAML Research document.");
       expect(prompts[1]).toContain("Rewrite the same facts into one YAML document only.");
       expect(prompts[1]).toContain("Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.");
       expect(prompts[1]).toContain("Do not call edit, write, or mutating bash commands while retrying this research stage.");
+      expect(prompts[1]).toContain("what_found: {}");
+      expect(prompts[1]).toContain("constraints: {}");
+      expect(prompts[1]).toContain("gaps: {}");
       expect(prompts[1]).toContain("Use the declared Research schema fields exactly once and keep the payload directly parseable.");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("extends local agent stage timeouts when true Ollama host integration is enabled", async () => {
+    const projectRoot = join(tempDir, "project-ollama-host-timeout");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    mkdirSync(join(projectRoot, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: qwen3-coder:30b\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: auto\n`,
+      "utf8"
+    );
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: ollama-timeout
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const seenTimeouts: number[] = [];
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        seenTimeouts.push(input.timeoutMs ?? 0);
+        return {
+          host: "claude",
+          stderr: "",
+          content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: ollama timeout
+status: complete
+pipeline_stage: research
+what_found: {}
+how_it_works: Timeout is extended for true Ollama host integration.
+constraints: {}
+gaps: {}
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human"
+        },
+        {
+          runId: "oltm01",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(seenTimeouts).toEqual([600_000]);
     } finally {
       process.chdir(origCwd);
     }

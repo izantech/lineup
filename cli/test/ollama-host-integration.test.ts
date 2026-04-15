@@ -142,7 +142,85 @@ const IMPLEMENT_JSON = JSON.stringify({
   issues_encountered: []
 })
 
+const RESEARCH_JSON = JSON.stringify({
+  what_found: {
+    files: ["README.md"]
+  },
+  how_it_works: "Captured by the Ollama host integration harness.",
+  constraints: {
+    tooling: "local"
+  },
+  gaps: {
+    pending: []
+  }
+})
+
+const PLAN_JSON = JSON.stringify({
+  apiVersion: "lineup/v3",
+  kind: "Plan",
+  status: "approved",
+  summary: "Integrate native executor",
+  approaches: [
+    {
+      name: "Native",
+      strategy: "Execute inside Lineup"
+    }
+  ],
+  recommendation: {
+    approach: "Native",
+    rationale: "Avoid the TF bridge"
+  },
+  changes: [
+    {
+      file: "cli/src/lib/executor.ts",
+      change: "Add executor",
+      rationale: "Run tasks natively"
+    }
+  ],
+  acceptance_criteria: [
+    {
+      criterion: "Pipeline reaches verify"
+    }
+  ],
+  risks: [
+    {
+      risk: "Tests could depend on external host tooling",
+      mitigation: "Seed native driver in tests"
+    }
+  ]
+})
+
+const REVIEW_JSON = JSON.stringify({
+  apiVersion: "lineup/v3",
+  kind: "Review",
+  status: "PASS",
+  summary: "Pipeline completed through native executor.",
+  issues: [],
+  test_results: {
+    test_suite: {
+      status: "pass"
+    }
+  }
+})
+
 const TEACHER_PROSE = "The bundled explain tactic resolved successfully, but the host returned plain prose instead of structured YAML."
+
+const EXPLANATION_JSON = JSON.stringify({
+  type: "explanation",
+  agent: "teacher",
+  date: "2026-04-14",
+  topic: "explain-tactic",
+  status: "complete",
+  pipeline_stage: "explain",
+  learning_objectives: ["Understand bundled tactic resolution."],
+  prerequisites: [],
+  explanation: {
+    overview: "Recovered from prose output.",
+    sections: [],
+    raw_output: TEACHER_PROSE
+  },
+  further_exploration: []
+})
 
 const HOSTS: HostName[] = ["claude", "codex", "opencode"]
 
@@ -304,22 +382,19 @@ function responseFor(agent) {
     case 'teacher':
       return teacherMode === 'prose' ? ${escapeForScript(TEACHER_PROSE)} : ${escapeForScript(EXPLANATION_YAML)}
     case 'formatter':
-      return JSON.stringify({
-        type: 'explanation',
-        agent: 'teacher',
-        date: '2026-04-14',
-        topic: 'explain-tactic',
-        status: 'complete',
-        pipeline_stage: 'explain',
-        learning_objectives: ['Understand bundled tactic resolution.'],
-        prerequisites: [],
-        explanation: {
-          overview: 'Recovered from prose output.',
-          sections: [],
-          raw_output: ${escapeForScript(TEACHER_PROSE)}
-        },
-        further_exploration: []
-      })
+      if (prompt.includes('kind: Plan')) {
+        return ${escapeForScript(PLAN_JSON)}
+      }
+      if (prompt.includes('kind: Review') || prompt.includes('**Status')) {
+        return ${escapeForScript(REVIEW_JSON)}
+      }
+      if (prompt.includes('type: research') || prompt.includes('what_found:')) {
+        return ${escapeForScript(RESEARCH_JSON)}
+      }
+      if (prompt.includes('"changes_made"') || prompt.includes('"issues_encountered"')) {
+        return ${escapeForScript(IMPLEMENT_JSON)}
+      }
+      return ${escapeForScript(EXPLANATION_JSON)}
     default:
       return ${escapeForScript(RESEARCH_YAML)}
   }

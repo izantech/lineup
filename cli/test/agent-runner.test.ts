@@ -78,6 +78,47 @@ result: >-
     });
   });
 
+  it("unwraps OpenCode JSON event streams that end with a structured text payload", () => {
+    const raw = [
+      JSON.stringify({
+        type: "step_start",
+        part: { type: "step-start" }
+      }),
+      JSON.stringify({
+        type: "tool_use",
+        part: { type: "tool", tool: "read" }
+      }),
+      JSON.stringify({
+        type: "text",
+        part: {
+          type: "text",
+          text: `what_found:
+  key_files:
+    - path: README.md
+      description: Tiny smoke repo
+how_it_works: Reads the bounded smoke files.
+constraints: {}
+gaps: {}
+`
+        }
+      })
+    ].join("\n");
+
+    expect(parseLocalAgentStructuredOutput(raw)).toEqual({
+      what_found: {
+        key_files: [
+          {
+            path: "README.md",
+            description: "Tiny smoke repo"
+          }
+        ]
+      },
+      how_it_works: "Reads the bounded smoke files.",
+      constraints: {},
+      gaps: {}
+    });
+  });
+
   it("skips permissive schemas for Codex structured output mode", () => {
     const rawSchema = JSON.stringify({
       type: "object",
@@ -712,6 +753,35 @@ linger.unref()
 
     expect(Date.now() - startedAt).toBeLessThan(2_500);
     expect(result.content).toContain("how_it_works: a background process lingered after the main command exited");
+  });
+
+  it("unwraps OpenCode JSON event streams into the final text payload when no artifact file is written", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-opencode-json-stream-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+
+    const fakeOpencodePath = join(binDir, "opencode");
+    writeFakeHostScript(
+      fakeOpencodePath,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ type: 'step_start', part: { type: 'step-start' } }) + '\\n')
+process.stdout.write(JSON.stringify({ type: 'text', part: { type: 'text', text: 'what_found:\\n  key_files:\\n    - path: README.md\\n      description: Tiny smoke repo\\nhow_it_works: Reads the smoke repo.\\nconstraints: {}\\ngaps: {}\\n' } }) + '\\n')
+`
+    );
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    const runner = createLocalAgentRunner("opencode");
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "researcher",
+      prompt: "Inspect the tiny smoke repo.",
+      timeoutMs: 2_000
+    });
+
+    expect(result.content).toContain("what_found:");
+    expect(result.content).toContain("how_it_works: Reads the smoke repo.");
   });
 
   it("falls back from a stalled Claude strict pass to a valid structured rewrite", async () => {

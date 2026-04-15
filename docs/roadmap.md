@@ -201,19 +201,29 @@ Failure classes are now instrumented and no longer conflated:
     produce a valid `research.yaml`
   - the latest `0868fe` rerun still times out at the 300000ms invocation
     boundary, so the blocker is now env-lane completion time/reliability
+  - the next likely incompatibility is request shape against Ollama's
+    Anthropic-compatible endpoint, not the old strict-schema-first launch shape
 - OpenCode:
   - the process starts and logs its one-time SQLite migration
   - it is past the old provider-selection error, but still drifts or emits
     malformed research output on some runs
   - prompt/tool guidance is now tighter about read-only research, bounded file
     inspection, and not pasting rendered `read` output back into edits
+  - the next likely issue is the exact non-interactive headless contract rather
+    than provider selection or simple model-flag wiring
 - Codex:
   - the process starts on `provider: ollama`
   - stderr shows active reasoning and tool planning
   - the runner watches both the final artifact path and Codex's direct `-o`
     output path
   - research normalization now repairs the array-shaped `what_found` form that
-    local models can emit
+    local models can emit, plus colon-heavy `how_it_works` summaries that were
+    previously invalid YAML
+  - reviewer normalization now accepts both `**Status: PASS**` and
+    `**Status**: PASS` markdown output
+  - the latest live failure is no longer parsing: implement/verify can finish,
+    but the final patch no longer applies because the host touched the source
+    repo path instead of staying fully inside the isolated worktree
 
 Current instrumentation:
 
@@ -271,6 +281,9 @@ Comprehensive fix plan:
      - decide whether the env lane needs a longer per-invocation timeout or a
        narrower direct repro that proves where the draft call spends time on
        `qwen3-coder:30b`
+     - trim or normalize any unsupported Anthropic-compatible request fields
+       that Ollama still ignores so Claude headless runs do not block waiting on
+       a feature the compatibility layer does not implement
 3. OpenCode stabilization
    - completed:
      - tighten the research prompt to require exactly one YAML Research document
@@ -284,7 +297,7 @@ Comprehensive fix plan:
      - keep OpenCode on the bounded tiny-repo task instead of broad workspace
        exploration during retry/follow-up behavior
      - determine whether the non-interactive path still needs a different
-       output mode once the bounded prompt behavior is stable
+       output mode or wrapper path once the bounded prompt behavior is stable
 4. Codex stabilization
    - keep `codex exec --oss --local-provider ollama` as the live provider path
    - completed:
@@ -294,11 +307,13 @@ Comprehensive fix plan:
      - normalize array-shaped `what_found` entries into structured `key_files`
        so one common local-model artifact shape no longer fails validation
    - remaining:
-     - rerun Codex on top of the current Claude/OpenCode retry-hardening branch
-     - tighten the research artifact contract so the local model actually writes
-       the expected file instead of free-running in tool/reasoning mode
-   - if needed, add a Codex-specific completion helper that can recover a valid
-     research artifact from returned output when the file is not written
+     - keep native local-host execution fully inside the isolated worktree so
+       the final `workspace.patch` applies cleanly back to the source repo
+     - rerun Codex on top of the current branch once the local-runner root leak
+       is fixed
+   - if needed after that, add a Codex-specific completion helper that can
+     recover a valid research artifact from returned output when the file is not
+     written
 5. Final acceptance
    - green deterministic suite
    - green per-host live smoke for `claude`, `opencode`, and `codex`

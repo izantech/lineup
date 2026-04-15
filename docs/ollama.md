@@ -240,6 +240,9 @@ The hosts are still failing in different ways on the current branch state:
 - the latest `0868fe` run under the `ZmPYGb` smoke root still timed out at the
   300000ms host invocation boundary, so the remaining blocker is not wrapper
   detection anymore but draft completion time/reliability on the env lane
+- the next likely runtime focus is Anthropic-compat request shape rather than
+  prompt wording alone; Ollama's compatibility layer still does not implement
+  every Anthropic feature Claude Code can use against the cloud API
 
 Implication:
 
@@ -264,6 +267,10 @@ Implication:
   must not be pasted back into `edit.oldString`
 - the pre-stage retry loop now clears stale artifacts before retrying, so a bad
   first write cannot immediately satisfy the second attempt with old output
+- the next likely runtime focus is the exact headless launch contract, because
+  OpenCode's Ollama integration is config-injected first and plain model-flag
+  changes are unlikely to resolve the remaining non-terminating runs on their
+  own
 
 Implication:
 
@@ -282,14 +289,24 @@ Implication:
   `what_found` may arrive as an array of `{ path, content }` entries and is
   rewritten into the structured `key_files` object that the Research schema
   expects
+- research normalization also repairs one common colon-heavy scalar shape in
+  `how_it_works`, where local models emit a single unquoted line containing
+  additional `: ` sequences that would otherwise be invalid YAML
+- reviewer normalization now accepts both `**Status: PASS**` and
+  `**Status**: PASS` markdown styles instead of treating the second form as a
+  fatal YAML parse failure
 - tighter researcher prompts and stricter pre-stage artifact validation did not
   eliminate the completion failure
-- Codex has not been rerun yet after the latest Claude/OpenCode-specific retry
-  hardening, so the next Codex pass should be taken on the current branch state
+- the latest preserved live Codex failure moved forward into isolated-worktree
+  application: the generated `workspace.patch` no longer applies cleanly
+  because the host still touched the source repo path instead of staying fully
+  inside the temporary worktree during implement/verify
 
 Implication:
 
-- Codex is now a contract/completion problem, not a provider-selection problem
+- Codex is no longer blocked on provider selection or artifact parsing
+- the next Codex fix is to keep native local-host execution fully inside the
+  isolated workspace so the final patch can apply back to the source repo
 
 ## Recommended configs
 

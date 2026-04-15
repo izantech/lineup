@@ -69,6 +69,38 @@ function readFileIfPresent(filePath?: string): string | null {
   }
 }
 
+function extractEventStreamText(raw: string): string | undefined {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return undefined;
+  }
+
+  const texts: string[] = [];
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (typeof parsed.result === "string") {
+        texts.push(parsed.result);
+      }
+
+      if (parsed.part && typeof parsed.part === "object" && !Array.isArray(parsed.part)) {
+        const part = parsed.part as Record<string, unknown>;
+        if (typeof part.text === "string") {
+          texts.push(part.text);
+        }
+      }
+    } catch {
+      return undefined;
+    }
+  }
+
+  return texts.length > 0 ? texts[texts.length - 1] : undefined;
+}
+
 type HostInvocationTraceEvent = {
   at: string;
   type: string;
@@ -299,14 +331,34 @@ function extractStructuredPayload(raw: string): unknown {
   return undefined;
 }
 
+function looksJsonLike(raw: string): boolean {
+  const trimmed = raw.trimStart();
+  return (
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    trimmed.startsWith("```json") ||
+    trimmed.startsWith("```")
+  );
+}
+
 export function parseLocalAgentStructuredOutput(raw: string): unknown {
+  const eventStreamText = extractEventStreamText(raw);
+  if (eventStreamText !== undefined) {
+    const nested = parseLocalAgentStructuredOutput(eventStreamText);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+
   const extracted = extractStructuredPayload(raw);
   if (extracted !== undefined) {
     return extracted;
   }
 
   try {
-    const repairedJson = JSON.parse(repairJsonOutput(raw).content);
+    const repairedJson = looksJsonLike(raw)
+      ? JSON.parse(repairJsonOutput(raw).content)
+      : JSON.parse(raw);
     if (repairedJson && typeof repairedJson === "object" && !Array.isArray(repairedJson)) {
       const record = repairedJson as Record<string, unknown>;
       if (record.structured_output !== undefined) {
@@ -655,6 +707,14 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
       host: result.host,
       stderr: result.stderr,
       content: fileOutput
+    };
+  }
+  const eventStreamText = extractEventStreamText(result.content);
+  if (eventStreamText !== undefined) {
+    return {
+      host: result.host,
+      stderr: result.stderr,
+      content: eventStreamText
     };
   }
   return result;

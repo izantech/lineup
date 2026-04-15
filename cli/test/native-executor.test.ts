@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createArtifactStore } from "../src/lib/artifact-store.js";
-import { applyWorkspacePatch, executeNativeExecutor, type NativeExecutionDriver } from "../src/lib/executor.js";
+import { applyWorkspacePatch, executeNativeExecutor, normalizeReviewArtifact, type NativeExecutionDriver } from "../src/lib/executor.js";
 import { CliError } from "../src/lib/errors.js";
 
 const APPROVED_PLAN = `apiVersion: lineup/v3
@@ -134,6 +134,25 @@ describe("executeNativeExecutor", () => {
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("normalizes markdown review artifacts when the label and colon are split", () => {
+    const normalized = normalizeReviewArtifact(
+      `**Status**: PASS WITH WARNINGS
+
+**Summary**: Native executor completed with a warning.
+
+**Issues**:
+- Warning: README.md line 2 needs a follow-up check.
+
+**Test results**: No tests were run.
+`,
+      "inline-review"
+    );
+
+    expect(normalized).toContain("kind: Review");
+    expect(normalized).toContain("status: PASS_WITH_WARNINGS");
+    expect(normalized).toContain("summary: Native executor completed with a warning.");
   });
 
   it("compiles plan tasks, retries retryable failures, and persists review output", async () => {

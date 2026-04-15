@@ -11,6 +11,8 @@ import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store
 import {
   applyWorkspacePatch,
   executeNativeExecutor,
+  normalizeTaskExecutionResult,
+  normalizeReviewArtifact,
   prepareExecutionArtifacts,
   type NativeExecutionDriver,
   type NativeTaskExecutionResult,
@@ -59,6 +61,7 @@ import { notifyPipelineComplete } from "./notify.js";
 import { repairJsonOutput, repairYamlOutput } from "./llm-output-repair.js";
 import { CliError } from "./errors.js";
 import { inspectGitProject } from "./git.js";
+import { readOllamaConfig } from "./config.js";
 import { buildAgentSystemPrompt } from "./prompt-builder.js";
 
 
@@ -75,6 +78,9 @@ type StageResult = {
   outputs: Record<string, unknown>;
   duration?: number;
 };
+
+const DEFAULT_LOCAL_AGENT_TIMEOUT_MS = 300_000;
+const OLLAMA_HOST_INTEGRATION_TIMEOUT_MS = 600_000;
 
 type RuntimeLockRecord = {
   runId?: string;
@@ -133,6 +139,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   // 4. Setup directories
   const runRoot = lineupRunDir(runId, projectRoot);
   const artifactDir = lineupRunArtifactsDir(runId, projectRoot);
+  const localAgentTimeoutMs = localAgentRunner
+    ? resolveLocalAgentTimeoutMs(projectRoot, localAgentRunner.host)
+    : DEFAULT_LOCAL_AGENT_TIMEOUT_MS;
   const cacheDir = resolve(projectRoot, ".lineup", ".cache");
   const artifactStore = createArtifactStore(lineupArtifactStoreDir(projectRoot));
   const protocolMessages: LineupProtocolMessage[] = [];
@@ -255,6 +264,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             projectRoot,
             localAgentRunner?.host ?? options.host,
             artifactDir,
+            localAgentTimeoutMs,
             runId,
             options.prompt ?? "",
             () => protocolRequestId++,
@@ -289,6 +299,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             projectRoot,
             localAgentRunner?.host ?? options.host,
             artifactDir,
+            localAgentTimeoutMs,
             runId,
             options.prompt ?? "",
             () => protocolRequestId++,
@@ -827,7 +838,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         addDirs: [input.runRoot, input.artifactDir],
         tracePrefixPath: resolve(input.runRoot, "host", `implement-${taskTraceLabel(input.task.id)}-${localAgentRunner.host}`)
       });
-      return JSON.parse(repairJsonOutput(result.content).content) as NativeTaskExecutionResult;
+      return normalizeTaskExecutionResult(result.content, input.task, `local-agent:${localAgentRunner.host}:${input.task.id}`);
     },
     async executeReview(input) {
       const reviewPath = resolve(input.artifactDir, "review.yaml");
@@ -842,7 +853,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         tracePrefixPath: resolve(input.runRoot, "host", `verify-reviewer-${localAgentRunner.host}`)
       });
       return {
-        reviewYaml: repairYamlOutput(result.content).content
+        reviewYaml: normalizeReviewArtifact(result.content, reviewPath)
       };
     }
   };
@@ -1014,6 +1025,9 @@ function buildOpenCodeResearchPromptInstructions(stage: WorkflowStage): string {
     "- This research stage is read-only. Never call `edit`, `write`, or mutating `bash` commands.",
     "- Do not make the requested code change during research. Only inspect and report.",
     "- Keep the document structurally complete and directly usable.",
+    "- Use the top-level keys `what_found`, `how_it_works`, `constraints`, and `gaps` exactly once.",
+    "- `what_found`, `constraints`, and `gaps` must be YAML mappings. Never emit them as scalars or lists.",
+    "- If any mapping would otherwise be empty, return `{}` instead of prose or a placeholder bullet list.",
     "- Return only the final YAML payload."
   ];
 
@@ -1077,11 +1091,25 @@ function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput:
     "Stay bounded to the requested task and do not expand into repository-wide exploration.",
     "Do not add markdown, prose, code fences, bullet lists, or extra wrapper text.",
     "Do not call edit, write, or mutating bash commands while retrying this research stage.",
+    "Return this exact top-level shape and keep mapping fields as mappings:",
+    "what_found: {}",
+    "how_it_works: \"\"",
+    "constraints: {}",
+    "gaps: {}",
     "Use the declared Research schema fields exactly once and keep the payload directly parseable.",
     "",
     "Previous invalid output:",
     invalidOutput.trim()
   ].join("\n");
+}
+
+function resolveLocalAgentTimeoutMs(projectRoot: string, host?: HostName): number {
+  const ollama = readOllamaConfig({ projectRoot, host });
+  if (ollama?.hostIntegration?.enabled) {
+    return OLLAMA_HOST_INTEGRATION_TIMEOUT_MS;
+  }
+
+  return DEFAULT_LOCAL_AGENT_TIMEOUT_MS;
 }
 
 function slugifyTopic(input: string): string {
@@ -1101,7 +1129,7 @@ function taskTraceLabel(input: string): string {
 }
 
 function normalizeResearchArtifact(raw: string, taskPrompt: string, source: string): string {
-  const repaired = repairYamlOutput(raw).content;
+  const repaired = repairResearchYamlScalars(repairYamlOutput(raw).content);
 
   try {
     const normalized = normalizeResearchDocument(parseRestrictedYaml(repaired, source), taskPrompt);
@@ -1125,6 +1153,24 @@ function normalizeResearchArtifact(raw: string, taskPrompt: string, source: stri
 
     throw error;
   }
+}
+
+function repairResearchYamlScalars(raw: string): string {
+  return raw.replace(/^how_it_works:\s*(.+)$/m, (line, value: string) => {
+    const trimmed = value.trim();
+    if (
+      trimmed.length === 0 ||
+      trimmed.startsWith("\"") ||
+      trimmed.startsWith("'") ||
+      trimmed.startsWith("|") ||
+      trimmed.startsWith(">") ||
+      !trimmed.includes(": ")
+    ) {
+      return line;
+    }
+
+    return `how_it_works: |-\n  ${trimmed}`;
+  });
 }
 
 function stringifyStructuredYaml(payload: unknown): string {
@@ -1333,6 +1379,7 @@ async function executePreStage(
   projectRoot: string,
   host: HostName | undefined,
   artifactDir: string,
+  localAgentTimeoutMs: number,
   runId: string,
   taskPrompt: string,
   nextRequestId: () => number,
@@ -1414,7 +1461,7 @@ async function executePreStage(
             workingDirectory: projectRoot,
             agent: stage.agent,
             prompt,
-            timeoutMs: 300_000,
+            timeoutMs: localAgentTimeoutMs,
             addDirs: [artifactDir],
             outputSchemaPath: resolveArtifactSchemaPath(stage.agent, schemaLabel),
             expectedOutputPath: outputPath,
@@ -1719,6 +1766,7 @@ async function executePlannerPhase(
   projectRoot: string,
   host: HostName | undefined,
   artifactDir: string,
+  localAgentTimeoutMs: number,
   runId: string,
   taskPrompt: string,
   nextRequestId: () => number,
@@ -1755,7 +1803,7 @@ async function executePlannerPhase(
           workingDirectory: projectRoot,
           agent: stage.agent ?? "architect",
           prompt,
-          timeoutMs: 300_000,
+          timeoutMs: localAgentTimeoutMs,
           addDirs: [artifactDir],
           outputSchemaPath: resolveArtifactSchemaPath(stage.agent ?? "architect", "Plan"),
           expectedOutputPath: planPath,
