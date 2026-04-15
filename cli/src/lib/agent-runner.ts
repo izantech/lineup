@@ -144,6 +144,7 @@ function tracedEnvSubset(env: NodeJS.ProcessEnv | undefined): Record<string, str
     HOME: current.HOME ?? null,
     USERPROFILE: current.USERPROFILE ?? null,
     OLLAMA_HOST: current.OLLAMA_HOST ?? null,
+    OPENCODE_CONFIG_CONTENT: secretMarker(current.OPENCODE_CONFIG_CONTENT),
     ANTHROPIC_BASE_URL: current.ANTHROPIC_BASE_URL ?? null,
     ANTHROPIC_AUTH_TOKEN: secretMarker(current.ANTHROPIC_AUTH_TOKEN),
     ANTHROPIC_API_KEY: secretMarker(current.ANTHROPIC_API_KEY),
@@ -517,6 +518,15 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       claudeDraftJsonOutput: true
     });
     const rawDraft = readFileIfPresent(input.expectedOutputPath) ?? draftResult.content;
+    const parsedDraft = parseLocalAgentStructuredOutput(rawDraft);
+    if (parsedDraft !== undefined) {
+      return {
+        host: draftResult.host,
+        stderr: draftResult.stderr,
+        content: `${JSON.stringify(parsedDraft, null, 2)}\n`
+      };
+    }
+
     const structured = await formatStructuredOutputWithClaude({
       projectRoot: input.projectRoot,
       workingDirectory: input.workingDirectory,

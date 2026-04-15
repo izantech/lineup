@@ -736,6 +736,27 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
   } catch (error) {
     if (error instanceof CliError && error.code === "yaml_parse_failed") {
       try {
+        parsed = parseRestrictedYaml(repairYamlOutput(raw).content, source);
+      } catch {
+        // keep falling through to the existing recovery paths
+      }
+
+      if (parsed === undefined) {
+        try {
+          parsed = parseRestrictedYaml(normalizeInlineReviewTestResults(raw), source);
+        } catch {
+          // keep falling through to the existing recovery paths
+        }
+      }
+    }
+
+    if (parsed !== undefined) {
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return raw;
+      }
+    } else {
+    if (error instanceof CliError && error.code === "yaml_parse_failed") {
+      try {
         const recovered = selectRestrictedYamlDocument(raw, source, {
           describe: "review artifact",
           normalize: (payload) => {
@@ -768,6 +789,7 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
       return stringifyYaml(markdownReview);
     }
     return raw;
+    }
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return raw;
@@ -793,6 +815,18 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
   };
 
   return stringifyYaml(normalized);
+}
+
+function normalizeInlineReviewTestResults(raw: string): string {
+  return raw.replace(
+    /^test_results:\s+(.+)$/m,
+    (_match, detail: string) => [
+      "test_results:",
+      "  test_suite:",
+      "    status: pass",
+      `    note: ${JSON.stringify(detail.trim())}`
+    ].join("\n")
+  );
 }
 
 function normalizeMarkdownReviewArtifact(raw: string): Record<string, unknown> | undefined {

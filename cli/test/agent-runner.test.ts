@@ -870,7 +870,7 @@ process.exit(0)
     });
   });
 
-  it("uses a draft-first sequence for Ollama-backed Claude structured output runs", async () => {
+  it("uses the draft artifact directly for Ollama-backed Claude structured output runs when it is already parseable", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-draft-first-"));
     const homeDir = join(tempDir, "home");
     const binDir = join(tempDir, "bin");
@@ -897,7 +897,6 @@ if (logPath) {
   appendFileSync(logPath, \`PROMPT: \${prompt}\\nOUTPUT_FORMAT_JSON: \${hasJsonOutputFormat}\\n\`)
 }
 
-const isFormatter = prompt.includes('Convert the following draft into a JSON value that matches the provided schema.')
 const markerPath = process.env.HOME ? \`\${process.env.HOME}/.claude-ollama-draft-first\` : '.claude-ollama-draft-first'
 
 if (!existsSync(markerPath)) {
@@ -919,16 +918,8 @@ changes:
   process.exit(0)
 }
 
-if (!isFormatter) {
-  process.stderr.write('strict formatter was not used after the draft pass\\n')
-  process.exit(1)
-}
-
-process.stdout.write(JSON.stringify({
-  summary: 'Claude formatted the draft after the Ollama-backed draft pass',
-  changes: [{ file: 'README.md', action: 'append sentence', reason: 'Final strict formatter preserved the contract' }]
-}))
-process.exit(0)
+process.stderr.write('strict formatter should not be used when the draft artifact is already parseable\\n')
+process.exit(1)
 `
     );
 
@@ -1011,23 +1002,20 @@ process.exit(child.status ?? 0)
       });
 
       expect(JSON.parse(result.content)).toEqual({
-        summary: "Claude formatted the draft after the Ollama-backed draft pass",
+        summary: "draft first",
         changes: [
           {
             file: "README.md",
             action: "append sentence",
-            reason: "Final strict formatter preserved the contract"
+            reason: "Draft content was captured before strict formatting"
           }
         ]
       });
 
       const prompts = readFileSync(promptLog, "utf8");
       expect(prompts).toContain("Create or overwrite");
-      expect(prompts).toContain("Convert the following draft into a JSON value that matches the provided schema.");
       expect(prompts.indexOf("Create or overwrite")).toBeGreaterThanOrEqual(0);
-      expect(prompts.indexOf("Convert the following draft into a JSON value that matches the provided schema.")).toBeGreaterThan(
-        prompts.indexOf("Create or overwrite")
-      );
+      expect(prompts).not.toContain("Convert the following draft into a JSON value that matches the provided schema.");
     } finally {
       process.env.PATH = originalPath;
       process.env.HOME = originalHome;

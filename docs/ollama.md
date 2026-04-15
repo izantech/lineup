@@ -239,53 +239,42 @@ The hosts are still failing in different ways on the current branch state:
 ### Claude
 
 - the old strict-schema-first hang is no longer the current failure
-- Ollama-backed Claude research now goes draft-first, then strict formatter
+- Ollama-backed Claude structured runs now go draft-first, and if the draft
+  artifact is already parseable Lineup validates it locally instead of asking
+  Claude for a second formatter pass
 - headless `ollama launch claude` can return immediately with no output, so the
   runner now retries automatically through the Anthropic-compatible env path
-- on `qwen3-coder:30b`, that env fallback can produce a valid `research.yaml`
-  after a long local-model turn; the preserved `4ebd39` run under the
-  `vm2S2E` smoke root is the current proof point
-- the latest `0868fe` run under the `ZmPYGb` smoke root still timed out at the
-  300000ms host invocation boundary, so the remaining blocker is not wrapper
-  detection anymore but draft completion time/reliability on the env lane
-- the next likely runtime focus is Anthropic-compat request shape rather than
-  prompt wording alone; Ollama's compatibility layer still does not implement
-  every Anthropic feature Claude Code can use against the cloud API
+- even after that change, the remaining live Claude failure is outside the
+  Lineup contract: the wrapper still exits quickly with no artifact, and the
+  env fallback still hangs on minimal direct prompts across both
+  `qwen3-coder-next:q4_K_M` and `qwen3.5:9b`
+- Ollama's Anthropic-compatible wiring is already aligned with the documented
+  manual setup, so the remaining blocker now looks like Claude Code runtime
+  compatibility with the available local models in this environment
 
 Implication:
 
-- the remaining Claude blocker is the Ollama-backed draft invocation itself,
-  not the strict schema pass
-- the runtime now has the right fallback mechanics, so the next Claude work
-  should focus on the env transport and timeout/completion profile, not on
-  reverting the strict final validation contract again
+- the remaining Claude blocker is not Lineup prompt shape or schema handling
+- until a Claude-compatible local model path is proven here, the remaining work
+  is upstream host/runtime validation rather than another Lineup-side contract
+  change
 
 ### OpenCode
 
 - OpenCode is now past the original model-selection and generic-startup issues
-- one live run (`dcd421` under the `Kyxk5V` smoke root) wrote a near-valid
-  research artifact that failed YAML parsing
-- another live run (`96b99b` under the `E95Fek` smoke root) timed out after
-  drifting back into broad workspace exploration during research
-- the research prompt now explicitly says the stage is read-only and must emit
-  exactly one YAML Research document
-- the prompt now also explicitly says not to perform the requested code change
-  during research and not to expand into repository-wide exploration
-- OpenCode tool guidance now warns that `read` output is display-rendered and
-  must not be pasted back into `edit.oldString`
-- the pre-stage retry loop now clears stale artifacts before retrying, so a bad
-  first write cannot immediately satisfy the second attempt with old output
-- the next likely runtime focus is the exact headless launch contract, because
-  OpenCode's Ollama integration is config-injected first and plain model-flag
-  changes are unlikely to resolve the remaining non-terminating runs on their
-  own
+- Lineup now launches OpenCode with the canonical `ollama/<model>` selector and
+  injects the wrapper-style `OPENCODE_CONFIG_CONTENT` payload inline
+- even with that corrected runtime contract, OpenCode still hangs after
+  migration and provider resolution on both the tiny smoke task and a direct
+  minimal “reply with OK” prompt
+- that same post-stream-start hang reproduces across `qwen3-coder:30b`,
+  `qwen3-coder-next:q4_K_M`, and `qwen3.5:9b`
 
 Implication:
 
-- OpenCode is no longer blocked on provider selection
-- the remaining issue is host behavior under the research prompt: keeping it on
-  the bounded tiny-repo task and getting it to terminate with one valid YAML
-  document instead of drifting or writing malformed YAML
+- OpenCode is no longer blocked on provider selection or config injection
+- the remaining issue is upstream host/runtime compatibility in this local
+  Ollama setup, not the bounded smoke prompt or the Lineup launch contract
 
 ### Codex
 
@@ -306,21 +295,19 @@ Implication:
 - native implement/review local-runner invocations now stay fully inside the
   isolated worktree, so Codex no longer receives the source repo root through
   the local human-native path during implement/verify
-- tighter researcher prompts and stricter pre-stage artifact validation did not
-  eliminate the completion failure
 - the older append-task ambiguity is gone because the smoke task now uses a
   placeholder-replacement contract in `README.md`
-- the latest preserved live Codex failure moved forward again: run `1d2e5f`
-  under the `aBFDYI` smoke root completed research, plan, and native implement,
-  then failed on malformed `review.yaml`
+- reviewer normalization now also repairs the common colon-heavy scalar
+  `test_results:` line that local models can emit
+- live smoke run `be7176` under the `zFHtPJ` smoke root now completes the full
+  pipeline successfully on `qwen3-coder:30b`
 
 Implication:
 
-- Codex is no longer blocked on provider selection or source-repo leakage in
-  the local native path
-- the next Codex fix is to harden reviewer normalization or the Codex review
-  prompt so malformed `review.yaml` from the bounded smoke task no longer ends
-  the run
+- Codex is no longer blocked on provider selection, source-repo leakage, or
+  malformed bounded-pipeline review output
+- the remaining Codex work is explain-tactic validation and general smoke
+  throughput, not a known main-pipeline contract failure
 
 ## Recommended configs
 

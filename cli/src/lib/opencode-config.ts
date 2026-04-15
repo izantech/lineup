@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { CliError } from "./errors.js";
 
-export const LINEUP_OPENCODE_OLLAMA_PROVIDER = "lineup-ollama";
+export const LINEUP_OPENCODE_OLLAMA_PROVIDER = "ollama";
 const OPENCODE_CONFIG_SCHEMA = "https://opencode.ai/config.json";
 const LINEUP_PROVIDER_NPM = "@ai-sdk/openai-compatible";
 const LINEUP_PROVIDER_DISPLAY_NAME = "Ollama";
@@ -18,6 +18,10 @@ export type UpsertLineupOpencodeConfigResult = {
   content: string;
   changed: boolean;
 };
+
+function qualifyOpencodeModel(providerName: string, model: string): string {
+  return `${providerName}/${model}`;
+}
 
 function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n?/g, "\n");
@@ -85,6 +89,7 @@ export function mergeLineupOpencodeConfig(content: string, config: LineupOpencod
 
   existingModels[config.model] = {
     ...existingModel,
+    _launch: true,
     name: config.model
   };
 
@@ -97,6 +102,7 @@ export function mergeLineupOpencodeConfig(content: string, config: LineupOpencod
   lineupProvider.models = existingModels;
   provider[config.providerName] = lineupProvider;
   next.provider = provider;
+  next.model = qualifyOpencodeModel(config.providerName, config.model);
 
   const rendered = `${JSON.stringify(next, null, 2)}\n`;
   return {

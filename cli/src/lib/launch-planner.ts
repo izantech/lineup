@@ -320,7 +320,7 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
     }
   }
 
-  upsertLineupOpencodeConfig(opencodeConfigPath(input.homeDir ?? os.homedir()), {
+  const managedConfig = upsertLineupOpencodeConfig(opencodeConfigPath(input.homeDir ?? os.homedir()), {
     providerName: LINEUP_OPENCODE_OLLAMA_PROVIDER,
     model: ollama.model,
     baseUrl: ollama.baseUrl
@@ -333,7 +333,10 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
     strategy,
     command: "opencode",
     args: insertOptionBeforePrompt(directArgs, "--model", qualifiedModel),
-    env,
+    env: {
+      ...env,
+      OPENCODE_CONFIG_CONTENT: managedConfig.content.trim()
+    },
     effectiveModel: qualifiedModel,
     ollama,
     integration: "ollama-managed"

@@ -437,6 +437,7 @@ log({
   args,
   prompt,
   env: {
+    OPENCODE_CONFIG_CONTENT: process.env.OPENCODE_CONFIG_CONTENT ? '[set]' : null,
     OLLAMA_HOST: process.env.OLLAMA_HOST ?? null,
     LINEUP_WRAPPED_VIA_OLLAMA: process.env.LINEUP_WRAPPED_VIA_OLLAMA ?? null
   }
@@ -638,9 +639,12 @@ function assertHostLaunchPath(
   const opencodeInvocation = trace.find((entry) => entry.command === "opencode")
   expect(opencodeInvocation?.args).toContain("--model")
   expect(opencodeInvocation?.args).toContain(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/${model}`)
+  expect(opencodeInvocation?.env?.OPENCODE_CONFIG_CONTENT).toBeTruthy()
   const opencodeConfig = JSON.parse(readFileSync(opencodeConfigPath(homeDir), "utf8")) as {
+    model?: string
     provider: Record<string, unknown>
   }
+  expect(opencodeConfig.model).toBe(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/${model}`)
   expect(opencodeConfig.provider).toHaveProperty(LINEUP_OPENCODE_OLLAMA_PROVIDER)
 }
 

@@ -29,6 +29,7 @@ describe("opencode config helper", () => {
     expect(result.changed).toBe(true);
     expect(JSON.parse(result.content)).toEqual({
       $schema: "https://opencode.ai/config.json",
+      model: "ollama/qwen3-coder",
       theme: "midnight",
       provider: {
         anthropic: {
@@ -36,7 +37,7 @@ describe("opencode config helper", () => {
             baseURL: "https://api.anthropic.com/v1"
           }
         },
-        "lineup-ollama": {
+        ollama: {
           npm: "@ai-sdk/openai-compatible",
           name: "Ollama",
           options: {
@@ -44,6 +45,7 @@ describe("opencode config helper", () => {
           },
           models: {
             "qwen3-coder": {
+              _launch: true,
               name: "qwen3-coder"
             }
           }
@@ -91,36 +93,29 @@ describe("opencode config helper", () => {
 
     expect(JSON.parse(result.content)).toEqual({
       $schema: "https://opencode.ai/config.json",
+      model: "ollama/qwen3-coder",
       provider: {
         ollama: {
           npm: "@ai-sdk/openai-compatible",
           name: "Ollama",
           options: {
-            baseURL: "http://old-host:11434/v1",
+            baseURL: "http://localhost:11434/v1",
             timeout: 30
           },
           models: {
             "llama3.1": {
               name: "llama3.1",
               temperature: 0.2
+            },
+            "qwen3-coder": {
+              _launch: true,
+              name: "qwen3-coder"
             }
           }
         },
         openai: {
           options: {
             baseURL: "https://api.openai.com/v1"
-          }
-        },
-        "lineup-ollama": {
-          npm: "@ai-sdk/openai-compatible",
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1"
-          },
-          models: {
-            "qwen3-coder": {
-              name: "qwen3-coder"
-            }
           }
         }
       },
@@ -136,8 +131,9 @@ describe("opencode config helper", () => {
       baseUrl: "http://localhost:11434"
     }))).toEqual({
       $schema: "https://opencode.ai/config.json",
+      model: "ollama/qwen3-coder",
       provider: {
-        "lineup-ollama": {
+        ollama: {
           npm: "@ai-sdk/openai-compatible",
           name: "Ollama",
           options: {
@@ -145,6 +141,7 @@ describe("opencode config helper", () => {
           },
           models: {
             "qwen3-coder": {
+              _launch: true,
               name: "qwen3-coder"
             }
           }

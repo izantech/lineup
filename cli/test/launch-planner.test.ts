@@ -104,13 +104,21 @@ describe("launch planner", () => {
     expect(plan.args).toContain("--model")
     expect(plan.args).toContain(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
     expect(plan.effectiveModel).toBe(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
+    expect(plan.env.OPENCODE_CONFIG_CONTENT).toBeTruthy()
     expect(plan.args[plan.args.length - 1]).toBe("inspect")
 
     const config = opencodeConfigPath(home)
     expect(config).toBe(join(home, ".config", "opencode", "opencode.json"))
     expect(JSON.parse(readFileSync(config, "utf8"))).toEqual(expect.objectContaining({
+      model: `${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`,
       provider: expect.objectContaining({
-        [LINEUP_OPENCODE_OLLAMA_PROVIDER]: expect.any(Object)
+        [LINEUP_OPENCODE_OLLAMA_PROVIDER]: expect.objectContaining({
+          models: expect.objectContaining({
+            "qwen3-coder": expect.objectContaining({
+              _launch: true
+            })
+          })
+        })
       })
     }))
   })
@@ -162,6 +170,7 @@ describe("launch planner", () => {
     expect(plan.args).toContain("Lineup developer: Build the feature")
     expect(plan.args).toContain("--model")
     expect(plan.args).toContain(`${LINEUP_OPENCODE_OLLAMA_PROVIDER}/qwen3-coder`)
+    expect(plan.env.OPENCODE_CONFIG_CONTENT).toBeTruthy()
   })
 
   it("launches Codex with the OSS local-provider contract when strategy resolves to launch", () => {

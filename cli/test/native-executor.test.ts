@@ -155,6 +155,23 @@ describe("executeNativeExecutor", () => {
     expect(normalized).toContain("summary: Native executor completed with a warning.");
   });
 
+  it("normalizes review artifacts after repairing colon-heavy scalar YAML", () => {
+    const normalized = normalizeReviewArtifact(
+      `status: PASS
+summary: The change looks correct.
+issues: []
+test_results: No specific tests were run as this was a simple text replacement operation. The implementation was verified through direct file inspection and git diff checking, confirming that: 1. The placeholder text has been removed from README.md 2. The new text has been correctly added to README.md 3. The change matches exactly what was planned 4. No other files were modified
+`,
+      "codex-inline-review"
+    );
+
+    expect(normalized).toContain("kind: Review");
+    expect(normalized).toContain("status: PASS");
+    expect(normalized).toContain("summary: The change looks correct.");
+    expect(normalized).toContain("test_results:");
+    expect(normalized).toContain("status: pass");
+  });
+
   it("compiles plan tasks, retries retryable failures, and persists review output", async () => {
     const attempts = new Map<string, number>();
     const emittedMethods: string[] = [];
