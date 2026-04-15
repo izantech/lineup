@@ -155,6 +155,60 @@ You are the architect body.
     expect(built.prompt).not.toContain("## Context-Efficient Research Protocol");
   });
 
+  it("uses the compact architect body for Ollama host integration runs", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:
+  enabled: true
+  model: local-qwen
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "architect.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "claude"
+      }
+    });
+
+    expect(built.prompt).toContain("Turn the available research and stage context into one compact, actionable implementation plan.");
+    expect(built.prompt).toContain("Prefer at most 2 approaches.");
+    expect(built.prompt).not.toContain("Your plan must include:");
+  });
+
+  it("uses the compact teacher body for Ollama host integration runs", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:
+  enabled: true
+  model: local-qwen
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "teacher.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "claude"
+      }
+    });
+
+    expect(built.prompt).toContain("Explain the requested topic using only the minimum code and context needed.");
+    expect(built.prompt).toContain("Return only the final structured explanation payload with no wrapper prose.");
+    expect(built.prompt).not.toContain("Your explanation must include:");
+  });
+
   it("adds full-pipeline Ollama runtime guidance for agents without appendices", () => {
     writeProjectConfig(
       tempDir,

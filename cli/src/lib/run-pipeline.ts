@@ -909,6 +909,11 @@ function formatStageContext(stage: WorkflowStage, ctx: ExpressionContext): strin
   return lines.join("\n").trim();
 }
 
+function formatCompactStageContext(stage: WorkflowStage, ctx: ExpressionContext): string {
+  const payload = selectStageInput(stage, ctx);
+  return Object.keys(payload).length > 0 ? JSON.stringify(payload) : "";
+}
+
 function describeStageOutputs(stage: WorkflowStage): string {
   const entries = Object.entries(resolveEffectiveStageOutputs(stage));
   if (entries.length === 0) {
@@ -918,6 +923,52 @@ function describeStageOutputs(stage: WorkflowStage): string {
   return entries
     .map(([name, def]) => `- ${name}: ${def.type}${def.max_length ? ` (max ${def.max_length})` : ""}`)
     .join("\n");
+}
+
+function describeCompactStageOutputs(stage: WorkflowStage): string {
+  const entries = Object.entries(resolveEffectiveStageOutputs(stage));
+  if (entries.length === 0) {
+    return "structured payload only";
+  }
+
+  return entries.map(([name]) => name).join(", ");
+}
+
+function shouldUseCompactOllamaHostPrompt(projectRoot: string, host?: HostName): boolean {
+  if (!host) {
+    return false;
+  }
+
+  const ollama = readOllamaConfig({ projectRoot, host });
+  return Boolean(ollama?.hostIntegration?.enabled);
+}
+
+function buildCompactStageExtraInstructions(input: {
+  stage: WorkflowStage;
+  taskPrompt: string;
+  ctx: ExpressionContext;
+  outputSchema: string;
+  host?: HostName;
+}): string {
+  const lines = [
+    "Lineup stage:",
+    `- id: ${input.stage.id}`,
+    `- schema: ${input.outputSchema}`,
+    "- Return only the final structured payload with no wrapper prose or markdown.",
+    `- Required fields: ${describeCompactStageOutputs(input.stage)}`,
+    `- Request: ${input.taskPrompt}`
+  ];
+
+  const compactContext = formatCompactStageContext(input.stage, input.ctx);
+  if (compactContext) {
+    lines.push(`- Context JSON: ${compactContext}`);
+  }
+
+  if (input.host === "opencode" && input.stage.agent === "researcher") {
+    lines.push("- OpenCode research: emit exactly one YAML Research document, stay read-only, and do not call edit/write or mutating bash commands.");
+  }
+
+  return lines.join("\n");
 }
 
 function resolveEffectiveStageOutputs(stage: WorkflowStage): Record<string, { type: string; max_length?: number }> {
@@ -974,6 +1025,44 @@ function buildStageAgentPrompt(input: {
 }): string {
   const agentName = input.stage.agent ?? "architect";
   const outputTemplate = loadOutputTemplate(input.projectRoot, agentName);
+  const useCompactContract = shouldUseCompactOllamaHostPrompt(input.projectRoot, input.host);
+  const extraInstructions = useCompactContract
+    ? buildCompactStageExtraInstructions({
+        stage: input.stage,
+        taskPrompt: input.taskPrompt,
+        ctx: input.ctx,
+        outputSchema: input.outputSchema,
+        host: input.host
+      })
+    : [
+        "Lineup stage contract:",
+        `- Stage ID: ${input.stage.id}`,
+        `- Stage description: ${input.stage.description ?? "n/a"}`,
+        `- User request: ${input.taskPrompt}`,
+        `- Output schema: ${input.outputSchema}`,
+        input.outputPath
+          ? `- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`
+          : "- Emit only the payload content with no prose or explanation.",
+        "",
+        "Expected fields:",
+        describeStageOutputs(input.stage),
+        ...(outputTemplate
+          ? [
+              "",
+              "Follow this output template shape exactly. Replace placeholder values, but keep the same YAML-style structure:",
+              outputTemplate,
+              "",
+              "Do not return markdown headings, bullets, or prose outside the structured payload."
+            ]
+          : []),
+        "",
+        "Stage context:",
+        formatStageContext(input.stage, input.ctx) || "(none)",
+        ...(input.host === "opencode" ? ["", buildOpenCodeStageToolInstructions(input.stage)] : []),
+        ...(input.host === "opencode" && input.stage.agent === "researcher"
+          ? ["", buildOpenCodeResearchPromptInstructions(input.stage)]
+          : [])
+      ].join("\n");
   const prompt = buildAgentSystemPrompt({
     agentFilePath: resolve(input.projectRoot, "agents", `${agentName}.md`),
     promptTemplate: "{{AGENT_BODY}}",
@@ -981,35 +1070,7 @@ function buildStageAgentPrompt(input: {
       projectRoot: input.projectRoot,
       ...(input.host ? { host: input.host } : {})
     },
-    extraInstructions: [
-      "Lineup stage contract:",
-      `- Stage ID: ${input.stage.id}`,
-      `- Stage description: ${input.stage.description ?? "n/a"}`,
-      `- User request: ${input.taskPrompt}`,
-      `- Output schema: ${input.outputSchema}`,
-      input.outputPath
-        ? `- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`
-        : "- Emit only the payload content with no prose or explanation.",
-      "",
-      "Expected fields:",
-      describeStageOutputs(input.stage),
-      ...(outputTemplate
-        ? [
-            "",
-            "Follow this output template shape exactly. Replace placeholder values, but keep the same YAML-style structure:",
-            outputTemplate,
-            "",
-            "Do not return markdown headings, bullets, or prose outside the structured payload."
-          ]
-        : []),
-      "",
-      "Stage context:",
-      formatStageContext(input.stage, input.ctx) || "(none)",
-      ...(input.host === "opencode" ? ["", buildOpenCodeStageToolInstructions(input.stage)] : []),
-      ...(input.host === "opencode" && input.stage.agent === "researcher"
-        ? ["", buildOpenCodeResearchPromptInstructions(input.stage)]
-        : [])
-    ].join("\n")
+    extraInstructions
   });
 
   return input.host === "opencode" ? normalizeOpenCodeStagePrompt(prompt.prompt) : prompt.prompt;
@@ -1254,6 +1315,12 @@ function normalizeResearchWhatFound(value: unknown): Record<string, unknown> | n
 
   if (value.length === 0) {
     return null;
+  }
+
+  if (value.every((entry) => typeof entry === "string" && entry.trim().length > 0)) {
+    return {
+      files: value.map((entry) => (entry as string).trim())
+    };
   }
 
   const keyFiles = value.map((entry) => {

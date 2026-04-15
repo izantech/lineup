@@ -897,6 +897,114 @@ gaps:
     }
   });
 
+  it("uses a compact stage contract for Ollama host-integration prompts", async () => {
+    const projectRoot = join(tempDir, "project-compact-ollama-prompts");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+    mkdirSync(join(projectRoot, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".lineup", "config.yaml"),
+      `ollama:
+  enabled: true
+  model: qwen3-coder:30b
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`,
+      "utf8"
+    );
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: compact-ollama-prompts
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [research]
+`);
+
+    const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        capturedPrompts.push({ agent: input.agent, prompt: input.prompt });
+        if (input.agent === "researcher") {
+          return {
+            host: "claude",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: compact
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Compact prompt path.
+constraints:
+  host: claude
+gaps:
+  pending: []
+`
+          };
+        }
+
+        return {
+          host: "claude",
+          stderr: "",
+          content: APPROVED_PLAN
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Replace the README placeholder once."
+        },
+        {
+          runId: "cmpct1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      const researchPrompt = capturedPrompts.find((entry) => entry.agent === "researcher")?.prompt ?? "";
+      const planPrompt = capturedPrompts.find((entry) => entry.agent === "architect")?.prompt ?? "";
+      for (const prompt of [researchPrompt, planPrompt]) {
+        expect(prompt).toContain("Lineup stage:");
+        expect(prompt).toContain("Return only the final structured payload with no wrapper prose or markdown.");
+        expect(prompt).not.toContain("Stage description:");
+        expect(prompt).not.toContain("Expected fields:");
+        expect(prompt).not.toContain("Create or overwrite");
+        expect(prompt).not.toContain("Follow this output template shape exactly.");
+      }
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("runs the bundled explain tactic outside the lineup repo", async () => {
     const projectRoot = join(tempDir, "project-explain-tactic");
     writeTemplatesTo(projectRoot);
@@ -1563,6 +1671,82 @@ gaps: none
     }
   });
 
+  it("normalizes string-array what_found into a schema-valid object with metadata", async () => {
+    const projectRoot = join(tempDir, "project-research-string-array");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-string-array
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke() {
+        return {
+          host: "claude",
+          stderr: "",
+          content: `what_found:
+  - README.md
+  - .lineup-core/workflows/full-pipeline.yaml
+how_it_works: The stage reported a string-array what_found payload.
+constraints:
+  - README.md must change
+gaps:
+  - none
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsarr1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        what_found: {
+          files: ["README.md", ".lineup-core/workflows/full-pipeline.yaml"]
+        },
+        constraints: {
+          items: ["README.md must change"]
+        },
+        gaps: {
+          items: ["none"]
+        }
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("removes the previous stage artifact before retrying a malformed researcher response", async () => {
     const projectRoot = join(tempDir, "project-research-retry-artifact-cleanup");
     writeTemplatesTo(projectRoot);
@@ -1598,7 +1782,7 @@ stages:
         }
 
         if (attempt === 1) {
-          const invalid = `what_found:\n  - README.md\nhow_it_works: invalid\nconstraints:\n  missing_value\n`;
+          const invalid = `what_found: [README.md\nhow_it_works: invalid\nconstraints:\n  missing_value\n`;
           if (input.expectedOutputPath) {
             writeFileSync(input.expectedOutputPath, invalid, "utf8");
           }

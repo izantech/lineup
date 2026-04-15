@@ -35,8 +35,10 @@ agent spawn when Ollama is disabled.
 
 When true host integration is enabled, Lineup can also swap the normal bundled
 agent body for a host-specific compact prompt variant such as
-`cli/agents/researcher-ollama-compact.md`. That path keeps local Ollama host
-runs short and deterministic without changing the final structured artifact
+`cli/agents/researcher-ollama-compact.md`,
+`cli/agents/architect-ollama-compact.md`, or
+`cli/agents/teacher-ollama-compact.md`. That path keeps local Ollama host runs
+short and deterministic without changing the final structured artifact
 contract.
 
 ## Teams Mode

@@ -215,10 +215,21 @@ guessing about where the hang occurred.
 
 ## Prompt Shaping
 
-When true host integration is enabled, Lineup can load a compact host-specific
-agent body such as `cli/agents/researcher-ollama-compact.md` instead of the
-full bundled researcher prompt. This keeps local Ollama runs tighter without
-changing the final output schema or validation rules.
+When true host integration is enabled, Lineup can load compact host-specific
+agent bodies such as:
+
+- `cli/agents/researcher-ollama-compact.md`
+- `cli/agents/architect-ollama-compact.md`
+- `cli/agents/teacher-ollama-compact.md`
+
+Lineup also switches the stage-level instructions onto a compact contract:
+
+- shorter stage metadata
+- compact JSON context instead of verbose pretty-printed context blocks
+- a minimal required-fields summary instead of the older long template prose
+
+This keeps local Ollama runs tighter without changing the final output schema
+or validation rules.
 
 The local smoke lane also uses a deterministic tiny-repo task:
 

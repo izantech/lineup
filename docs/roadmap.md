@@ -248,8 +248,11 @@ Current instrumentation:
 - Ollama-backed Claude structured runs now go draft-first and keep the strict
   formatter as the final schema-preserving pass instead of starting with the
   direct strict host invocation
-- Ollama-backed researcher stages can use a compact host-specific prompt body,
-  and the local smoke lane now uses a deterministic tiny-repo task instead of a
+- Ollama-backed researcher, architect, and teacher stages can use compact
+  host-specific prompt bodies, and the stage contract itself is now shorter so
+  local models receive compact JSON context plus a minimal required-fields
+  summary instead of the older verbose prompt scaffold
+- the local smoke lane now uses a deterministic tiny-repo task instead of a
   generic freeform smoke request
 - the smoke runner no-progress deadline is now 5 minutes so slow local-model
   turns are not cut off immediately after the env fallback

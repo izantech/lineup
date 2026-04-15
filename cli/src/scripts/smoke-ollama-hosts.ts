@@ -138,14 +138,12 @@ type BridgeEventsPayload = {
 const SUPPORTED_HOSTS: HostName[] = ["claude", "codex", "opencode"];
 
 const PIPELINE_SMOKE_PROMPT = [
-  "Run the full Lineup smoke pipeline on this tiny repository.",
-  "Make one deterministic change: replace the placeholder line `REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION` in README.md with exactly one sentence: 'This repo validates Ollama host execution.'",
-  "Do not add the sentence more than once.",
-  "The final README.md must contain that sentence exactly once and must not contain the placeholder text.",
+  "Run the full Lineup smoke pipeline on this tiny repo.",
+  "Replace `REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION` in README.md with exactly `This repo validates Ollama host execution.` once.",
   "For research, inspect only README.md, .lineup-core/workflows/full-pipeline.yaml, and .lineup/tactics/example.yaml unless a later stage truly requires more.",
-  "Do not inspect Ollama service health, host CLI configuration, runtime logs, bridge files, or network endpoints.",
-  "Keep every artifact concise, structured, and scoped to this tiny repo.",
-  "Auto-answer any bridge questions."
+  "Do not inspect Ollama, host config, runtime logs, bridge files, or network endpoints.",
+  "Keep artifacts concise and structured.",
+  "Auto-answer bridge questions."
 ].join(" ");
 
 function parseArgs(argv: string[]): SmokeOptions {
