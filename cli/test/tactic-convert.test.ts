@@ -139,4 +139,45 @@ describe("tacticToWorkflow", () => {
     expect(v1.name).toBe("scope");
     expect(v1.required).toBe(true);
   });
+
+  it("infers sequential inputs from prior research outputs for explain stages", () => {
+    const tactic: TacticDefinition = {
+      name: "explain",
+      stages: [
+        { type: "research" },
+        { type: "explain" },
+      ],
+    };
+
+    const workflow = tacticToWorkflow(tactic);
+
+    expect(workflow.stages).toHaveLength(2);
+    expect(workflow.stages[1].inputs).toEqual([
+      {
+        source: "research",
+        fields: ["what_found", "how_it_works", "constraints", "gaps"]
+      }
+    ]);
+  });
+
+  it("preserves research outputs as the input source across inserted approval gates", () => {
+    const tactic: TacticDefinition = {
+      name: "research-gated",
+      stages: [
+        { type: "research", gate: "approval" },
+        { type: "plan" },
+      ],
+    };
+
+    const workflow = tacticToWorkflow(tactic);
+
+    expect(workflow.stages).toHaveLength(3);
+    expect(workflow.stages[2].depends_on).toEqual(["research-approval"]);
+    expect(workflow.stages[2].inputs).toEqual([
+      {
+        source: "research",
+        fields: ["what_found", "how_it_works", "constraints", "gaps"]
+      }
+    ]);
+  });
 });

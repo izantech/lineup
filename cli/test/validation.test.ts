@@ -99,6 +99,22 @@ describe("schema validation", () => {
     expect(() => parseRestrictedYamlDocuments(tagged, "fixture/tactic.yaml")).toThrow(CliError);
   });
 
+  it("allows exclamation marks inside block scalar content", () => {
+    const content = `type: explanation
+agent: teacher
+date: 2026-04-15
+topic: explain
+status: complete
+pipeline_stage: explain
+raw_output: |-
+  if (tactic.verification && !hasVerifyStage) {
+    return true
+  }
+`;
+
+    expect(() => parseRestrictedYamlDocuments(content, "fixture/teacher.yaml")).not.toThrow();
+  });
+
   it("rejects malformed multi-document YAML", () => {
     const malformed = "---\nname: first\ndescription: one\nstages: []\nverification: []\n---\nname: second\ndescription: two\nstages:\n  - type: research\n    agent: researcher\nverification\n  - check\n";
     expect(() => parseRestrictedYamlDocuments(malformed, "fixture/tactic.yaml")).toThrow(CliError);

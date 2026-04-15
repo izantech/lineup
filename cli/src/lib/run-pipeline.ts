@@ -141,7 +141,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   const runRoot = lineupRunDir(runId, projectRoot);
   const artifactDir = lineupRunArtifactsDir(runId, projectRoot);
   const localAgentTimeoutMs = localAgentRunner
-    ? resolveLocalAgentTimeoutMs(projectRoot, localAgentRunner.host)
+    ? resolveLocalAgentTimeoutMs(projectRoot, localAgentRunner.host, options.timeout)
     : DEFAULT_LOCAL_AGENT_TIMEOUT_MS;
   const cacheDir = resolve(projectRoot, ".lineup", ".cache");
   const artifactStore = createArtifactStore(lineupArtifactStoreDir(projectRoot));
@@ -875,6 +875,10 @@ function selectStageInput(stage: WorkflowStage, ctx: ExpressionContext): Record<
       }
     }
 
+    if (input.via === "file-reference" && typeof sourceOutputs.artifactPath === "string") {
+      selected.artifactPath = sourceOutputs.artifactPath;
+    }
+
     if (Object.keys(selected).length > 0) {
       payload[input.source] = selected;
       continue;
@@ -1122,7 +1126,8 @@ function buildOpenCodeStageToolInstructions(stage: WorkflowStage): string {
     "- For file reading, use `read`.",
     "- `read` output is rendered for display. When reusing file contents in a later `edit`, copy only the raw file text and never include line numbers or `(End of file ...)` wrappers in `oldString`.",
     "- For text search, use `grep`.",
-    "- Use `webfetch` only when you already have a URL. Do not request a separate web-search tool."
+    "- Use `webfetch` only when you already have a URL. Do not request a separate web-search tool.",
+    "- Do not call `task` or `skill` for normal Lineup stages. Complete the stage in the current invocation unless the prompt explicitly asks you to delegate."
   ];
 
   if (stage.agent === "researcher") {
@@ -1179,7 +1184,11 @@ function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput:
   ].join("\n");
 }
 
-function resolveLocalAgentTimeoutMs(projectRoot: string, host?: HostName): number {
+function resolveLocalAgentTimeoutMs(projectRoot: string, host?: HostName, timeoutSeconds?: number): number {
+  if (timeoutSeconds !== undefined && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0) {
+    return Math.round(timeoutSeconds * 1000)
+  }
+
   const ollama = readOllamaConfig({ projectRoot, host });
   if (ollama?.hostIntegration?.enabled) {
     return OLLAMA_HOST_INTEGRATION_TIMEOUT_MS;
@@ -1232,21 +1241,40 @@ function normalizeResearchArtifact(raw: string, taskPrompt: string, source: stri
 }
 
 function repairResearchYamlScalars(raw: string): string {
-  return raw.replace(/^how_it_works:\s*(.+)$/m, (line, value: string) => {
-    const trimmed = value.trim();
-    if (
-      trimmed.length === 0 ||
-      trimmed.startsWith("\"") ||
-      trimmed.startsWith("'") ||
-      trimmed.startsWith("|") ||
-      trimmed.startsWith(">") ||
-      !trimmed.includes(": ")
-    ) {
-      return line;
-    }
+  return raw
+    .replace(/^how_it_works:\s*(.+)$/m, (line, value: string) => {
+      const trimmed = value.trim();
+      if (
+        trimmed.length === 0 ||
+        trimmed.startsWith("\"") ||
+        trimmed.startsWith("'") ||
+        trimmed.startsWith("|") ||
+        trimmed.startsWith(">") ||
+        !trimmed.includes(": ")
+      ) {
+        return line;
+      }
 
-    return `how_it_works: |-\n  ${trimmed}`;
-  });
+      return `how_it_works: |-\n  ${trimmed}`;
+    })
+    .replace(/^(\s*-\s+)(.+)$/gm, (line, prefix: string, value: string) => {
+      const trimmed = value.trim();
+      if (
+        trimmed.length === 0 ||
+        trimmed.startsWith("\"") ||
+        trimmed.startsWith("'") ||
+        trimmed.startsWith("|") ||
+        trimmed.startsWith(">") ||
+        !trimmed.includes("`")
+      ) {
+        return line;
+      }
+
+      const escaped = trimmed
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"');
+      return `${prefix}"${escaped}"`;
+    });
 }
 
 function stringifyStructuredYaml(payload: unknown): string {

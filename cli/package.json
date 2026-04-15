@@ -55,7 +55,8 @@
     "schema:check": "tsx src/scripts/schema-check.ts",
     "generate:check": "tsx src/scripts/generate-check.ts",
     "smoke:dist": "tsx src/scripts/smoke-dist.ts",
-    "smoke:ollama-hosts": "tsx src/scripts/smoke-ollama-hosts.ts"
+    "smoke:ollama-hosts": "tsx src/scripts/smoke-ollama-hosts.ts",
+    "validate:direct-hosts": "tsx src/scripts/validate-direct-hosts.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",
@@ -65,6 +66,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.18.1",
+    "node-pty": "^1.0.0",
     "tsup": "^8.5.0",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2",

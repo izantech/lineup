@@ -783,6 +783,70 @@ risks:
     expect(normalized).not.toContain("/private/var/folders/test/lineup-claude-cwd-123");
   });
 
+  it("normalizes planner drafts that use humanized change keys into schema-valid changes", async () => {
+    const projectRoot = join(tempDir, "project-plan-normalize-humanized-keys");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const { normalizePlanForStage } = await import("../src/lib/executor.js");
+
+    const normalized = normalizePlanForStage(
+      `summary: Replace the README placeholder for direct-host validation
+approaches:
+  - Approach 1 (Minimal Changes): Direct replacement of the placeholder text with no additional modifications
+recommendation: Approach 1 is recommended as it's the simplest and most direct implementation.
+changes:
+  - File path: README.md
+    What to change: Replace 'REPLACE_ME_VALIDATE_DIRECT_HOST_EXECUTION' with 'This repo validates direct host execution.'
+    Why this change is needed: This is the explicit requirement for the direct-host certification validation task
+acceptance_criteria:
+  - README.md contains 'This repo validates direct host execution.'
+risks:
+  - Content accidentally truncated during edit
+`,
+      join(projectRoot, ".lineup", ".runs", "plan.yaml"),
+      projectRoot
+    );
+
+    expect(normalized).toContain("file: README.md");
+    expect(normalized).toContain("change: Replace 'REPLACE_ME_VALIDATE_DIRECT_HOST_EXECUTION'");
+    expect(normalized).toMatch(
+      /rationale: This is the explicit requirement for the direct-host certification[\s\S]*validation task/
+    );
+  });
+
+  it("normalizes planner drafts that use plain scalars with embedded colons", async () => {
+    const projectRoot = join(tempDir, "project-plan-normalize-colon-scalars");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const { normalizePlanForStage } = await import("../src/lib/executor.js");
+
+    const normalized = normalizePlanForStage(
+      `summary: Replace the README placeholder for direct-host validation
+approaches:
+  - strategy: Minimal replacement: update the placeholder in place
+recommendation: I recommend Approach 1: direct replacement because the repo is tiny and the task is bounded.
+changes:
+  - File path: README.md
+    What to change: Replace 'REPLACE_ME_VALIDATE_DIRECT_HOST_EXECUTION' with 'This repo validates direct host execution.'
+    Why this change is needed: This is the explicit requirement for the direct-host certification validation task
+acceptance_criteria:
+  - README.md contains 'This repo validates direct host execution.'
+risks:
+  - Content accidentally truncated during edit
+`,
+      join(projectRoot, ".lineup", ".runs", "plan.yaml"),
+      projectRoot
+    );
+
+    expect(normalized).toContain('strategy: "Minimal replacement: update the placeholder in place"');
+    expect(normalized).toMatch(
+      /rationale: "I recommend Approach 1: direct replacement because the repo is tiny[\s\S]*and the task is bounded\."/
+    );
+    expect(normalized).toContain("file: README.md");
+  });
+
   it("normalizes array-shaped research findings into a structured what_found object", async () => {
     const projectRoot = join(tempDir, "project-host-research-array");
     writeTemplatesTo(projectRoot);
@@ -1111,6 +1175,98 @@ gaps:
       expect(reviewerInvocation?.projectRoot).toBe(reviewerInvocation?.workingDirectory);
       expect(reviewerInvocation?.projectRoot).not.toBe(canonicalProjectRoot);
       expect(reviewerInvocation?.outputSchemaPath).toContain("/schemas/yaml/v3/review.schema.json");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("includes file-reference stage inputs in downstream prompts", async () => {
+    const projectRoot = join(tempDir, "project-file-reference-context");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: file-reference-context
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [research]
+    inputs:
+      - source: research
+        fields: [what_found, constraints]
+        via: file-reference
+`);
+
+    const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        capturedPrompts.push({ agent: input.agent, prompt: input.prompt });
+        if (input.agent === "researcher") {
+          return {
+            host: "claude",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: file-reference
+status: complete
+pipeline_stage: research
+what_found:
+  files:
+    - README.md
+how_it_works: Captured by the local runner.
+constraints:
+  tooling: local
+gaps:
+  pending: []
+`
+          };
+        }
+
+        return {
+          host: "claude",
+          stderr: "",
+          content: APPROVED_PLAN
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Plan with file references"
+        },
+        {
+          runId: "filrf1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      const architectPrompt = capturedPrompts.find((entry) => entry.agent === "architect")?.prompt ?? "";
+      expect(architectPrompt).toContain("research:");
+      expect(architectPrompt).toContain("Read artifact:");
     } finally {
       process.chdir(origCwd);
     }
@@ -1531,6 +1687,7 @@ issues: []
         expect(prompt).toContain("read");
         expect(prompt).toContain("grep");
         expect(prompt).toContain("webfetch");
+        expect(prompt).toContain("Do not call `task` or `skill` for normal Lineup stages.");
         expect(prompt).not.toMatch(/\bLS\b/);
         expect(prompt).not.toMatch(/\bRead\b/);
         expect(prompt).not.toMatch(/\bGrep\b/);
@@ -1716,6 +1873,76 @@ gaps: {}
 
       expect(result.status).toBe("success");
       expect(seenTimeouts).toEqual([600_000]);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("uses the explicit timeout option for local agent stages", async () => {
+    const projectRoot = join(tempDir, "project-explicit-host-timeout");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: explicit-host-timeout
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const seenTimeouts: number[] = [];
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        seenTimeouts.push(input.timeoutMs ?? 0);
+        return {
+          host: "codex",
+          stderr: "",
+          content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: explicit timeout
+status: complete
+pipeline_stage: research
+what_found: {}
+how_it_works: Explicit timeout hints override the default local agent timeout.
+constraints: {}
+gaps: {}
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          timeout: 45
+        },
+        {
+          runId: "expt45",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(seenTimeouts).toEqual([45_000]);
     } finally {
       process.chdir(origCwd);
     }

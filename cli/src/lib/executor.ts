@@ -168,15 +168,33 @@ function ensureParentDirectory(filePath: string): void {
 }
 
 export function normalizePlanForStage(rawPlan: string, source: string, projectRoot: string): string {
-  try {
-    validatePlanYaml(rawPlan, source);
-    return rawPlan;
-  } catch {
-    const normalized = normalizePlanDraft(parseRestrictedYaml(rawPlan, source), source, projectRoot);
-    const validatedRaw = stringifyYaml(normalized);
-    validatePlanYaml(validatedRaw, source);
-    return validatedRaw;
+  const candidates = [
+    rawPlan,
+    normalizeInlinePlanScalars(rawPlan),
+    repairYamlOutput(rawPlan).content,
+    normalizeInlinePlanScalars(repairYamlOutput(rawPlan).content)
+  ];
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      validatePlanYaml(candidate, source);
+      return candidate;
+    } catch {
+      try {
+        const normalized = normalizePlanDraft(parseRestrictedYaml(candidate, source), source, projectRoot);
+        const validatedRaw = stringifyYaml(normalized);
+        validatePlanYaml(validatedRaw, source);
+        return validatedRaw;
+      } catch {
+        continue;
+      }
+    }
   }
+
+  const normalized = normalizePlanDraft(parseRestrictedYaml(normalizeInlinePlanScalars(repairYamlOutput(rawPlan).content), source), source, projectRoot);
+  const validatedRaw = stringifyYaml(normalized);
+  validatePlanYaml(validatedRaw, source);
+  return validatedRaw;
 }
 
 function normalizeApprovedPlan(rawPlan: string, source: string, projectRoot: string): { raw: string; parsed: ApprovedPlan } {
@@ -325,14 +343,45 @@ function normalizeApproachScope(value: unknown): { files_changed?: number; lines
 function normalizePlanRecommendation(value: unknown, approaches: unknown): ApprovedPlan["recommendation"] {
   const item = typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
   const normalizedApproaches = normalizePlanApproaches(approaches);
+  const recommendationText = typeof value === "string" ? value.trim() : undefined;
   return {
     approach: firstNonEmptyString(item.approach, normalizedApproaches[0]?.name, "Default approach") ?? "Default approach",
     rationale:
       firstNonEmptyString(
         item.rationale,
+        recommendationText,
         "This approach best balances scope, risk, and implementation speed for the requested task."
       ) ?? "This approach best balances scope, risk, and implementation speed for the requested task."
   };
+}
+
+function normalizeInlinePlanScalars(raw: string): string {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^(\s*(?:-\s*)?[A-Za-z_][A-Za-z0-9_-]*):\s+(.+)$/);
+      if (!match) {
+        return line;
+      }
+
+      const [, key, value] = match;
+      const trimmed = value.trim();
+      if (
+        trimmed.length === 0 ||
+        trimmed.startsWith('"') ||
+        trimmed.startsWith("'") ||
+        trimmed.startsWith("|") ||
+        trimmed.startsWith(">") ||
+        trimmed.startsWith("{") ||
+        trimmed.startsWith("[") ||
+        !trimmed.includes(":")
+      ) {
+        return line;
+      }
+
+      return `${key}: ${JSON.stringify(trimmed)}`;
+    })
+    .join("\n");
 }
 
 function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPlanChange[] {
@@ -348,8 +397,22 @@ function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPl
     }
 
     const item = entry as Record<string, unknown>;
-    const file = normalizeDraftPath(firstNonEmptyString(item.file, item.path, item.file_path), projectRoot);
-    const change = firstNonEmptyString(item.change, item.description, item.action, item.what_to_change);
+    const file = normalizeDraftPath(
+      firstNonEmptyString(
+        item.file,
+        item.path,
+        item.file_path,
+        lookupLoosePlanField(item, "file path")
+      ),
+      projectRoot
+    );
+    const change = firstNonEmptyString(
+      item.change,
+      item.description,
+      item.action,
+      item.what_to_change,
+      lookupLoosePlanField(item, "what to change")
+    );
     if (!file || !change) {
       return [];
     }
@@ -364,6 +427,7 @@ function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPl
             item.description,
             item.reason,
             item.why_this_change_is_needed,
+            lookupLoosePlanField(item, "why this change is needed"),
             "Required to satisfy the approved plan."
           ) ??
           "Required to satisfy the approved plan.",
@@ -374,6 +438,18 @@ function normalizePlanChanges(value: unknown, projectRoot: string): NormalizedPl
       }
     ];
   });
+}
+
+function lookupLoosePlanField(item: Record<string, unknown>, expectedKey: string): string | undefined {
+  const normalizedExpected = expectedKey.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+
+  for (const [key, value] of Object.entries(item)) {
+    if (key.replace(/[^a-z0-9]+/gi, "").toLowerCase() === normalizedExpected) {
+      return typeof value === "string" ? value : undefined;
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeDraftPath(value: string | undefined, projectRoot: string): string | undefined {
@@ -786,32 +862,27 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
     // fall through to best-effort normalization
   }
 
+  const yamlCandidates = Array.from(
+    new Set([
+      raw,
+      repairYamlOutput(raw).content,
+      normalizeInlineReviewScalars(normalizeInlineReviewTestResults(repairYamlOutput(raw).content))
+    ])
+  );
+
   let parsed: unknown;
-  try {
-    parsed = parseRestrictedYaml(raw, source);
-  } catch (error) {
-    if (error instanceof CliError && error.code === "yaml_parse_failed") {
-      try {
-        parsed = parseRestrictedYaml(repairYamlOutput(raw).content, source);
-      } catch {
-        // keep falling through to the existing recovery paths
-      }
-
-      if (parsed === undefined) {
-        try {
-          parsed = parseRestrictedYaml(normalizeInlineReviewTestResults(raw), source);
-        } catch {
-          // keep falling through to the existing recovery paths
-        }
-      }
+  let parseError: unknown;
+  for (const candidate of yamlCandidates) {
+    try {
+      parsed = parseRestrictedYaml(candidate, source);
+      break;
+    } catch (error) {
+      parseError = error;
     }
+  }
 
-    if (parsed !== undefined) {
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        return raw;
-      }
-    } else {
-    if (error instanceof CliError && error.code === "yaml_parse_failed") {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    if (parseError instanceof CliError && parseError.code === "yaml_parse_failed") {
       try {
         const recovered = selectRestrictedYamlDocument(raw, source, {
           describe: "review artifact",
@@ -844,10 +915,7 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
     if (markdownReview) {
       return stringifyYaml(markdownReview);
     }
-    return raw;
-    }
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+
     return raw;
   }
 
@@ -875,7 +943,7 @@ export function normalizeReviewArtifact(raw: string, source: string): string {
 
 function normalizeInlineReviewTestResults(raw: string): string {
   return raw.replace(
-    /^test_results:\s+(.+)$/m,
+    /^test_results:[ \t]+(.+)$/m,
     (_match, detail: string) => [
       "test_results:",
       "  test_suite:",
@@ -883,6 +951,17 @@ function normalizeInlineReviewTestResults(raw: string): string {
       `    note: ${JSON.stringify(detail.trim())}`
     ].join("\n")
   );
+}
+
+function normalizeInlineReviewScalars(raw: string): string {
+  return raw.replace(/^summary:\s+(.+)$/m, (line, value: string) => {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed.startsWith('"') || trimmed.startsWith("'") || trimmed.startsWith("|") || trimmed.startsWith(">")) {
+      return line;
+    }
+
+    return `summary: ${JSON.stringify(trimmed)}`;
+  });
 }
 
 function normalizeMarkdownReviewArtifact(raw: string): Record<string, unknown> | undefined {
@@ -1834,6 +1913,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
     }
     const normalizedReviewYaml = normalizeReviewArtifact(reviewResult.reviewYaml, path.join(options.artifactDir, "review.yaml"));
     validateReviewYaml(normalizedReviewYaml, path.join(options.artifactDir, "review.yaml"));
+    writeFileSync(path.join(options.artifactDir, "review.yaml"), normalizedReviewYaml, "utf8");
     const reviewRecord = options.artifactStore.persistText("review", normalizedReviewYaml, "yaml");
     const workspacePatchPath = await captureWorkspacePatch(workspace.worktreeRoot, workspace.baselineHead, options.artifactDir, tasksArtifact);
     const parsedReview = parseRestrictedYaml(normalizedReviewYaml, reviewRecord.path) as Record<string, unknown>;

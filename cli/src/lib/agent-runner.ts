@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -57,6 +57,33 @@ function readFileIfPresent(filePath?: string): string | null {
   } catch {
     return null;
   }
+}
+
+function prepareIsolatedCodexHome(currentEnv: NodeJS.ProcessEnv): { env: NodeJS.ProcessEnv; cleanup: () => void } {
+  const isolatedHome = mkdtempSync(path.join(os.tmpdir(), "lineup-codex-home-"));
+  const codexHome = path.join(isolatedHome, ".codex");
+  mkdirSync(codexHome, { recursive: true });
+
+  const sourceHome = currentEnv.HOME ?? currentEnv.USERPROFILE;
+  if (sourceHome) {
+    const sourceAuthPath = path.join(sourceHome, ".codex", "auth.json");
+    const targetAuthPath = path.join(codexHome, "auth.json");
+    if (existsSync(sourceAuthPath)) {
+      copyFileSync(sourceAuthPath, targetAuthPath);
+    }
+  }
+
+  return {
+    env: {
+      ...currentEnv,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      CODEX_HOME: codexHome
+    },
+    cleanup: () => {
+      rmSync(isolatedHome, { recursive: true, force: true });
+    }
+  };
 }
 
 function extractEventStreamText(raw: string): string | undefined {
@@ -258,6 +285,37 @@ function normalizeCodexSchemaNode(schema: unknown): { value: unknown; changed: b
     const inferredType = inferSchemaTypeFromConst(normalizedRecord.const);
     if (inferredType) {
       normalizedRecord.type = inferredType;
+      changed = true;
+    }
+  }
+
+  if (
+    normalizedRecord.type === "object" &&
+    normalizedRecord.properties &&
+    typeof normalizedRecord.properties === "object" &&
+    !Array.isArray(normalizedRecord.properties)
+  ) {
+    const properties = normalizedRecord.properties as Record<string, unknown>;
+    const required = Array.isArray(normalizedRecord.required)
+      ? normalizedRecord.required.filter((value): value is string => typeof value === "string")
+      : [];
+    const keepKeys = new Set(required);
+    const nextProperties = Object.fromEntries(
+      Object.entries(properties).filter(([key]) => keepKeys.has(key))
+    );
+    const nextRequired = Object.keys(nextProperties);
+
+    if (Object.keys(nextProperties).length !== Object.keys(properties).length) {
+      normalizedRecord.properties = nextProperties;
+      changed = true;
+    }
+
+    if (
+      !Array.isArray(normalizedRecord.required) ||
+      normalizedRecord.required.length !== nextRequired.length ||
+      normalizedRecord.required.some((value, index) => value !== nextRequired[index])
+    ) {
+      normalizedRecord.required = nextRequired;
       changed = true;
     }
   }
@@ -626,6 +684,7 @@ async function formatStructuredOutputWithClaude(input: {
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
   const outputDir = mkdtempSync(path.join(os.tmpdir(), "lineup-codex-output-"));
   const outputPath = path.join(outputDir, `${input.agent}.txt`);
+  const isolatedCodex = prepareIsolatedCodexHome(process.env);
   const initialLaunchPlan = planHostLaunch({
     host,
     projectRoot: input.projectRoot,
@@ -654,6 +713,13 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
         schemaPath: normalizedSchemaPath
       })
     : initialLaunchPlan;
+  const isolatedLaunchPlan = {
+    ...launchPlan,
+    env: {
+      ...launchPlan.env,
+      ...isolatedCodex.env
+    }
+  };
 
   try {
     if (normalizedSchemaPath && normalizedSchema) {
@@ -661,11 +727,11 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
     }
 
     const result = await runSpawnedCommand({
-      host: launchPlan.host,
-      command: launchPlan.command,
-      args: launchPlan.args,
+      host: isolatedLaunchPlan.host,
+      command: isolatedLaunchPlan.command,
+      args: isolatedLaunchPlan.args,
       cwd: input.workingDirectory,
-      env: launchPlan.env,
+      env: isolatedLaunchPlan.env,
       timeoutMs: input.timeoutMs,
       stopOnOutputPaths: uniqueDirs([input.expectedOutputPath ?? "", outputPath]),
       tracePrefixPath: input.tracePrefixPath
@@ -685,6 +751,7 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
       stderr: result.stderr
     };
   } finally {
+    isolatedCodex.cleanup();
     rmSync(outputDir, { recursive: true, force: true });
   }
 }

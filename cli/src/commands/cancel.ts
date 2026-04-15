@@ -4,6 +4,7 @@ import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { lineupRuntimeLockFile } from "../lib/paths.js";
 import { loadPipelineState, savePipelineState } from "../lib/state.js";
+import { appendBridgeCompleteEvent, loadBridgeSession } from "../lib/bridge.js";
 
 export type CancelCommandOptions = {
   runId: string;
@@ -20,6 +21,9 @@ export async function runCancelCommand(options: CancelCommandOptions): Promise<v
   }
 
   if (TERMINAL_STATUSES.has(state.status)) {
+    if (state.status === "canceled") {
+      syncBridgeCancellation(options.runId);
+    }
     if (options.json) {
       printJson({ run_id: options.runId, status: state.status, already_terminal: true });
     } else {
@@ -29,6 +33,7 @@ export async function runCancelCommand(options: CancelCommandOptions): Promise<v
   }
 
   savePipelineState({ ...state, status: "canceled" });
+  syncBridgeCancellation(options.runId);
 
   releaseRuntimeLockIfHeld(options.runId);
 
@@ -37,6 +42,22 @@ export async function runCancelCommand(options: CancelCommandOptions): Promise<v
   } else {
     printTableLine(`Canceled run ${options.runId}.`);
   }
+}
+
+function syncBridgeCancellation(runId: string): void {
+  const session = loadBridgeSession(runId);
+  if (!session || session.status === "canceled") {
+    return;
+  }
+
+  appendBridgeCompleteEvent(
+    runId,
+    {
+      status: "canceled",
+      summary: "Run was canceled by the user.",
+      completedAt: new Date().toISOString()
+    }
+  );
 }
 
 function releaseRuntimeLockIfHeld(runId: string): void {

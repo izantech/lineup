@@ -1,6 +1,7 @@
 import type {
   AgentRole,
   LineupApiVersion,
+  StageInput,
   StageType,
   WorkflowDefinition,
   WorkflowStage,
@@ -41,6 +42,47 @@ const TACTIC_TYPE_MAP: Record<string, { type: StageType; agent?: AgentRole; id: 
   explain: { type: "agent", agent: "teacher", id: "explain" },
 };
 
+const DEFAULT_STAGE_OUTPUT_FIELDS: Partial<Record<StageType, string[]>> = {
+  reasoning: ["requirements", "resolved_requirements"],
+  agent: []
+};
+
+function defaultOutputFieldsForTacticStage(stage: TacticStage): string[] {
+  if (stage.type === "research") {
+    return ["what_found", "how_it_works", "constraints", "gaps"];
+  }
+  if (stage.type === "clarify") {
+    return ["requirements"];
+  }
+  if (stage.type === "clarification-gate") {
+    return ["resolved_requirements"];
+  }
+  if (stage.type === "plan") {
+    return ["summary", "approaches", "changes", "parallelization_strategy", "acceptance_criteria"];
+  }
+  if (stage.type === "verify") {
+    return ["status", "summary", "findings"];
+  }
+  if (stage.type === "explain") {
+    return ["learning_objectives", "prerequisites", "explanation", "further_exploration"];
+  }
+
+  return mappingOutputFields(stage.type);
+}
+
+function mappingOutputFields(stageType: string | undefined): string[] {
+  if (!stageType) {
+    return [];
+  }
+
+  const mapping = TACTIC_TYPE_MAP[stageType];
+  if (!mapping) {
+    return [];
+  }
+
+  return DEFAULT_STAGE_OUTPUT_FIELDS[mapping.type] ?? [];
+}
+
 function uniqueId(base: string, usedIds: Set<string>): string {
   if (!usedIds.has(base)) {
     usedIds.add(base);
@@ -59,6 +101,7 @@ export function tacticToWorkflow(tactic: TacticDefinition): WorkflowDefinition {
   const usedIds = new Set<string>();
   const workflowStages: WorkflowStage[] = [];
   let previousId: string | null = null;
+  let previousOutputSource: StageInput | null = null;
 
   for (const tacticStage of tactic.stages) {
     if (!tacticStage.type) {
@@ -73,18 +116,22 @@ export function tacticToWorkflow(tactic: TacticDefinition): WorkflowDefinition {
 
     const stageId = uniqueId(mapping.id, usedIds);
     const agent = (tacticStage.agent as AgentRole | undefined) ?? mapping.agent;
+    const inferredInputs = previousOutputSource ? [previousOutputSource] : undefined;
 
     const stage: WorkflowStage = {
       id: stageId,
       type: mapping.type,
       ...(agent ? { agent } : {}),
       depends_on: previousId ? [previousId] : [],
+      ...(inferredInputs ? { inputs: inferredInputs } : {}),
       ...(tacticStage.optional ? { optional: true } : {}),
       ...(tacticStage.prompt ? { description: tacticStage.prompt.trim() } : {}),
     };
 
     workflowStages.push(stage);
     previousId = stageId;
+    const outputFields = defaultOutputFieldsForTacticStage(tacticStage);
+    previousOutputSource = outputFields.length > 0 ? { source: stageId, fields: outputFields } : null;
 
     // Insert approval gate after this stage if requested
     if (tacticStage.gate === "approval") {

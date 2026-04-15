@@ -107,7 +107,7 @@ export function parseRestrictedYamlDocuments(content: string, source: string): u
     });
   }
 
-  if (/(^|\s)![A-Za-z_][\w:-]*/m.test(content)) {
+  if (/(^|\n)[ \t-]*![A-Za-z_][\w:-]*/m.test(content) || /[\[{,]\s*![A-Za-z_][\w:-]*/m.test(content)) {
     throw new CliError(`${source}: YAML custom tags are not allowed.`, {
       code: "yaml_tag_not_allowed"
     });

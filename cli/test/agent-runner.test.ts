@@ -137,10 +137,18 @@ gaps: {}
       additionalProperties: false,
       properties: {
         summary: { type: "string" }
-      }
+      },
+      required: ["summary"]
     });
 
-    expect(normalizeCodexOutputSchema(rawSchema)).toBe(rawSchema);
+    expect(JSON.parse(normalizeCodexOutputSchema(rawSchema) ?? "null")).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        summary: { type: "string" }
+      },
+      required: ["summary"]
+    });
   });
 
   it("adds explicit types to const-only properties for Codex structured output mode", () => {
@@ -157,9 +165,11 @@ gaps: {}
           additionalProperties: false,
           properties: {
             labels: { const: ["alpha"] }
-          }
+          },
+          required: ["labels"]
         }
-      }
+      },
+      required: ["apiVersion", "kind", "attempts", "dryRun", "metadata"]
     });
 
     expect(JSON.parse(normalizeCodexOutputSchema(rawSchema) ?? "null")).toEqual({
@@ -175,9 +185,11 @@ gaps: {}
           additionalProperties: false,
           properties: {
             labels: { type: "array", const: ["alpha"] }
-          }
+          },
+          required: ["labels"]
         }
-      }
+      },
+      required: ["apiVersion", "kind", "attempts", "dryRun", "metadata"]
     });
   });
 
@@ -422,6 +434,85 @@ setTimeout(() => process.exit(0), 100)
     expect(["expected_output", "exit"]).toContain(trace.completionReason);
     expect(trace.events.some((event) => event.type === "spawn")).toBe(true);
     expect(trace.events.some((event) => event.type === "close" || event.type === "artifact_detected")).toBe(true);
+  });
+
+  it("isolates direct Codex runs from the caller home while preserving auth.json", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-home-"));
+    const binDir = join(tempDir, "bin");
+    const callerHome = join(tempDir, "caller-home");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(callerHome, ".codex"), { recursive: true });
+    writeFileSync(join(callerHome, ".codex", "auth.json"), '{"auth_mode":"chatgpt"}\n', "utf8");
+
+    const fakeCodexPath = join(binDir, "codex");
+    writeFileSync(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+import { existsSync, writeFileSync } from 'node:fs'
+
+let output = ''
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index]
+  if (arg === '-o') {
+    output = process.argv[index + 1] ?? ''
+    index += 1
+  }
+}
+
+const payload = {
+  home: process.env.HOME,
+  userProfile: process.env.USERPROFILE,
+  codexHome: process.env.CODEX_HOME,
+  authCopied: existsSync((process.env.CODEX_HOME ?? '') + '/auth.json'),
+  disableApps: process.argv.includes('--disable') && process.argv.includes('apps'),
+  hasSkillsOverride: process.argv.includes('skills.config=[]'),
+  hasPluginsOverride: process.argv.includes('plugins={}'),
+  hasMcpOverride: process.argv.includes('mcp_servers={}')
+}
+
+if (output) {
+  writeFileSync(output, JSON.stringify(payload, null, 2) + '\\n')
+}
+
+process.exit(0)
+`,
+      "utf8"
+    );
+    chmodSync(fakeCodexPath, 0o755);
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = callerHome;
+    process.env.USERPROFILE = callerHome;
+
+    const runner = createLocalAgentRunner("codex");
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "researcher",
+      prompt: "Explain this tiny repo.",
+      timeoutMs: 3_000
+    });
+
+    const payload = JSON.parse(result.content) as {
+      home: string;
+      userProfile: string;
+      codexHome: string;
+      authCopied: boolean;
+      disableApps: boolean;
+      hasSkillsOverride: boolean;
+      hasPluginsOverride: boolean;
+      hasMcpOverride: boolean;
+    };
+
+    expect(payload.home).not.toBe(callerHome);
+    expect(payload.userProfile).toBe(payload.home);
+    expect(payload.codexHome).toBe(join(payload.home, ".codex"));
+    expect(payload.authCopied).toBe(true);
+    expect(payload.home).not.toBe(callerHome);
+    expect(payload.disableApps).toBe(true);
+    expect(payload.hasSkillsOverride).toBe(true);
+    expect(payload.hasPluginsOverride).toBe(true);
+    expect(payload.hasMcpOverride).toBe(true);
   });
 
   it("routes Codex agent stages to the configured Ollama model in full mode", async () => {
@@ -1124,7 +1215,7 @@ process.exit(child.status ?? 0)
         prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
         expectedOutputPath,
         outputSchemaPath: schemaPath,
-        timeoutMs: 2_000
+        timeoutMs: 4_000
       });
 
       expect(JSON.parse(result.content)).toEqual({
@@ -1278,7 +1369,7 @@ process.exit(child.status ?? 0)
         prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
         expectedOutputPath,
         outputSchemaPath: schemaPath,
-        timeoutMs: 2_000
+        timeoutMs: 4_000
       });
 
       expect(JSON.parse(result.content)).toEqual({

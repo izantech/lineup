@@ -202,6 +202,24 @@ test_results: No specific tests were run as this was a simple text replacement o
     expect(normalized).toContain("status: pass");
   });
 
+  it("quotes colon-heavy review summaries before parsing", () => {
+    const normalized = normalizeReviewArtifact(
+      `status: PASS
+summary: The implementation matches the approved plan exactly: README.md keeps the existing heading and blank line, and the placeholder text on line 3 was replaced with the required sentence once and only once. The change is complete, minimal, and does not introduce observable side effects. No automated tests were present in the workspace, which is acceptable for this documentation-only change.
+issues: []
+test_results:
+  test_suite:
+    status: pass
+`,
+      "codex-colon-summary-review"
+    );
+
+    expect(normalized).toContain("kind: Review");
+    expect(normalized).toContain("status: PASS");
+    expect(normalized).toContain("summary:");
+    expect(normalized).toContain("The implementation matches the approved plan exactly: README.md keeps");
+  });
+
   it("compiles plan tasks, retries retryable failures, and persists review output", async () => {
     const attempts = new Map<string, number>();
     const emittedMethods: string[] = [];
@@ -405,6 +423,7 @@ risks:
     expect(result.implementResult.outputs.task_results).toHaveLength(2);
     expect(result.verifyResult.outputs.status).toBe("PASS");
     expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("kind: Review");
+    expect(readFileSync(join(artifactDir, "review.yaml"), "utf8")).toContain("kind: Review");
   });
 
   it("normalizes string-only implementation change entries onto the task write scope", () => {
