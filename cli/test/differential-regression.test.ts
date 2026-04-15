@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -70,6 +70,14 @@ function initGitRepo(projectRoot: string): void {
   execSync("git commit -m 'init'", { cwd: projectRoot, stdio: "ignore" });
 }
 
+function writeWorkspaceChange(workspaceRoot: string, relativePath: string, marker: string): void {
+  const targetPath = join(workspaceRoot, relativePath)
+  mkdirSync(dirname(targetPath), { recursive: true })
+  const existing = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : ""
+  const prefix = existing.length > 0 ? `${existing.replace(/\n*$/, "\n")}` : ""
+  writeFileSync(targetPath, `${prefix}${marker}\n`, "utf8")
+}
+
 function writeWorkflow(projectRoot: string): string {
   const workflowDir = join(projectRoot, ".lineup-core", "workflows");
   mkdirSync(workflowDir, { recursive: true });
@@ -125,12 +133,14 @@ describe("differential regression harness", () => {
   it("validates native execution against fixture corpus", async () => {
     const nativeDriver: NativeExecutionDriver = {
       async executeTask(input) {
+        const changedFile = input.task.write_scope?.[0] ?? "README.md"
+        writeWorkspaceChange(input.workspaceRoot, changedFile, `updated ${input.task.id}`)
         return {
           status: "complete",
           summary: `completed ${input.task.id}`,
           changes_made: [
             {
-              file: input.task.write_scope?.[0] ?? "unknown",
+              file: changedFile,
               description: "updated fixture file",
               task_id: input.task.id
             }

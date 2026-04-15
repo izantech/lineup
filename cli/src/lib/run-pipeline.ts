@@ -1157,6 +1157,8 @@ function normalizeOpenCodeStagePrompt(prompt: string): string {
 }
 
 function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput: string): string {
+  const sanitizedInvalidOutput = sanitizeInvalidOutputForRetry(invalidOutput);
+
   return [
     originalPrompt.trimEnd(),
     "",
@@ -1173,7 +1175,7 @@ function buildOpenCodeResearchRetryPrompt(originalPrompt: string, invalidOutput:
     "Use the declared Research schema fields exactly once and keep the payload directly parseable.",
     "",
     "Previous invalid output:",
-    invalidOutput.trim()
+    sanitizedInvalidOutput
   ].join("\n");
 }
 
@@ -1376,6 +1378,8 @@ function normalizeResearchObjectField(value: unknown): Record<string, unknown> {
 }
 
 function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string, reason?: string): string {
+  const sanitizedInvalidOutput = sanitizeInvalidOutputForRetry(invalidOutput);
+
   return [
     originalPrompt.trimEnd(),
     "",
@@ -1388,7 +1392,7 @@ function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string, 
     "Every `changes[].file` value must be a repo-relative path such as `README.md` or `src/index.ts`, never an absolute filesystem path.",
     "",
     "Previous invalid output:",
-    invalidOutput.trim()
+    sanitizedInvalidOutput
   ].join("\n");
 }
 
@@ -1397,6 +1401,8 @@ function buildStructuredArtifactRetryPrompt(
   invalidOutput: string,
   schemaLabel: string
 ): string {
+  const sanitizedInvalidOutput = sanitizeInvalidOutputForRetry(invalidOutput);
+
   return [
     originalPrompt.trimEnd(),
     "",
@@ -1406,8 +1412,30 @@ function buildStructuredArtifactRetryPrompt(
     "If the previous draft included extra narrative, strip it and keep only the final structured artifact.",
     "",
     "Previous invalid output:",
-    invalidOutput.trim()
+    sanitizedInvalidOutput
   ].join("\n");
+}
+
+function sanitizeInvalidOutputForRetry(invalidOutput: string): string {
+  const trimmed = invalidOutput.trim();
+  if (trimmed.length === 0) {
+    return "[empty output]"
+  }
+
+  if (looksLikeToolCallTranscript(trimmed)) {
+    return "[tool-call transcript omitted; previous output was not a structured artifact]"
+  }
+
+  const maxLength = 4_000
+  if (trimmed.length <= maxLength) {
+    return trimmed
+  }
+
+  return `${trimmed.slice(0, maxLength)}\n... [truncated]`
+}
+
+function looksLikeToolCallTranscript(value: string): boolean {
+  return /<function=|<parameter=|<\/?tool_call>/.test(value)
 }
 
 function parseStructuredStageArtifact(

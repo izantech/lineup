@@ -1184,6 +1184,139 @@ process.exit(child.status ?? 0)
     }
   });
 
+  it("uses JSON draft mode for Ollama-backed Claude reviewer runs", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-reviewer-draft-"));
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const promptLog = join(tempDir, "claude-prompts.log");
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+import { appendFileSync, writeFileSync } from 'node:fs'
+
+const prompt = process.argv.slice(2).join(' ')
+const hasJsonOutputFormat = process.argv.includes('--output-format') && process.argv.includes('json')
+const logPath = process.env.LINEUP_TEST_PROMPT_LOG
+if (logPath) {
+  appendFileSync(logPath, \`PROMPT: \${prompt}\\nOUTPUT_FORMAT_JSON: \${hasJsonOutputFormat}\\n\`)
+}
+
+if (!hasJsonOutputFormat) {
+  process.stderr.write('reviewer draft pass should use json output mode\\n')
+  process.exit(1)
+}
+
+const match = prompt.match(/Write or emit the payload for (\\S+)\\./)
+if (match) {
+  writeFileSync(match[1], \`apiVersion: lineup/v3
+kind: Review
+status: PASS
+summary: Review passed.
+issues: []
+test_results:
+  test_suite:
+    status: pass
+\`)
+}
+process.exit(0)
+`
+    );
+
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+
+const args = process.argv.slice(2)
+const separatorIndex = args.indexOf('--')
+const childArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : []
+const child = spawnSync('claude', childArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  env: process.env
+})
+
+if (child.stdout) {
+  process.stdout.write(child.stdout)
+}
+if (child.stderr) {
+  process.stderr.write(child.stderr)
+}
+process.exit(child.status ?? 0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const originalPromptLog = process.env.LINEUP_TEST_PROMPT_LOG;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    process.env.LINEUP_TEST_PROMPT_LOG = promptLog;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const expectedOutputPath = join(tempDir, "review.yaml");
+      const schemaPath = join(tempDir, "review-output.schema.json");
+      writeFileSync(
+        schemaPath,
+        JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              apiVersion: { type: "string" },
+              kind: { type: "string" },
+              status: { type: "string" },
+              summary: { type: "string" }
+            },
+            required: ["apiVersion", "kind", "status", "summary"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "reviewer",
+        prompt: `Write or emit the payload for ${expectedOutputPath}.`,
+        expectedOutputPath,
+        outputSchemaPath: schemaPath,
+        timeoutMs: 2_000
+      });
+
+      expect(JSON.parse(result.content)).toMatchObject({
+        apiVersion: "lineup/v3",
+        kind: "Review",
+        status: "PASS",
+        summary: "Review passed."
+      });
+
+      const prompts = readFileSync(promptLog, "utf8");
+      expect(prompts).toContain("OUTPUT_FORMAT_JSON: true");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      process.env.LINEUP_TEST_PROMPT_LOG = originalPromptLog;
+    }
+  });
+
   it("uses JSON draft mode for Ollama-backed Claude developer runs", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-developer-draft-"));
     const homeDir = join(tempDir, "home");

@@ -207,9 +207,11 @@ Failure classes are now instrumented and no longer conflated:
     runner now retries automatically through the Anthropic-compatible env lane
   - direct minimal prompts now succeed on `qwen3-coder:30b` over both the
     wrapper and the Anthropic-compatible env transport
-  - the remaining work is live full-pipeline stabilization on
-    `qwen3-coder:30b`, not another redesign of the old strict-schema-first
-    launch path
+  - native implement/review local-runner invocations now also use JSON draft
+    output under Ollama-backed execution, and the latest per-host Claude smoke
+    completes the bounded tiny-repo full pipeline on `qwen3-coder:30b`
+  - the remaining Claude work is final all-host confirmation and throughput
+    monitoring, not another redesign of the old strict-schema-first launch path
 - OpenCode:
   - auto/default execution now uses the wrapper launch path instead of managed
     provider mode

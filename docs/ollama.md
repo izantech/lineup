@@ -274,11 +274,11 @@ are now part of the local Ollama checkpoint:
 - the smoke lane copies the canonical full-pipeline workflow into the temp repo
   so plan prompts receive the same triage and research inputs as a real run
 
-The hosts are still failing in different ways on the current branch state:
+Host status is now mixed on the current branch state:
 
 ### Claude
 
-- the old strict-schema-first hang is no longer the current failure
+- the old strict-schema-first hang is no longer the current failure mode
 - Ollama-backed Claude structured runs now go draft-first, and if the draft
   artifact is already parseable Lineup validates it locally instead of asking
   Claude for a second formatter pass
@@ -294,17 +294,20 @@ The hosts are still failing in different ways on the current branch state:
 - headless `ollama launch claude` can still return immediately with no output,
   so smoke/debug retries now use an internal force-env switch instead of PATH
   mutation when the wrapper lane needs to be bypassed
-- the remaining failures are now about stage-by-stage live behavior rather than
-  the original strict-schema contract
-- the next active Claude work is stage-by-stage live stabilization of the full
-  pipeline on `qwen3-coder:30b`, not another transport-selection redesign
+- native implement/review stages now also use JSON draft output under
+  Ollama-backed execution, which removed the last live stall seen in the
+  Claude developer/reviewer lanes
+- the latest per-host smoke on `qwen3-coder:30b` completes the tiny-repo full
+  pipeline successfully under the default env-first transport
+- the remaining Claude work is all-host confirmation and general throughput
+  monitoring, not a known per-host pipeline contract bug
 
 Implication:
 
-- the remaining Claude blocker is no longer the old strict-schema launch shape
-- the right next work is concrete live-pipeline debugging on
-  `qwen3-coder:30b`, especially implement/review completion quality under the
-  env-first transport
+- Claude is no longer blocked on the old strict-schema launch shape or on the
+  developer/reviewer local-runner contract for the current smoke task
+- the right next work is confirming Claude stays green when run alongside the
+  remaining hosts in the final `--host all` matrix
 
 ### OpenCode
 

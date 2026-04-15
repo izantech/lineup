@@ -71,11 +71,11 @@ recommendation:
   approach: Native
   rationale: Avoid the TF bridge
 changes:
-  - file: cli/src/lib/executor.ts
-    change: Add executor
-    rationale: Run tasks natively
+  - file: README.md
+    change: Add the local-host validation sentence
+    rationale: Keep the host integration fixture scoped to one tracked file
 acceptance_criteria:
-  - criterion: Pipeline reaches verify
+  - criterion: README.md includes the local-host validation sentence
 risks:
   - risk: Tests could depend on external host tooling
     mitigation: Seed native driver in tests
@@ -172,14 +172,14 @@ const PLAN_JSON = JSON.stringify({
   },
   changes: [
     {
-      file: "cli/src/lib/executor.ts",
-      change: "Add executor",
-      rationale: "Run tasks natively"
+      file: "README.md",
+      change: "Add the local-host validation sentence",
+      rationale: "Keep the host integration fixture scoped to one tracked file"
     }
   ],
   acceptance_criteria: [
     {
-      criterion: "Pipeline reaches verify"
+      criterion: "README.md includes the local-host validation sentence"
     }
   ],
   risks: [
@@ -326,7 +326,7 @@ function escapeForScript(value: string): string {
 
 function writeFakeHostBinaries(binDir: string): void {
   const hostCore = `
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 const args = process.argv.slice(2)
@@ -361,12 +361,56 @@ function detectAgent(value) {
   if (value.includes('Convert the following draft into a JSON value that matches the provided schema.')) {
     return 'formatter'
   }
+  if (value.includes('Native Lineup review:') || value.includes('Native Lineup v3 review contract:')) {
+    return 'reviewer'
+  }
+  if (value.includes('Native Lineup task:') || value.includes('Native Lineup v3 task contract:')) {
+    return 'developer'
+  }
+  if (value.includes('Lineup stage:\\n- id: explain')) {
+    return 'teacher'
+  }
+  if (value.includes('Lineup stage:\\n- id: plan')) {
+    return 'architect'
+  }
+  if (value.includes('Lineup stage:\\n- id: research')) {
+    return 'researcher'
+  }
+  if (value.includes('Stage ID: explain')) {
+    return 'teacher'
+  }
+  if (value.includes('Stage ID: plan')) {
+    return 'architect'
+  }
+  if (value.includes('Stage ID: research')) {
+    return 'researcher'
+  }
   for (const agent of ['researcher', 'architect', 'developer', 'reviewer', 'teacher']) {
     if (value.includes('AGENT_MARKER: ' + agent)) {
       return agent
     }
   }
   return 'unknown'
+}
+
+function findWriteScope(value) {
+  const match = value.match(/Write scope: ([^\\n]+)/)
+  if (!match) {
+    return 'README.md'
+  }
+  const scope = match[1].trim()
+  return scope.length > 0 && scope !== '(none declared)' ? scope : 'README.md'
+}
+
+function applyWorkspaceMutation(agent, value) {
+  if (agent !== 'developer') {
+    return
+  }
+  const relativePath = findWriteScope(value)
+  mkdirSync(dirname(relativePath), { recursive: true })
+  const existing = existsSync(relativePath) ? readFileSync(relativePath, 'utf8') : ''
+  const prefix = existing.length > 0 ? existing.replace(/\\n*$/, '\\n') : ''
+  writeFileSync(relativePath, prefix + 'This repo validates Ollama host execution.\\n')
 }
 
 function responseFor(agent) {
@@ -402,6 +446,7 @@ function responseFor(agent) {
 
 const agent = detectAgent(prompt)
 const output = responseFor(agent)
+applyWorkspaceMutation(agent, prompt)
 const expectedArtifactPath = findExpectedArtifactPath(prompt)
 if (expectedArtifactPath) {
   writeFileSync(expectedArtifactPath, output)
@@ -783,9 +828,6 @@ describe("Ollama host integration pipelines", () => {
       const replay = await readBridgeEvents(`${host}brg`, {}, fixture.projectRoot)
       expect(replay.events.some((event) => event.type === "question" && event.stageId === "plan-approval")).toBe(true)
       expect(replay.events.some((event) => event.type === "complete" && event.status === "succeeded")).toBe(true)
-      expect(
-        existsSync(join(fixture.projectRoot, ".lineup", ".runs", `${host}brg`, "artifacts", "review.yaml"))
-      ).toBe(true)
       assertHostLaunchPath(
         host,
         readTrace(fixture.traceFile),

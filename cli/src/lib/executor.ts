@@ -712,7 +712,23 @@ export async function applyWorkspacePatch(sourceRoot: string, patchPath?: string
   }
 
   const checkResult = await runCommand("git", ["-C", sourceRoot, "apply", "--check", "--whitespace=nowarn", patchPath]);
-  assertSuccess(checkResult, `git apply --check for ${patchPath}`);
+  if (checkResult.code !== 0) {
+    const reverseCheckResult = await runCommand("git", [
+      "-C",
+      sourceRoot,
+      "apply",
+      "--reverse",
+      "--check",
+      "--whitespace=nowarn",
+      patchPath
+    ]);
+
+    if (reverseCheckResult.code === 0) {
+      return;
+    }
+
+    assertSuccess(checkResult, `git apply --check for ${patchPath}`);
+  }
 
   const applyResult = await runCommand("git", ["-C", sourceRoot, "apply", "--whitespace=nowarn", patchPath]);
   assertSuccess(applyResult, `git apply for ${patchPath}`);
@@ -1324,6 +1340,7 @@ function buildReviewerPrompt(input: {
   tasksArtifact: CompiledTasksArtifact;
   verificationResults?: VerificationResult[];
   outputPath?: string;
+  workspaceDiff?: string;
 }): string {
   const templatePath = path.join(packageRoot(), "templates", "reviewer.yaml");
   const outputTemplate = existsSync(templatePath) ? readFileSync(templatePath, "utf8").trim() : null;
@@ -1347,7 +1364,13 @@ function buildReviewerPrompt(input: {
           },
           null,
           2
-        )
+        ),
+        ...(input.workspaceDiff
+          ? [
+              "Workspace diff:",
+              input.workspaceDiff
+            ]
+          : [])
       ]
     : [
         "Native Lineup v3 review contract:",
@@ -1365,7 +1388,14 @@ function buildReviewerPrompt(input: {
         JSON.stringify(input.tasksArtifact.tasks, null, 2),
         "",
         "Implementation state:",
-        JSON.stringify(input.implementationState, null, 2)
+        JSON.stringify(input.implementationState, null, 2),
+        ...(input.workspaceDiff
+          ? [
+              "",
+              "Workspace diff:",
+              input.workspaceDiff
+            ]
+          : [])
       ];
 
   if (outputTemplate) {
@@ -1468,10 +1498,6 @@ function inferTaskChangesFromWorkspace(
   task: CompiledTask,
   result: NativeTaskExecutionResult
 ): NativeTaskExecutionResult {
-  if ((result.changes_made?.length ?? 0) > 0) {
-    return result
-  }
-
   const scope = task.write_scope?.length ? task.write_scope : task.deliverables ?? []
   if (scope.length === 0) {
     return result
@@ -1498,6 +1524,16 @@ function inferTaskChangesFromWorkspace(
     })
 
   if (changedFiles.length === 0) {
+    if ((result.changes_made?.length ?? 0) > 0) {
+      throw new CliError(`Task ${task.id} reported file changes but produced no workspace diff.`, {
+        code: "build_failure"
+      })
+    }
+
+    return result
+  }
+
+  if ((result.changes_made?.length ?? 0) > 0) {
     return result
   }
 
@@ -1509,6 +1545,43 @@ function inferTaskChangesFromWorkspace(
       task_id: task.id
     }))
   }
+}
+
+function buildWorkspaceDiffContext(
+  workspaceRoot: string,
+  implementationState: ImplementationState
+): string | undefined {
+  const changedFiles = [...new Set(
+    implementationState.changes_made
+      .map((change) => change.file.trim())
+      .filter((file) => file.length > 0)
+  )]
+
+  if (changedFiles.length === 0) {
+    return undefined
+  }
+
+  const diff = spawnSync("git", ["diff", "--", ...changedFiles], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: process.env
+  })
+
+  if (diff.status !== 0) {
+    return undefined
+  }
+
+  const content = diff.stdout.trim()
+  if (content.length === 0) {
+    return undefined
+  }
+
+  const maxLength = 12_000
+  if (content.length <= maxLength) {
+    return content
+  }
+
+  return `${content.slice(0, maxLength)}\n... [diff truncated]`
 }
 
 export async function executeNativeExecutor(options: NativeExecutorOptions): Promise<NativeExecutorResult> {
@@ -1660,6 +1733,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
 
     options.emitStatus("implement", "Native task execution completed.", true);
 
+    const workspaceDiff = buildWorkspaceDiffContext(workspace.worktreeRoot, implementationState)
     const reviewPrompt = buildReviewerPrompt({
       projectRoot: options.projectRoot,
       host: options.host,
@@ -1667,7 +1741,8 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       implementationState,
       tasksArtifact,
       verificationResults: options.verificationResults,
-      outputPath: path.join(options.artifactDir, "review.yaml")
+      outputPath: path.join(options.artifactDir, "review.yaml"),
+      workspaceDiff
     });
 
     options.emitProtocol(

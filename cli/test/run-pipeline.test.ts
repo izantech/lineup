@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { rmSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -53,6 +53,14 @@ function initGitRepo(projectRoot: string): void {
   writeFileSync(join(projectRoot, "README.md"), "# test\n", "utf8");
   execSync("git add README.md", { cwd: projectRoot, stdio: "ignore" });
   execSync("git commit -m 'init'", { cwd: projectRoot, stdio: "ignore" });
+}
+
+function writeWorkspaceChange(workspaceRoot: string, relativePath: string, marker: string): void {
+  const targetPath = join(workspaceRoot, relativePath)
+  mkdirSync(dirname(targetPath), { recursive: true })
+  const existing = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : ""
+  const prefix = existing.length > 0 ? `${existing.replace(/\n*$/, "\n")}` : ""
+  writeFileSync(targetPath, `${prefix}${marker}\n`, "utf8")
 }
 
 const APPROVED_PLAN = `apiVersion: lineup/v3
@@ -253,12 +261,14 @@ stages:
 
     const driver: NativeExecutionDriver = {
       async executeTask(input) {
+        const changedFile = input.task.write_scope?.[0] ?? "README.md"
+        writeWorkspaceChange(input.workspaceRoot, changedFile, `updated ${input.task.id}`)
         return {
           status: "complete",
           summary: `completed ${input.task.id}`,
           changes_made: [
             {
-              file: input.task.write_scope?.[0] ?? "unknown",
+              file: changedFile,
               description: "updated file",
               task_id: input.task.id
             }
@@ -1027,6 +1037,7 @@ gaps:
         }
 
         if (input.agent === "developer") {
+          writeWorkspaceChange(input.workingDirectory, "cli/src/lib/executor.ts", "export const implementedThroughRunner = true")
           return {
             host: "claude",
             stderr: "",
@@ -1035,8 +1046,8 @@ gaps:
               summary: "implemented the requested change",
               changes_made: [
                 {
-                  file: "README.md",
-                  description: "updated readme",
+                  file: "cli/src/lib/executor.ts",
+                  description: "updated executor",
                   task_id: "CHANGE-001"
                 }
               ],
@@ -2315,6 +2326,92 @@ gaps:
       expect(explainYaml).toContain("agent: teacher");
       expect(explainYaml).toContain("status: complete");
       expect(explainYaml).toContain("raw_output:");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("omits tool-call transcripts from generic retry prompts after malformed Codex research output", async () => {
+    const projectRoot = join(tempDir, "project-explain-codex-retry");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const prompts: string[] = [];
+    let researchAttempts = 0;
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "codex",
+      async invoke(input) {
+        prompts.push(input.prompt);
+
+        if (input.agent === "researcher") {
+          researchAttempts += 1;
+          if (researchAttempts === 1) {
+            return {
+              host: "codex",
+              stderr: "",
+              content: `<function=exec_command>\n<parameter=cmd>\ncat .lineup-core/workflows/full-pipeline.yaml\n</parameter>\n</function>\n</tool_call>`
+            };
+          }
+
+          return {
+            host: "codex",
+            stderr: "",
+            content: `type: research
+agent: researcher
+date: 2026-04-15
+topic: explain
+status: complete
+pipeline_stage: 2
+what_found:
+  files:
+    - .lineup-core/workflows/full-pipeline.yaml
+how_it_works: The bundled explain tactic routes through the smoke path.
+constraints:
+  host: codex
+gaps:
+  pending: []
+`
+          };
+        }
+
+        return {
+          host: "codex",
+          stderr: "",
+          content: `type: explanation
+agent: teacher
+status: complete
+topic: explain
+summary: The bundled explain tactic resolved.
+details:
+  - It runs through the smoke path.
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          tactic: "explain",
+          mode: "human",
+          prompt: "Explain the bundled explain tactic and confirm the smoke path."
+        },
+        {
+          runId: "codrx1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(prompts).toHaveLength(3);
+      expect(prompts[1]).toContain("Previous output was invalid because it was not a valid structured Research payload.");
+      expect(prompts[1]).toContain("[tool-call transcript omitted; previous output was not a structured artifact]");
+      expect(prompts[1]).not.toContain("<function=exec_command>");
     } finally {
       process.chdir(origCwd);
     }
