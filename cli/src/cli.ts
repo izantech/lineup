@@ -583,7 +583,9 @@ function isDirectExecution(argv: string[]): boolean {
     return false;
   }
 
-  return path.resolve(entry) === path.resolve(packageRoot(), "dist", "cli.js");
+  const resolvedEntry = path.resolve(entry);
+  return resolvedEntry === path.resolve(packageRoot(), "dist", "cli.js")
+    || resolvedEntry === path.resolve(packageRoot(), "src", "cli.ts");
 }
 
 if (isDirectExecution(process.argv)) {

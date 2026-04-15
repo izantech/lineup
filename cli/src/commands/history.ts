@@ -1,9 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
-
 import { printJson, printTableLine } from "../lib/output.js";
-import { lineupRunsDir } from "../lib/paths.js";
-import type { PipelineStateRecord } from "../lib/state.js";
+import { readRunHistory } from "../lib/tui-services.js";
 
 export type HistoryCommandOptions = {
   status?: string;
@@ -11,83 +7,8 @@ export type HistoryCommandOptions = {
   json?: boolean;
 };
 
-type HistoryEntry = {
-  run_id: string;
-  status: string;
-  workflow: string | null;
-  current_stage: string | null;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
-  duration_human: string | null;
-  completed_stages: number;
-  retry_count: number;
-};
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.round((ms % 60000) / 1000);
-  return `${minutes}m ${seconds}s`;
-}
-
-function formatWorkflowName(workflowPath: string | null | undefined): string {
-  if (!workflowPath) return "-";
-  const base = path.basename(workflowPath, ".yaml");
-  return base;
-}
-
 export async function runHistoryCommand(options: HistoryCommandOptions): Promise<void> {
-  const cwd = process.cwd();
-  const runsDir = lineupRunsDir(cwd);
-  const limit = options.limit ?? 20;
-
-  let entries: HistoryEntry[] = [];
-
-  try {
-    const dirEntries = readdirSync(runsDir, { withFileTypes: true })
-      .filter(e => e.isDirectory());
-
-    for (const dirEntry of dirEntries) {
-      const stateFile = path.join(runsDir, dirEntry.name, "pipeline-state.json");
-      try {
-        const raw = readFileSync(stateFile, "utf8");
-        const state = JSON.parse(raw) as PipelineStateRecord;
-
-        if (options.status && state.status !== options.status) continue;
-
-        const retryCount = state.retry_state
-          ? Object.values(state.retry_state).reduce((sum, r) => sum + r.attempt, 0)
-          : 0;
-
-        entries.push({
-          run_id: state.run_id,
-          status: state.status,
-          workflow: state.workflow ? formatWorkflowName(state.workflow) : null,
-          current_stage: state.current_stage ?? null,
-          started_at: state.started_at ?? state.updated_at,
-          finished_at: state.finished_at ?? null,
-          duration_ms: state.duration_ms ?? null,
-          duration_human: state.duration_ms ? formatDuration(state.duration_ms) : null,
-          completed_stages: state.completed_stages?.length ?? 0,
-          retry_count: retryCount,
-        });
-      } catch { continue; }
-    }
-  } catch {
-    entries = [];
-  }
-
-  // Sort by started_at descending
-  entries.sort((a, b) => {
-    const aTime = a.started_at ? new Date(a.started_at).getTime() : 0;
-    const bTime = b.started_at ? new Date(b.started_at).getTime() : 0;
-    return bTime - aTime;
-  });
-
-  // Apply limit
-  entries = entries.slice(0, limit);
+  const entries = readRunHistory({ status: options.status, limit: options.limit })
 
   if (options.json) {
     printJson(entries);

@@ -2,6 +2,12 @@ import { Box, Divider, Spacer, Text } from './ink-shim'
 import { createElement, type TuiElement, type TuiNode } from './react-shim'
 import type { TuiAction, TuiKeyBinding, TuiTone } from './types'
 
+export type TuiSectionOptions = {
+  active?: boolean
+  tone?: TuiTone
+  grow?: number
+}
+
 export function titleText(value: string, subtitle?: string): TuiElement {
   return Box(
     { direction: 'column' },
@@ -14,9 +20,10 @@ export function badge(label: string, tone: TuiTone = 'neutral'): TuiElement {
   return Box({ direction: 'row', tone }, Text({ bold: true, children: [label] }))
 }
 
-export function section(title: string, children: readonly TuiNode[], detail?: string): TuiElement {
+export function section(title: string, children: readonly TuiNode[], detail?: string, options: TuiSectionOptions = {}): TuiElement {
+  const tone = options.active ? options.tone ?? 'accent' : options.tone
   return Box(
-    { direction: 'column', section: title },
+    { direction: 'column', section: title, border: Boolean(options.active), tone },
     titleText(title, detail),
     Divider(),
     ...children
@@ -24,8 +31,19 @@ export function section(title: string, children: readonly TuiNode[], detail?: st
 }
 
 export function panel(title: string, children: readonly TuiNode[], detail?: string): TuiElement {
+  return panelWithOptions(title, children, detail)
+}
+
+export type TuiPanelOptions = {
+  active?: boolean
+  tone?: TuiTone
+  grow?: number
+}
+
+export function panelWithOptions(title: string, children: readonly TuiNode[], detail?: string, options: TuiPanelOptions = {}): TuiElement {
+  const tone = options.active ? options.tone ?? 'accent' : options.tone
   return Box(
-    { direction: 'column', border: true, title },
+    { direction: 'column', border: true, title, tone, flexGrow: options.grow },
     titleText(title, detail),
     ...children
   )
@@ -102,4 +120,3 @@ export function emptyState(message: string, hint?: string): TuiElement {
     hint ? Text({ dim: true, children: [hint] }) : null
   )
 }
-

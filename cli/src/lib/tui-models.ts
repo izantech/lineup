@@ -377,13 +377,20 @@ export async function buildHomeViewModel(cwd = process.cwd(), homeDir = os.homed
     quickActions: [
       { id: "new-run", label: "New run", intent: "primary" },
       {
+        id: "init-project",
+        label: "Initialize Lineup",
+        command: "lineup init",
+        intent: report.healthy ? "neutral" : "primary"
+      },
+      {
         id: "resume-selected",
         label: "Resume selected run",
         command: latestRun && ["blocked", "failed", "canceled"].includes(latestRun.status) ? `lineup resume ${latestRun.runId}` : undefined,
         disabled: !latestRun || !["blocked", "failed", "canceled"].includes(latestRun.status)
       },
       { id: "inspect-selected", label: "Inspect selected run", command: latestRun ? `lineup show ${latestRun.runId}` : undefined, disabled: !latestRun },
-      { id: "doctor", label: "Refresh readiness", command: "lineup doctor", intent: "neutral" }
+      { id: "doctor", label: "Refresh readiness", command: "lineup doctor", intent: "neutral" },
+      { id: "show-status", label: "Status details", command: "lineup status --artifacts", intent: "neutral" }
     ]
   };
 }
@@ -393,6 +400,8 @@ export function buildRunComposerViewModel(): TuiRunComposerViewModel {
     hosts: [...SUPPORTED_HOSTS],
     defaults: {
       host: "codex",
+      workflow: undefined,
+      tactic: undefined,
       isolation: "index",
       implementMethod: "phase",
       approvePlan: false,
@@ -588,7 +597,9 @@ export function buildCommandPaletteItems(preferences: TuiPreferences): TuiComman
     { id: "resume", label: "Resume selected run", shortcut: preferences.keybindings.resume, description: "Resume a blocked, failed, or canceled run.", group: "Recovery" },
     { id: "inspect", label: "Inspect selected run", shortcut: preferences.keybindings.artifacts, description: "Open inspection and artifact actions for the selected run.", group: "Runs" },
     { id: "logs", label: "Toggle logs", shortcut: preferences.keybindings.logs, description: "Show or hide detailed event output for the active run.", group: "Runs" },
+    { id: "init-project", label: "Initialize Lineup", description: "Scaffold Lineup workflow and runtime directories.", group: "Setup" },
     { id: "refresh", label: "Refresh readiness", shortcut: "", description: "Reload doctor readiness, host state, and run summaries.", group: "Setup" },
+    { id: "show-status", label: "Show host status", description: "Refresh Home with host/runtime status details.", group: "Setup" },
     { id: "artifacts-plan", label: "Open plan artifact", description: "Focus the selected run plan artifact.", group: "Artifacts" },
     { id: "artifacts-review", label: "Open review artifact", description: "Focus the selected run review artifact.", group: "Artifacts" },
     { id: "quit", label: "Quit", shortcut: preferences.keybindings.quit, description: "Exit the Lineup terminal UI.", group: "Help" }

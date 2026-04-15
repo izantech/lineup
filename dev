@@ -42,6 +42,7 @@ ${GREEN}Build:${NC}
   typecheck               Run TypeScript type checks
   test                    Run test suite
   check                   Run all checks (typecheck, test, schema, generate, build)
+  tui [args...]           Launch the local-source TUI without installing lineup globally
 
 ${GREEN}Web:${NC}
   web                     Start Astro dev server
@@ -192,6 +193,11 @@ run_check() {
     echo -e "\n${GREEN}All checks passed${NC}"
 }
 
+run_tui() {
+    ensure_cli_deps
+    npm --prefix "$ROOT_DIR/cli" run dev -- tui "$@"
+}
+
 run_setup() {
     echo -e "${BOLD}Installing CLI dependencies...${NC}"
     npm --prefix "$ROOT_DIR/cli" install
@@ -288,6 +294,7 @@ main() {
         typecheck) run_typecheck ;;
         test)      run_test ;;
         check)     run_check ;;
+        tui)       run_tui "$@" ;;
         web)       run_web "$@" ;;
         clean)     run_clean "$@" ;;
         bench)

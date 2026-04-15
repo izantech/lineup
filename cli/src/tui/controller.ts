@@ -1,15 +1,22 @@
 import type { PendingGate } from '../lib/gate-store.js'
 import type { TuiRoute } from './types.js'
 
-export const COMPOSER_FIELD_COUNT = 6
+export const COMPOSER_FIELD_COUNT = 13
 
 export type TuiRuntimeRoute = TuiRoute
 
 export type TuiComposerState = {
   prompt: string
   host: 'claude' | 'codex' | 'opencode'
+  workflow?: string
+  tactic?: string
   isolation: 'index' | 'full' | 'sparse'
   implementMethod: 'phase' | 'task' | 'single-session'
+  fromStage?: string
+  timeout?: number
+  gateTimeout?: number
+  dryRun: boolean
+  forceRerun: boolean
   approvePlan: boolean
   maxParallel: number
 }
@@ -18,6 +25,7 @@ export type TuiHomeFocus = 'recentRuns' | 'quickActions'
 export type TuiComposerFocus = 'prompt' | 'fields' | 'actions'
 export type TuiLiveFocus = 'timeline' | 'logs' | 'nextActions' | 'artifacts'
 export type TuiInspectFocus = 'sections' | 'actions' | 'artifacts' | 'diffs' | 'recentRuns'
+export type TuiInspectPane = 'summary' | 'artifacts' | 'content' | 'diff' | 'logs' | 'replay' | 'history' | 'actions'
 
 export type TuiSessionState = {
   route: TuiRuntimeRoute
@@ -36,6 +44,7 @@ export type TuiSessionState = {
   liveActionIndex: number
   liveArtifactIndex: number
   inspectFocus: TuiInspectFocus
+  inspectPane: TuiInspectPane
   inspectSectionIndex: number
   inspectActionIndex: number
   inspectArtifactIndex: number
@@ -61,6 +70,7 @@ export type TuiControllerAction =
   | { type: 'set-composer-focus'; focus: TuiComposerFocus }
   | { type: 'set-live-focus'; focus: TuiLiveFocus }
   | { type: 'set-inspect-focus'; focus: TuiInspectFocus }
+  | { type: 'set-inspect-pane'; pane: TuiInspectPane }
   | { type: 'move-home-selection'; delta: 1 | -1; runCount: number; actionCount: number }
   | { type: 'focus-next' }
   | { type: 'focus-prev' }
@@ -120,6 +130,7 @@ export function createDefaultTuiSessionState(composer: TuiComposerState): TuiSes
     liveActionIndex: 0,
     liveArtifactIndex: 0,
     inspectFocus: 'actions',
+    inspectPane: 'summary',
     inspectSectionIndex: 0,
     inspectActionIndex: 0,
     inspectArtifactIndex: 0,
@@ -239,6 +250,12 @@ export function reduceTuiSessionState(state: TuiSessionState, action: TuiControl
       return {
         ...state,
         inspectFocus: action.focus
+      }
+
+    case 'set-inspect-pane':
+      return {
+        ...state,
+        inspectPane: action.pane
       }
 
     case 'move-home-selection':

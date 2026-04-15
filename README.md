@@ -77,6 +77,7 @@ The interactive TUI is the same human entrypoint that should let you start a run
 ./dev build                     # Build CLI
 ./dev typecheck                 # Run type checks
 ./dev test                      # Run test suite
+./dev tui                       # Launch the local-source TUI without a global install
 ./dev install local             # Build from source and install CLI + detected host skills
 ./dev install remote            # Install latest from npm
 ./dev install clean [--purge]   # Remove CLI and host skills

@@ -1,11 +1,8 @@
 import { Box, Text } from './ink-shim'
-import { badge, panel, split } from './layout'
+import { badge, bulletList, emptyState, kvRow, panel, section, titleText } from './layout'
 import { GateModal } from './views/gate-modal'
-import { HelpPaletteView } from './views/help-palette-view'
-import { HomeView } from './views/home-view'
 import { InspectionView } from './views/inspection-view'
 import { LiveRunView } from './views/live-run-view'
-import { RunComposerView } from './views/run-composer-view'
 import type { TuiAppViewModel, TuiCallbacks } from './types'
 
 export type TuiAppShellProps = {
@@ -18,55 +15,85 @@ function routeTitle(viewModel: TuiAppViewModel): string {
   return `${viewModel.route.screen}${modal}`
 }
 
-function footerHints(viewModel: TuiAppViewModel): readonly string[] {
-  const hints = [...viewModel.chrome.hints]
+function renderWorkspaceOverview(viewModel: TuiAppViewModel): ReturnType<typeof Box> {
+  const quickCommands = viewModel.home.quickActions.map((action) => `${action.label}${action.description ? ` - ${action.description}` : ''}`)
+  const latestRun = viewModel.home.latestRun
 
-  switch (viewModel.route.screen) {
-    case 'compose':
-      return ['Tab move', 'Enter start', 'Esc back', ...hints]
-    case 'live':
-      return ['Enter action', 'r resume', 'a artifacts', 'l logs', ...hints]
-    case 'inspect':
-      return ['Enter open', 'r resume', 'a artifacts', 'Esc back', ...hints]
-    case 'help':
-      return ['Type to search', 'Enter run command', 'Esc close', ...hints]
-    case 'home':
-    default:
-      return ['Enter open', 'r resume', 'a artifacts', 'Tab move', ...hints]
-  }
+  return panel('Workspace', [
+    titleText('Lineup', 'Type a task in the input panel below and press Enter to start a run.'),
+    viewModel.home.repoPath ? kvRow('folder', viewModel.home.repoPath) : null,
+    viewModel.home.subtitle ? Text({ children: [viewModel.home.subtitle] }) : null,
+    viewModel.chrome.status ? kvRow('status', String(viewModel.chrome.status)) : null,
+    section(
+      'Quick commands',
+      quickCommands.length > 0
+        ? [bulletList(quickCommands, 'Available')]
+        : [emptyState('No quick commands available', 'Initialize the repo or create a run to unlock more actions.')]
+    ),
+    latestRun
+      ? section('Latest run', [
+          kvRow('run', latestRun.runId),
+          kvRow('status', latestRun.status),
+          latestRun.workflow ? kvRow('workflow', latestRun.workflow) : null,
+          latestRun.stage ? kvRow('stage', latestRun.stage) : null,
+          latestRun.summary ? Text({ children: [latestRun.summary] }) : null
+        ].filter((item): item is NonNullable<typeof item> => item !== null))
+      : section('Latest run', [emptyState('No run selected', 'The pipeline view will appear here after you submit a task.')]),
+    viewModel.home.notes.length > 0 ? section('Notes', viewModel.home.notes.map((line) => Text({ children: [line] }))) : null,
+    Text({ dim: true, children: [`route: ${routeTitle(viewModel)}`] })
+  ].filter((item): item is NonNullable<typeof item> => item !== null))
 }
 
 function renderScreen(viewModel: TuiAppViewModel): ReturnType<typeof Box> {
+  if (viewModel.route.modal === 'gate') {
+    return GateModal({ viewModel: viewModel.gate })
+  }
+
   switch (viewModel.route.screen) {
-    case 'compose':
-      return RunComposerView({ viewModel: viewModel.composer })
     case 'live':
       return LiveRunView({ viewModel: viewModel.liveRun })
     case 'inspect':
       return InspectionView({ viewModel: viewModel.inspection })
-    case 'help':
-      return HelpPaletteView({ viewModel: viewModel.help })
     case 'home':
+    case 'compose':
     default:
-      return HomeView({ viewModel: viewModel.home })
+      return renderWorkspaceOverview(viewModel)
   }
 }
 
-function renderModal(viewModel: TuiAppViewModel): ReturnType<typeof Box> | null {
-  switch (viewModel.route.modal) {
-    case 'gate':
-      return GateModal({ viewModel: viewModel.gate })
-    case 'help':
-      return HelpPaletteView({ viewModel: viewModel.help })
-    default:
-      return null
+function renderInputPanel(viewModel: TuiAppViewModel): ReturnType<typeof Box> {
+  if (!viewModel.input.visible) {
+    return panel('Input', [
+      titleText('Input unavailable', 'Lineup is executing the pipeline.'),
+      Box(
+        { direction: 'row' },
+        badge('hidden', 'muted'),
+        badge('auto-return', 'accent')
+      ),
+      Text({ dim: true, children: ['The input panel returns automatically when Lineup needs a new task or a free-text answer.'] }),
+      viewModel.chrome.runId ? kvRow('run', viewModel.chrome.runId) : null,
+      viewModel.chrome.status ? kvRow('status', String(viewModel.chrome.status)) : null
+    ].filter((item): item is NonNullable<typeof item> => item !== null))
   }
+
+  const displayValue = viewModel.input.value.length > 0 ? viewModel.input.value : viewModel.input.placeholder
+
+  return panel('Input', [
+    titleText(viewModel.input.label, viewModel.input.hint),
+    Box(
+      { direction: 'row' },
+      badge(viewModel.route.modal === 'gate' ? 'gate response' : 'task input', viewModel.route.modal === 'gate' ? 'warning' : 'accent'),
+      badge('active', 'success')
+    ),
+    Text({ bold: viewModel.input.value.length > 0, dim: viewModel.input.value.length === 0, children: [displayValue || ''] }),
+    viewModel.input.context ? Text({ dim: true, children: [viewModel.input.context] }) : null,
+    viewModel.chrome.runId ? kvRow('run', viewModel.chrome.runId) : null,
+    viewModel.chrome.status ? kvRow('status', String(viewModel.chrome.status)) : null
+  ].filter((item): item is NonNullable<typeof item> => item !== null))
 }
 
 export function TuiAppShell(props: TuiAppShellProps): ReturnType<typeof Box> {
   const { viewModel } = props
-  const screen = renderScreen(viewModel)
-  const modal = renderModal(viewModel)
 
   return Box(
     {
@@ -74,21 +101,7 @@ export function TuiAppShell(props: TuiAppShellProps): ReturnType<typeof Box> {
       appShell: true,
       theme: viewModel.theme.name
     },
-    panel(viewModel.chrome.title, [
-      Text({ bold: true, children: [viewModel.chrome.title] }),
-      viewModel.chrome.subtitle ? Text({ dim: true, children: [viewModel.chrome.subtitle] }) : null,
-      viewModel.chrome.modeSummary ? Text({ children: [viewModel.chrome.modeSummary] }) : null,
-      viewModel.chrome.focusSummary ? Text({ dim: true, children: [viewModel.chrome.focusSummary] }) : null,
-      viewModel.chrome.selectionSummary ? Text({ dim: true, children: [viewModel.chrome.selectionSummary] }) : null,
-      viewModel.chrome.runId ? Text({ children: [`run: ${viewModel.chrome.runId}`] }) : null,
-      viewModel.chrome.routeLabel ? badge(viewModel.chrome.routeLabel, 'accent') : null,
-      viewModel.chrome.status ? badge(String(viewModel.chrome.status), 'neutral') : null,
-      footerHints(viewModel).length > 0 ? Text({ dim: true, children: [footerHints(viewModel).join('   ')] }) : null,
-      Text({ dim: true, children: [`route: ${routeTitle(viewModel)}`] })
-    ].filter((item): item is NonNullable<typeof item> => item !== null)),
-    split([screen], modal ? [modal] : [Text({ dim: true, children: ['Modal closed · Enter activate · / palette · q quit'] })]),
-    panel('Footer', [
-      Text({ dim: true, children: ['Tab cycle focus   Enter activate   Esc close/back   / palette   q quit'] })
-    ])
+    Box({ direction: 'column', flexGrow: 1 }, renderScreen(viewModel)),
+    renderInputPanel(viewModel)
   )
 }

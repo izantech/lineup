@@ -71,6 +71,13 @@ export type TuiRunCard = {
   summary?: string
   updatedAt?: string
   recoveryHint?: string
+  recoveryAction?: 'answer' | 'resume' | 'inspect'
+  recoveryCommand?: string
+  expiresAt?: string
+  artifactLabel?: string
+  artifactSummary?: string
+  relatedArtifactLabel?: string
+  relatedArtifactSummary?: string
   actions?: readonly TuiAction[]
 } & TuiSelectionState
 
@@ -103,6 +110,8 @@ export type TuiComposerViewModel = {
   focusedFieldId?: string
   selectedActionId?: string
   modeSummary?: string
+  workflowOptions?: readonly string[]
+  tacticOptions?: readonly string[]
   fields: readonly TuiComposerField[]
   validation: readonly string[]
   suggestedActions: readonly TuiAction[]
@@ -154,6 +163,10 @@ export type TuiArtifactCard = {
   summary?: string
   hash?: string
   status?: 'present' | 'missing' | 'stale'
+  relatedArtifactLabel?: string
+  relatedArtifactSummary?: string
+  contentLabel?: string
+  contentSummary?: string
 } & TuiSelectionState
 
 export type TuiLiveRunViewModel = {
@@ -197,6 +210,9 @@ export type TuiGateViewModel = {
   question: string
   context?: string
   statusLine?: string
+  expiresAt?: string
+  recoveryAction?: 'answer' | 'resume' | 'inspect'
+  recoveryCommand?: string
   focusedChoiceIndex?: number
   selectedChoiceValue?: string
   freeTextValue?: string
@@ -205,6 +221,62 @@ export type TuiGateViewModel = {
   freeTextLabel?: string
   artifactPreview: TuiArtifactCard | null
   help: readonly string[]
+}
+
+export type TuiInspectionPane =
+  | 'summary'
+  | 'artifacts'
+  | 'content'
+  | 'diff'
+  | 'logs'
+  | 'replay'
+  | 'history'
+  | 'actions'
+
+export type TuiArtifactContent = {
+  title: string
+  kind: string
+  language?: string
+  path?: string
+  lines: readonly string[]
+  summary?: string
+}
+
+export type TuiLogDetail = {
+  id: string
+  label: string
+  lines: readonly string[]
+  tone?: TuiTone
+  focused?: boolean
+  selected?: boolean
+}
+
+export type TuiReplayEntry = {
+  id: string
+  timestamp?: string
+  label: string
+  detail?: string
+  focused?: boolean
+  selected?: boolean
+}
+
+export type TuiHistoryEntry = {
+  runId: string
+  status: PipelineRunStatus | 'idle' | 'unknown'
+  workflow?: string
+  currentStage?: string
+  startedAt?: string
+  finishedAt?: string
+  duration?: string
+  retryCount?: number
+  focused?: boolean
+  selected?: boolean
+}
+
+export type TuiRecoverySummary = {
+  action: 'answer' | 'resume' | 'inspect'
+  message: string
+  command?: string
 }
 
 export type TuiInspectionSection = {
@@ -232,6 +304,7 @@ export type TuiInspectionViewModel = {
   runId: string
   status: PipelineRunStatus | 'idle' | 'unknown'
   summary?: string
+  activePane?: TuiInspectionPane
   focusedSection?: 'summary' | 'actions' | 'artifacts' | 'diffs' | 'recentRuns'
   selectedRunId?: string
   selectedArtifactKind?: string
@@ -239,7 +312,12 @@ export type TuiInspectionViewModel = {
   selectedActionId?: string
   sections: readonly TuiInspectionSection[]
   artifacts: readonly TuiArtifactCard[]
+  artifactContent?: TuiArtifactContent | null
   diffs: readonly TuiDiffEntry[]
+  logs?: readonly TuiLogDetail[]
+  replay?: readonly TuiReplayEntry[]
+  history?: readonly TuiHistoryEntry[]
+  recovery?: TuiRecoverySummary | null
   recentRuns: readonly TuiRunCard[]
   actions: readonly TuiAction[]
 }
@@ -279,12 +357,26 @@ export type TuiHelpPaletteViewModel = {
   recentCommands: readonly TuiPaletteCommand[]
 }
 
+export type TuiInputViewModel = {
+  title: string
+  label: string
+  value: string
+  placeholder: string
+  context?: string
+  hint?: string
+  visible?: boolean
+}
+
 export type TuiChromeViewModel = {
   title: string
   subtitle?: string
   modeSummary?: string
   focusSummary?: string
   selectionSummary?: string
+  inputLabel?: string
+  inputValue?: string
+  inputHint?: string
+  inputPlaceholder?: string
   runId?: string
   status?: PipelineRunStatus | 'idle' | 'unknown'
   routeLabel?: string
@@ -301,6 +393,7 @@ export type TuiAppViewModel = {
   gate: TuiGateViewModel
   inspection: TuiInspectionViewModel
   help: TuiHelpPaletteViewModel
+  input: TuiInputViewModel
 }
 
 export type TuiCallbacks = {
@@ -330,7 +423,7 @@ const defaultTheme: TuiTheme = {
 
 const defaultChrome: TuiChromeViewModel = {
   title: 'Lineup',
-  hints: ['/', 'palette', 'q quit'],
+  hints: ['Enter submit', 'Esc clear'],
   routeLabel: 'Home'
 }
 
@@ -370,6 +463,8 @@ export function createTuiComposerViewModel(input: Partial<TuiComposerViewModel> 
     focusedFieldId: input.focusedFieldId,
     selectedActionId: input.selectedActionId,
     modeSummary: input.modeSummary,
+    workflowOptions: input.workflowOptions ?? [],
+    tacticOptions: input.tacticOptions ?? [],
     fields: input.fields ?? [],
     validation: input.validation ?? [],
     suggestedActions: input.suggestedActions ?? [],
@@ -413,6 +508,9 @@ export function createTuiGateViewModel(input: Partial<TuiGateViewModel> & Pick<T
     question: input.question,
     context: input.context,
     statusLine: input.statusLine,
+    expiresAt: input.expiresAt,
+    recoveryAction: input.recoveryAction,
+    recoveryCommand: input.recoveryCommand,
     focusedChoiceIndex: input.focusedChoiceIndex,
     selectedChoiceValue: input.selectedChoiceValue,
     freeTextValue: input.freeTextValue,
@@ -430,6 +528,7 @@ export function createTuiInspectionViewModel(input: Partial<TuiInspectionViewMod
     runId: input.runId,
     status: input.status ?? 'idle',
     summary: input.summary,
+    activePane: input.activePane ?? 'summary',
     focusedSection: input.focusedSection,
     selectedRunId: input.selectedRunId,
     selectedArtifactKind: input.selectedArtifactKind,
@@ -437,7 +536,12 @@ export function createTuiInspectionViewModel(input: Partial<TuiInspectionViewMod
     selectedActionId: input.selectedActionId,
     sections: input.sections ?? [],
     artifacts: input.artifacts ?? [],
+    artifactContent: input.artifactContent ?? null,
     diffs: input.diffs ?? [],
+    logs: input.logs ?? [],
+    replay: input.replay ?? [],
+    history: input.history ?? [],
+    recovery: input.recovery ?? null,
     recentRuns: input.recentRuns ?? [],
     actions: input.actions ?? []
   }
@@ -460,8 +564,37 @@ export function createTuiHelpPaletteViewModel(input: Partial<TuiHelpPaletteViewM
   }
 }
 
+export function createTuiInputViewModel(input: Partial<TuiInputViewModel> = {}): TuiInputViewModel {
+  return {
+    title: input.title ?? 'Input',
+    label: input.label ?? 'Message',
+    value: input.value ?? '',
+    placeholder: input.placeholder ?? 'Type the task you want Lineup to run.',
+    context: input.context,
+    hint: input.hint ?? 'The input panel is the only editable area.',
+    visible: input.visible ?? true
+  }
+}
+
 export function createTuiAppViewModel(input: Partial<TuiAppViewModel> = {}): TuiAppViewModel {
   const route = input.route ?? { screen: 'home' }
+  const derivedInput = createTuiInputViewModel({
+    label: input.input?.label ?? input.chrome?.inputLabel ?? 'Message',
+    value: input.input?.value ?? input.chrome?.inputValue ?? input.composer?.prompt ?? '',
+    placeholder: input.input?.placeholder ?? input.chrome?.inputPlaceholder ?? 'Type the task you want Lineup to run.',
+    context:
+      input.input?.context ??
+      input.chrome?.subtitle ??
+      input.home?.repoPath ??
+      input.chrome?.modeSummary ??
+      input.chrome?.selectionSummary,
+    hint:
+      input.input?.hint ??
+      input.chrome?.inputHint ??
+      (route.screen === 'compose'
+        ? 'Type the task here, then press Enter to start.'
+        : 'The main panel is read-only; task input lives here.')
+  })
 
   return {
     route,
@@ -476,6 +609,7 @@ export function createTuiAppViewModel(input: Partial<TuiAppViewModel> = {}): Tui
       question: 'Awaiting gate request'
     }),
     inspection: input.inspection ?? createTuiInspectionViewModel({ runId: 'unknown' }),
-    help: input.help ?? createTuiHelpPaletteViewModel()
+    help: input.help ?? createTuiHelpPaletteViewModel(),
+    input: input.input ? { ...derivedInput, ...input.input } : derivedInput
   }
 }

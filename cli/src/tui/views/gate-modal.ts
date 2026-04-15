@@ -1,6 +1,6 @@
 import { Box, Text } from '../ink-shim'
 import { badge, bulletList, card, emptyState, kvRow, modal, split } from '../layout'
-import { formatShortHash } from '../format'
+import { formatIsoTimestamp, formatShortHash } from '../format'
 import type { TuiGateViewModel } from '../types'
 import { stateBadges, stateRow } from './state'
 
@@ -10,6 +10,19 @@ export type GateModalProps = {
 
 export function GateModal(props: GateModalProps) {
   const { viewModel } = props
+  const artifactPreview = viewModel.artifactPreview as TuiGateViewModel['artifactPreview'] & {
+    relatedArtifactLabel?: string
+    relatedArtifactSummary?: string
+    contentLabel?: string
+    contentSummary?: string
+  }
+  const recoveryBadge =
+    viewModel.recoveryAction ? badge(`recovery: ${viewModel.recoveryAction}`, viewModel.recoveryAction === 'resume' ? 'warning' : 'accent') : null
+  const recoveryDetails = [
+    viewModel.statusLine ? Text({ dim: true, children: [viewModel.statusLine] }) : null,
+    viewModel.expiresAt ? kvRow('expires', formatIsoTimestamp(viewModel.expiresAt)) : null,
+    viewModel.recoveryCommand ? kvRow('recovery command', viewModel.recoveryCommand) : null
+  ].filter((item): item is NonNullable<typeof item> => item !== null)
 
   const choices = viewModel.choices.length > 0
     ? viewModel.choices.map((choice, index) =>
@@ -34,13 +47,17 @@ export function GateModal(props: GateModalProps) {
 
   const preview = viewModel.artifactPreview
     ? card(
-        viewModel.artifactPreview.label,
+        artifactPreview.label,
         [
-          Box({ direction: 'row', artifact: viewModel.artifactPreview.kind }, ...stateBadges(viewModel.artifactPreview, 'accent')),
-          kvRow('kind', viewModel.artifactPreview.kind),
-          viewModel.artifactPreview.path ? kvRow('path', viewModel.artifactPreview.path) : null,
-          viewModel.artifactPreview.hash ? kvRow('hash', formatShortHash(viewModel.artifactPreview.hash)) : null,
-          viewModel.artifactPreview.summary ? Text({ children: [viewModel.artifactPreview.summary] }) : null
+          Box({ direction: 'row', artifact: artifactPreview.kind }, ...stateBadges(artifactPreview, 'accent')),
+          kvRow('kind', artifactPreview.kind),
+          artifactPreview.path ? kvRow('path', artifactPreview.path) : null,
+          artifactPreview.hash ? kvRow('hash', formatShortHash(artifactPreview.hash)) : null,
+          artifactPreview.summary ? Text({ children: [artifactPreview.summary] }) : null,
+          artifactPreview.relatedArtifactLabel ? kvRow('related', artifactPreview.relatedArtifactLabel) : null,
+          artifactPreview.relatedArtifactSummary ? Text({ dim: true, children: [artifactPreview.relatedArtifactSummary] }) : null,
+          artifactPreview.contentLabel ? kvRow('content', artifactPreview.contentLabel) : null,
+          artifactPreview.contentSummary ? Text({ children: [artifactPreview.contentSummary] }) : null
         ].filter((item): item is NonNullable<typeof item> => item !== null)
       )
     : emptyState('Artifact preview is unavailable', 'The gate modal can show the related plan, review, or verification artifact.')
@@ -48,9 +65,10 @@ export function GateModal(props: GateModalProps) {
   return modal(viewModel.title, [
     kvRow('request', String(viewModel.requestId)),
     kvRow('gate', viewModel.gateType),
+    recoveryBadge,
     Text({ bold: true, children: [viewModel.question] }),
     viewModel.context ? Text({ children: [viewModel.context] }) : null,
-    viewModel.statusLine ? Text({ dim: true, children: [viewModel.statusLine] }) : null,
+    ...recoveryDetails,
     split([preview], [bulletList(viewModel.help, 'Help'), ...choices]),
     viewModel.allowFreeText ? Text({ dim: true, children: [viewModel.freeTextLabel ?? 'Type a response and press Enter to submit it.'] }) : null,
     typeof viewModel.focusedChoiceIndex === 'number'

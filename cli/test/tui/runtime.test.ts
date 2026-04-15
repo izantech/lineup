@@ -1,61 +1,112 @@
 import { describe, expect, it } from 'vitest'
 
 import { runTuiApp } from '../../src/tui/runtime'
-import { createTuiHelpPaletteViewModel } from '../../src/tui/types'
+import { createTuiLiveRunViewModel } from '../../src/tui/types'
 
 describe('runTuiApp', () => {
-  it('builds a shell session from the provided view model and rerenders route changes', async () => {
+  it('renders a stacked main pane and input panel from a provided view model', async () => {
     const session = await runTuiApp({
       viewModel: {
-        route: { screen: 'help', modal: 'help' },
-        help: createTuiHelpPaletteViewModel({
-          title: 'Command palette',
-          query: 'run',
-          placeholder: 'Search commands',
-          sections: [
-            {
-              title: 'Runs',
-              commands: [
-                {
-                  id: 'new-run',
-                  label: 'New run',
-                  description: 'Open the composer and start a pipeline',
-                  shortcut: 'enter',
-                  slashCommand: 'run'
-                }
-              ]
-            }
-          ],
-          commands: [
-            {
-              id: 'new-run',
-              label: 'New run',
-              description: 'Open the composer and start a pipeline',
-              shortcut: 'enter',
-              slashCommand: 'run'
-            }
-          ],
-          keyBindings: [
-            { keys: ['/'], label: 'Open palette', description: 'Focus the command search' }
-          ],
-          slashCommands: [
-            { id: 'run', label: 'Run command', description: 'Open the composer', slashCommand: 'run' }
-          ],
-          recentCommands: [
-            { id: 'logs', label: 'Logs', description: 'Show the latest status stream', shortcut: 'l' }
-          ]
-        })
+        route: { screen: 'home' },
+        chrome: {
+          title: 'Lineup',
+          subtitle: 'Repository overview',
+          modeSummary: 'interactive · codex · ready',
+          inputLabel: 'Task prompt',
+          inputValue: 'Update the TUI to use a stacked input panel',
+          inputHint: 'Type the task you want Lineup to run. Enter starts the pipeline.',
+          inputPlaceholder: 'Describe the task you want Lineup to make progress on',
+          hints: ['/ palette', 'q quit']
+        },
+        home: {
+          title: 'Home',
+          subtitle: 'Repository overview',
+          repoPath: '/tmp/repo',
+          focusedSection: 'quickActions',
+          readiness: [],
+          latestRun: null,
+          recentRuns: [],
+          quickActions: [],
+          notes: []
+        }
       }
     })
 
-    expect(session.text).toContain('route: help + help')
-    expect(session.snapshot).toContain('Command palette')
-    expect(session.text).toContain('New run')
+    expect(session.snapshot).toContain('Workspace')
+    expect(session.snapshot).toContain('Input')
+    expect(session.text).toContain('Task prompt')
+    expect(session.text).toContain('Update the TUI to use a stacked input panel')
+    expect(session.text).toContain('Type the task you want Lineup to run. Enter starts the pipeline.')
+  })
 
-    session.update({
-      route: { screen: 'inspect' }
+  it('keeps the input panel context available when a gate is pending', async () => {
+    const session = await runTuiApp({
+      viewModel: {
+        route: { screen: 'live', modal: 'gate' },
+        chrome: {
+          title: 'Lineup',
+          subtitle: 'Gate response required',
+          modeSummary: 'interactive · codex · ready',
+          inputLabel: 'Gate response',
+          inputValue: 'approve',
+          inputHint: 'Type a response for the pending gate. Enter submits it.',
+          inputPlaceholder: 'Respond to the pending gate',
+          hints: ['q quit']
+        },
+        liveRun: createTuiLiveRunViewModel({
+          runId: 'run-123',
+          status: 'blocked'
+        }),
+        gate: {
+          title: 'Gate',
+          requestId: 'gate-1',
+          gateType: 'approval',
+          question: 'Approve the plan?',
+          statusLine: 'Waiting for a response',
+          allowFreeText: true,
+          freeTextLabel: 'Reason',
+          artifactPreview: null,
+          choices: [],
+          help: []
+        }
+      }
     })
 
-    expect(session.text).toContain('route: inspect')
+    expect(session.snapshot).toContain('Gate')
+    expect(session.snapshot).toContain('Input')
+    expect(session.text).toContain('Gate response')
+    expect(session.text).toContain('approve')
+    expect(session.text).toContain('Type a response for the pending gate. Enter submits it.')
+  })
+
+  it('keeps a bottom dock visible while the pipeline is executing without a question', async () => {
+    const session = await runTuiApp({
+      viewModel: {
+        route: { screen: 'live' },
+        chrome: {
+          title: 'Lineup',
+          subtitle: 'Pipeline running',
+          modeSummary: 'interactive · codex · busy',
+          hints: []
+        },
+        liveRun: createTuiLiveRunViewModel({
+          runId: 'run-456',
+          status: 'running'
+        }),
+        input: {
+          title: 'Input',
+          label: 'Task prompt',
+          value: '',
+          placeholder: 'Describe the task you want Lineup to make progress on',
+          hint: 'Type the task you want Lineup to run. Enter starts the pipeline.',
+          visible: false
+        }
+      }
+    })
+
+    expect(session.snapshot).toContain('Live run')
+    expect(session.snapshot).toContain('Input')
+    expect(session.text).toContain('Input unavailable')
+    expect(session.text).toContain('Lineup is executing the pipeline.')
   })
 })

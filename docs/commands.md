@@ -6,6 +6,7 @@ This page is the operator reference. If you want the human frontend, start with 
 
 - `./dev check` - run all checks
 - `./dev build`, `./dev typecheck`, `./dev test` - individual checks
+- `./dev tui` - launch the local-source TUI without installing `lineup` globally
 - `./dev install local` - rebuild and reinstall from the current source tree
 - `./dev install remote` - install latest from npm
 - `./dev install clean [--purge]` - remove CLI and host skills

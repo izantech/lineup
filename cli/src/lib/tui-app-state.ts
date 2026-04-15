@@ -12,6 +12,15 @@ import {
   type TuiLiveRunViewModel as StateLiveRunViewModel,
   type TuiLogEvent as StateLogEvent
 } from "./tui-models.js";
+import {
+  listTacticEntries,
+  listWorkflowEntries,
+  readArtifactContent,
+  readBridgeRecovery,
+  readRunHistory,
+  readRunLogs,
+  readRunReplay
+} from "./tui-services.js";
 import { COMPOSER_FIELD_COUNT, type TuiComposerState, type TuiRuntimeRoute, type TuiSessionState } from "../tui/controller.js";
 import {
   createTuiAction,
@@ -32,6 +41,15 @@ export type TuiAppStateInput = {
   session: TuiSessionState;
   liveEventsByRunId: Record<string, StateLogEvent[]>;
 };
+
+const INSPECTABLE_ARTIFACT_KINDS = new Set(["plan", "tasks", "review", "protocol", "pipeline-state"]);
+
+function summarizeTextContent(content: string): string | undefined {
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+}
 
 function mapAction(
   action: StateAction,
@@ -207,8 +225,46 @@ function buildComposerHelp(composer: TuiComposerState): string[] {
     "Type to edit the prompt.",
     "Enter starts a run.",
     "Tab cycles configuration values.",
-    `Current host: ${composer.host}`
+    "Left and right arrows adjust the focused composer field.",
+    "Workflow and tactic are mutually exclusive.",
+    `Current host: ${composer.host}`,
+    composer.workflow ? `Workflow: ${composer.workflow}` : "Workflow: default",
+    composer.tactic ? `Tactic: ${composer.tactic}` : "Tactic: none"
   ];
+}
+
+function buildInputLabel(session: TuiSessionState): string {
+  return session.pendingGate ? "Gate response" : "Task prompt"
+}
+
+function buildInputValue(session: TuiSessionState): string {
+  return session.pendingGate ? session.gateInput : session.composer.prompt
+}
+
+function buildInputHint(session: TuiSessionState): string {
+  if (session.pendingGate) {
+    if (session.pendingGate.choices.length > 0 && !session.pendingGate.allowFreeText) {
+      return "Use the arrow keys to select a choice. Press Enter to submit it."
+    }
+
+    return session.pendingGate.allowFreeText
+      ? "Type a response for the pending gate. Enter submits it."
+      : "Type a gate choice and press Enter to submit it."
+  }
+
+  return "Type the task you want Lineup to run. Enter starts the pipeline."
+}
+
+function showInputPanel(session: TuiSessionState, runStatus?: string): boolean {
+  if (session.pendingGate) {
+    return session.pendingGate.allowFreeText || session.pendingGate.choices.length === 0
+  }
+
+  if (runStatus === "running" || runStatus === "blocked" || runStatus === "pending") {
+    return false
+  }
+
+  return !session.busy
 }
 
 function mapHomeView(home: StateHomeViewModel) {
@@ -451,6 +507,7 @@ function mapInspectionViewWithState(model: StateInspectionViewModel | null, sess
   const base = mapInspectionView(model)
   return {
     ...base,
+    activePane: session.inspectPane,
     focusedSection:
       session.inspectFocus === "sections"
         ? "summary" as const
@@ -507,8 +564,92 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
   const liveEvents = selectedRunId ? input.liveEventsByRunId[selectedRunId] ?? [] : [];
   const liveRun = selectedRunId ? buildLiveRunViewModel(selectedRunId, liveEvents, input.cwd) : null;
   const composerDefaults = buildRunComposerViewModel();
+  const workflowOptions = listWorkflowEntries(input.cwd).map((entry) => entry.file)
+  const tacticOptions = listTacticEntries(input.cwd, true).map((entry) => entry.name)
   const paletteCommands = buildPaletteCommands(input.session.helpQuery, input.session.recentCommandIds);
   const paletteGroups = [...new Set(paletteCommands.map((command) => command.category ?? "Actions"))];
+  const homeView = mapHomeViewWithState(home, input.session)
+  const inspectionView = mapInspectionViewWithState(inspection, input.session)
+  const selectedArtifactKind = inspectionView.selectedArtifactKind
+  const artifactContent =
+    selectedRunId && selectedArtifactKind && INSPECTABLE_ARTIFACT_KINDS.has(selectedArtifactKind)
+      ? (() => {
+          try {
+            const artifact = readArtifactContent(selectedArtifactKind, selectedRunId, input.cwd)
+            return {
+              title: `${artifact.kind} content`,
+              kind: artifact.kind,
+              path: artifact.path,
+              summary: summarizeTextContent(artifact.content),
+              lines: artifact.content.split(/\r?\n/)
+            }
+          } catch {
+            return null
+          }
+        })()
+      : null
+  const logDetails =
+    selectedRunId
+      ? (() => {
+          try {
+            return readRunLogs(selectedRunId, input.cwd).entries.slice(0, 20).map((entry, index) => ({
+              id: `log-${index}`,
+              label: `Log entry ${index + 1}`,
+              lines: JSON.stringify(entry, null, 2).split(/\r?\n/),
+              selected: index === 0
+            }))
+          } catch {
+            return []
+          }
+        })()
+      : []
+  const replayEntries =
+    selectedRunId
+      ? (() => {
+          try {
+            return readRunReplay(selectedRunId, input.cwd).map((entry, index) => ({
+              id: `replay-${index}`,
+              label: entry.label,
+              detail: `offset ${entry.offsetMs}ms`,
+              selected: index === 0
+            }))
+          } catch {
+            return []
+          }
+        })()
+      : []
+  const historyEntries = readRunHistory({ limit: 10 }, input.cwd).map((entry, index) => ({
+    runId: entry.run_id,
+    status: entry.status as "pending" | "running" | "blocked" | "succeeded" | "failed" | "canceled" | "idle" | "unknown",
+    workflow: entry.workflow ?? undefined,
+    currentStage: entry.current_stage ?? undefined,
+    startedAt: entry.started_at ?? undefined,
+    finishedAt: entry.finished_at ?? undefined,
+    duration: entry.duration_human ?? undefined,
+    retryCount: entry.retry_count,
+    selected: index === 0
+  }))
+  const bridgeRecovery = selectedRunId ? await readBridgeRecovery(selectedRunId, input.cwd) : { session: null, events: null, recovery: null }
+  const recoverySummary = bridgeRecovery.recovery
+    ? {
+        action: bridgeRecovery.recovery.action,
+        message: bridgeRecovery.recovery.message,
+        command: bridgeRecovery.recovery.command
+      }
+    : null
+  const latestRunExtras =
+    home.latestRun && home.latestRun.runId === selectedRunId
+      ? {
+          recoveryAction: bridgeRecovery.recovery?.action,
+          recoveryCommand: bridgeRecovery.recovery?.command,
+          expiresAt: bridgeRecovery.session?.pending_question?.expiresAt,
+          artifactLabel: artifactContent?.title,
+          artifactSummary: artifactContent?.summary,
+          actions: inspectionView.actions
+        }
+      : {}
+  const selectedReadinessId =
+    homeView.readiness.find((item) => item.status !== "ready")?.id ?? homeView.readiness[0]?.id
 
   return createTuiAppViewModel({
     route: input.session.route,
@@ -530,6 +671,12 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
                   ? `live · ${input.session.liveFocus}`
                   : `inspect · ${input.session.inspectFocus}`,
       selectionSummary: selectedRunId ? `selected run ${selectedRunId}` : undefined,
+      inputLabel: buildInputLabel(input.session),
+      inputValue: buildInputValue(input.session),
+      inputHint: buildInputHint(input.session),
+      inputPlaceholder: input.session.pendingGate
+        ? "Respond to the pending gate"
+        : "Describe the task you want Lineup to make progress on",
       runId: input.session.attachedRunId ?? selectedRunId,
       status: liveRun?.status as TuiAppViewModel["chrome"]["status"],
       routeLabel: input.session.route.screen,
@@ -541,7 +688,26 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
         `${preferences.keybindings.quit} quit`
       ]
     },
-    home: mapHomeViewWithState(home, input.session),
+    input: {
+      title: "Input",
+      label: buildInputLabel(input.session),
+      value: buildInputValue(input.session),
+      placeholder: input.session.pendingGate
+        ? "Respond to the pending gate"
+        : "Describe the task you want Lineup to make progress on",
+      context: input.session.pendingGate
+        ? input.session.pendingGate.question
+        : selectedRunId
+          ? `Current run ${selectedRunId}`
+          : home.cwd,
+      hint: buildInputHint(input.session),
+      visible: showInputPanel(input.session, liveRun?.status)
+    },
+    home: {
+      ...homeView,
+      selectedReadinessId,
+      latestRun: homeView.latestRun ? { ...homeView.latestRun, ...latestRunExtras } : null
+    },
     composer: {
       title: "Compose run",
       prompt: input.session.composer.prompt,
@@ -550,11 +716,27 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           ? undefined
           : input.session.composerFocus === "prompt"
             ? "prompt"
-            : ["prompt", "host", "isolation", "implementMethod", "approvePlan", "maxParallel"][input.session.composerFieldIndex],
+            : [
+                "prompt",
+                "host",
+                "workflow",
+                "tactic",
+                "isolation",
+                "implementMethod",
+                "fromStage",
+                "timeout",
+                "gateTimeout",
+                "dryRun",
+                "forceRerun",
+                "approvePlan",
+                "maxParallel"
+              ][input.session.composerFieldIndex],
       selectedActionId: input.session.composerFocus === "actions"
         ? ["start-run", "back-home"][input.session.composerActionIndex]
         : undefined,
       modeSummary: `host ${input.session.composer.host} · isolation ${input.session.composer.isolation} · implement ${input.session.composer.implementMethod}`,
+      workflowOptions,
+      tacticOptions,
       fields: [
         {
           id: "prompt",
@@ -579,9 +761,10 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           total: COMPOSER_FIELD_COUNT
         },
         {
-          id: "isolation",
-          label: "Isolation",
-          value: input.session.composer.isolation,
+          id: "workflow",
+          label: "Workflow",
+          value: input.session.composer.workflow ?? "default",
+          hint: workflowOptions.length > 0 ? `available: ${workflowOptions.join(", ")}` : "No workflow files discovered.",
           editable: true,
           focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 2,
           selected: input.session.composerFieldIndex === 2,
@@ -589,9 +772,10 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           total: COMPOSER_FIELD_COUNT
         },
         {
-          id: "implementMethod",
-          label: "Implement method",
-          value: input.session.composer.implementMethod,
+          id: "tactic",
+          label: "Tactic",
+          value: input.session.composer.tactic ?? "none",
+          hint: tacticOptions.length > 0 ? `available: ${tacticOptions.join(", ")}` : "No tactics discovered.",
           editable: true,
           focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 3,
           selected: input.session.composerFieldIndex === 3,
@@ -599,9 +783,9 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           total: COMPOSER_FIELD_COUNT
         },
         {
-          id: "approvePlan",
-          label: "Approve plan",
-          value: input.session.composer.approvePlan ? "yes" : "no",
+          id: "isolation",
+          label: "Isolation",
+          value: input.session.composer.isolation,
           editable: true,
           focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 4,
           selected: input.session.composerFieldIndex === 4,
@@ -609,17 +793,93 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
           total: COMPOSER_FIELD_COUNT
         },
         {
-          id: "maxParallel",
-          label: "Max parallel",
-          value: String(input.session.composer.maxParallel),
+          id: "implementMethod",
+          label: "Implement method",
+          value: input.session.composer.implementMethod,
           editable: true,
           focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 5,
           selected: input.session.composerFieldIndex === 5,
           index: 5,
           total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "fromStage",
+          label: "From stage",
+          value: input.session.composer.fromStage ?? "start",
+          hint: "Used for rerun or resume flows.",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 6,
+          selected: input.session.composerFieldIndex === 6,
+          index: 6,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "timeout",
+          label: "Timeout",
+          value: input.session.composer.timeout !== undefined ? String(input.session.composer.timeout) : "default",
+          hint: "Stage timeout hint in seconds.",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 7,
+          selected: input.session.composerFieldIndex === 7,
+          index: 7,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "gateTimeout",
+          label: "Gate timeout",
+          value: input.session.composer.gateTimeout !== undefined ? String(input.session.composer.gateTimeout) : "default",
+          hint: "Gate timeout in seconds.",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 8,
+          selected: input.session.composerFieldIndex === 8,
+          index: 8,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "dryRun",
+          label: "Dry run",
+          value: input.session.composer.dryRun ? "yes" : "no",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 9,
+          selected: input.session.composerFieldIndex === 9,
+          index: 9,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "forceRerun",
+          label: "Force rerun",
+          value: input.session.composer.forceRerun ? "yes" : "no",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 10,
+          selected: input.session.composerFieldIndex === 10,
+          index: 10,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "approvePlan",
+          label: "Approve plan",
+          value: input.session.composer.approvePlan ? "yes" : "no",
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 11,
+          selected: input.session.composerFieldIndex === 11,
+          index: 11,
+          total: COMPOSER_FIELD_COUNT
+        },
+        {
+          id: "maxParallel",
+          label: "Max parallel",
+          value: String(input.session.composer.maxParallel),
+          editable: true,
+          focused: input.session.composerFocus === "fields" && input.session.composerFieldIndex === 12,
+          selected: input.session.composerFieldIndex === 12,
+          index: 12,
+          total: COMPOSER_FIELD_COUNT
         }
       ],
-      validation: input.session.composer.prompt.trim() ? [] : ["Prompt is required to start a run."],
+      validation: [
+        ...(input.session.composer.prompt.trim() ? [] : ["Prompt is required to start a run."]),
+        ...(input.session.composer.workflow && input.session.composer.tactic ? ["Workflow and tactic are mutually exclusive."] : [])
+      ],
       suggestedActions: [
         createTuiAction({
           id: "start-run",
@@ -650,6 +910,9 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
       question: input.session.pendingGate?.question ?? "No gate is waiting.",
       context: input.session.pendingGate?.context,
       statusLine: input.session.pendingGate ? "Choose an option or enter a free-text response." : "No pending gate.",
+      expiresAt: bridgeRecovery.session?.pending_question?.expiresAt,
+      recoveryAction: bridgeRecovery.recovery?.action,
+      recoveryCommand: bridgeRecovery.recovery?.command,
       focusedChoiceIndex: input.session.pendingGate ? input.session.gateSelectionIndex : undefined,
       selectedChoiceValue: input.session.pendingGate?.choices[input.session.gateSelectionIndex],
       freeTextValue: input.session.gateInput || undefined,
@@ -662,10 +925,28 @@ export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<Tui
       })),
       allowFreeText: input.session.pendingGate?.allowFreeText ?? false,
       freeTextLabel: "Type your response and press Enter.",
-      artifactPreview: liveRun?.artifacts[0] ? mapArtifactLine(liveRun.artifacts[0]) : null,
+      artifactPreview: artifactContent
+        ? {
+            kind: artifactContent.kind,
+            label: artifactContent.title,
+            path: artifactContent.path,
+            summary: artifactContent.summary,
+            contentLabel: artifactContent.title,
+            contentSummary: artifactContent.lines.slice(0, 3).join(" ")
+          }
+        : liveRun?.artifacts[0]
+          ? mapArtifactLine(liveRun.artifacts[0])
+          : null,
       help: ["Esc closes the modal.", "Arrow keys move between choices.", "Enter submits the current selection."]
     },
-    inspection: mapInspectionViewWithState(inspection, input.session),
+    inspection: {
+      ...inspectionView,
+      artifactContent,
+      logs: logDetails,
+      replay: replayEntries,
+      history: historyEntries,
+      recovery: recoverySummary
+    },
     help: {
       title: "Command palette",
       query: input.session.helpQuery ?? "",

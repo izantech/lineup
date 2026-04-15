@@ -27,8 +27,24 @@ function renderRunLine(
   )
 }
 
+function renderOptionalKvRows(rows: readonly (ReturnType<typeof kvRow> | ReturnType<typeof Text> | null)[]) {
+  return rows.filter((item): item is NonNullable<typeof item> => item !== null)
+}
+
 export function HomeView(props: HomeViewProps): ReturnType<typeof Box> {
   const { viewModel } = props
+  const recentRunsTitle = viewModel.focusedSection === 'recentRuns' ? 'Recent runs [active]' : 'Recent runs'
+  const quickActionsTitle = viewModel.focusedSection === 'quickActions' ? 'Quick actions [active]' : 'Quick actions'
+  const latestRun = viewModel.latestRun as TuiHomeViewModel['latestRun'] & {
+    recoveryAction?: string
+    recoveryCommand?: string
+    expiresAt?: string
+    artifactLabel?: string
+    artifactSummary?: string
+    relatedArtifactLabel?: string
+    relatedArtifactSummary?: string
+  }
+  const selectedReadiness = viewModel.readiness.find((item) => item.id === viewModel.selectedReadinessId)
   const readinessBody = viewModel.readiness.length > 0
     ? viewModel.readiness.map((item, index) =>
         card(
@@ -59,6 +75,34 @@ export function HomeView(props: HomeViewProps): ReturnType<typeof Box> {
         viewModel.latestRun.updatedAt ? kvRow('updated', formatIsoTimestamp(viewModel.latestRun.updatedAt)) : null,
         viewModel.latestRun.summary ? Text({ children: [viewModel.latestRun.summary] }) : null,
         viewModel.latestRun.recoveryHint ? Text({ dim: true, children: [viewModel.latestRun.recoveryHint] }) : null,
+        selectedReadiness
+          ? card(
+              'Selected readiness',
+              [
+                stateRow(
+                  selectedReadiness.label,
+                  selectedReadiness,
+                  selectedReadiness.detail,
+                  selectedReadiness.status === 'ready' ? 'success' : selectedReadiness.status === 'warning' ? 'warning' : 'danger'
+                ),
+                selectedReadiness.action ? actionLabel(selectedReadiness.action) : null
+              ].filter((item): item is NonNullable<typeof item> => item !== null)
+            )
+          : null,
+        latestRun
+          ? section(
+              'Recovery and artifact context',
+              renderOptionalKvRows([
+                latestRun.recoveryAction ? kvRow('recovery', latestRun.recoveryAction) : null,
+                latestRun.recoveryCommand ? kvRow('command', latestRun.recoveryCommand) : null,
+                latestRun.expiresAt ? kvRow('expires', formatIsoTimestamp(latestRun.expiresAt)) : null,
+                latestRun.artifactLabel ? kvRow('artifact', latestRun.artifactLabel) : null,
+                latestRun.artifactSummary ? Text({ children: [latestRun.artifactSummary] }) : null,
+                latestRun.relatedArtifactLabel ? kvRow('related artifact', latestRun.relatedArtifactLabel) : null,
+                latestRun.relatedArtifactSummary ? Text({ dim: true, children: [latestRun.relatedArtifactSummary] }) : null
+              ])
+            )
+          : null,
         viewModel.latestRun.actions && viewModel.latestRun.actions.length > 0
           ? section(
               'Actions',
@@ -79,10 +123,12 @@ export function HomeView(props: HomeViewProps): ReturnType<typeof Box> {
     viewModel.subtitle ? Text({ dim: true, children: [viewModel.subtitle] }) : null,
     viewModel.repoPath ? kvRow('repo', viewModel.repoPath) : null,
     viewModel.focusedSection ? Text({ dim: true, children: [`focus: ${viewModel.focusedSection}`] }) : null,
+    Text({ children: ['Tab cycles: Quick actions -> Recent runs'] }),
+    Text({ dim: true, children: ['Use ↑/↓ to move within the active section. Press Enter to open the focused action or run.'] }),
     section('Readiness', readinessBody),
     section('Latest run', latestRunBody),
     section(
-      'Recent runs',
+      recentRunsTitle,
       viewModel.recentRuns.length > 0
         ? viewModel.recentRuns.map((run) =>
             card(
@@ -105,10 +151,12 @@ export function HomeView(props: HomeViewProps): ReturnType<typeof Box> {
               ].filter((entry): entry is NonNullable<typeof entry> => entry !== null)
             )
           )
-        : [emptyState('Recent runs are empty', 'Completed and in-flight runs will appear here as they are created.')]
+        : [emptyState('Recent runs are empty', 'Completed and in-flight runs will appear here as they are created.')],
+      undefined,
+      { active: viewModel.focusedSection === 'recentRuns' }
     ),
     section(
-      'Quick actions',
+      quickActionsTitle,
       viewModel.quickActions.length > 0
         ? viewModel.quickActions.map((action) =>
             Box(
@@ -118,13 +166,22 @@ export function HomeView(props: HomeViewProps): ReturnType<typeof Box> {
               ...stateBadges(action, 'accent')
             )
           )
-        : [emptyState('Quick actions are waiting', 'Run, resume, inspect, and setup commands will appear here once they are available.')]
+        : [emptyState('Quick actions are waiting', 'Run, resume, inspect, and setup commands will appear here once they are available.')],
+      undefined,
+      { active: viewModel.focusedSection === 'quickActions' }
     ),
     viewModel.notes.length > 0
       ? section('Notes', viewModel.notes.map((note) => Text({ children: [note] })))
       : null,
     viewModel.latestRun
-      ? Text({ dim: true, children: [`Latest run reference: ${viewModel.latestRun.runId}`] })
+      ? Text({
+          dim: true,
+          children: [
+            `Latest run reference: ${viewModel.latestRun.runId}${
+              viewModel.latestRun.workflow ? ` · workflow ${viewModel.latestRun.workflow}` : ''
+            }${viewModel.latestRun.stage ? ` · stage ${viewModel.latestRun.stage}` : ''}`
+          ]
+        })
       : null
   ].filter((item): item is NonNullable<typeof item> => item !== null && item !== undefined))
 }

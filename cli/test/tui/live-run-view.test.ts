@@ -5,7 +5,7 @@ import { LiveRunView } from '../../src/tui/views/live-run-view'
 import { createTuiAction, createTuiLiveRunViewModel } from '../../src/tui/types'
 
 describe('LiveRunView', () => {
-  it('renders a full live-run status surface', () => {
+  it('renders a compact live-run status board', () => {
     const viewModel = createTuiLiveRunViewModel({
       title: 'Live run',
       runId: 'run-123',
@@ -60,12 +60,14 @@ describe('LiveRunView', () => {
     const snapshot = serializeTuiNode(node)
 
     expect(text).toContain('Live run')
-    expect(text).toContain('Stage timeline')
+    expect(text).toContain('Pipeline')
     expect(text).toContain('Verification')
     expect(text).toContain('Implementation wave 1')
-    expect(text).toContain('What changed')
+    expect(text).toContain('What Lineup is waiting on')
     expect(text).toContain('Resume selected run')
-    expect(text).not.toContain('The main agent will inject resume, retry, or cancel actions here')
+    expect(text).not.toContain('Tab cycles')
+    expect(text).not.toContain('focused')
+    expect(text).not.toContain('selected\n')
     expect(snapshot).toContain('Plan artifact')
   })
 })
