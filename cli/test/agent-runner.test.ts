@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -620,7 +620,7 @@ process.exit(0)
     expect(result.content).toContain("how_it_works: the runner returned before this process exited");
   });
 
-  it("uses a neutral cwd for Ollama-backed Claude launches", async () => {
+  it("uses the provided working directory for Ollama-backed Claude launches", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-neutral-cwd-"));
     const binDir = join(tempDir, "bin");
     mkdirSync(binDir, { recursive: true });
@@ -677,7 +677,7 @@ date: 2026-04-14
 topic: neutral-cwd
 status: complete
 pipeline_stage: research
-how_it_works: Claude ran from a neutral cwd
+how_it_works: Claude ran from the requested working directory
 \`)
 }
 
@@ -702,10 +702,9 @@ process.exit(0)
         timeoutMs: 2_000
       });
 
-      expect(result.content).toContain("how_it_works: Claude ran from a neutral cwd");
+      expect(result.content).toContain("how_it_works: Claude ran from the requested working directory");
       const capturedCwd = readFileSync(cwdFile, "utf8");
-      expect(capturedCwd).not.toBe(tempDir);
-      expect(capturedCwd).toContain(join(tmpdir(), "lineup-claude-cwd-"));
+      expect(capturedCwd).toBe(realpathSync(tempDir));
     } finally {
       process.env.PATH = originalPath;
       process.env.LINEUP_TEST_CWD_FILE = originalCwdFile;
@@ -1016,6 +1015,303 @@ process.exit(child.status ?? 0)
       expect(prompts).toContain("Create or overwrite");
       expect(prompts.indexOf("Create or overwrite")).toBeGreaterThanOrEqual(0);
       expect(prompts).not.toContain("Convert the following draft into a JSON value that matches the provided schema.");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      process.env.LINEUP_TEST_PROMPT_LOG = originalPromptLog;
+    }
+  });
+
+  it("uses text draft mode for Ollama-backed Claude architect runs before local normalization", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-architect-draft-"));
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const promptLog = join(tempDir, "claude-prompts.log");
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+import { appendFileSync, writeFileSync } from 'node:fs'
+
+const prompt = process.argv.slice(2).join(' ')
+const hasJsonOutputFormat = process.argv.includes('--output-format') && process.argv.includes('json')
+const logPath = process.env.LINEUP_TEST_PROMPT_LOG
+if (logPath) {
+  appendFileSync(logPath, \`PROMPT: \${prompt}\\nOUTPUT_FORMAT_JSON: \${hasJsonOutputFormat}\\n\`)
+}
+
+if (hasJsonOutputFormat) {
+  process.stderr.write('architect draft pass should use text output mode\\n')
+  process.exit(1)
+}
+
+const match = prompt.match(/Create or overwrite (\\S+) with the final structured payload\\./)
+if (match) {
+  writeFileSync(match[1], \`summary: Architect draft
+approaches:
+  - name: Minimal
+    description: Update README.md only
+recommendation: Minimal
+changes:
+  - file: README.md
+    change: Replace the placeholder
+    rationale: Required by the smoke task
+acceptance_criteria:
+  - README updated
+risks:
+  - Small repo task might overfit the plan
+\`)
+}
+process.exit(0)
+`
+    );
+
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+
+const args = process.argv.slice(2)
+const separatorIndex = args.indexOf('--')
+const childArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : []
+const child = spawnSync('claude', childArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  env: process.env
+})
+
+if (child.stdout) {
+  process.stdout.write(child.stdout)
+}
+if (child.stderr) {
+  process.stderr.write(child.stderr)
+}
+process.exit(child.status ?? 0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const originalPromptLog = process.env.LINEUP_TEST_PROMPT_LOG;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    process.env.LINEUP_TEST_PROMPT_LOG = promptLog;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const expectedOutputPath = join(tempDir, "plan.yaml");
+      const schemaPath = join(tempDir, "output.schema.json");
+      writeFileSync(
+        schemaPath,
+        JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              summary: { type: "string" },
+              changes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    file: { type: "string" },
+                    change: { type: "string" },
+                    rationale: { type: "string" }
+                  },
+                  required: ["file", "change", "rationale"]
+                }
+              }
+            },
+            required: ["summary", "changes"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "architect",
+        prompt: `Create or overwrite ${expectedOutputPath} with the final structured payload.`,
+        expectedOutputPath,
+        outputSchemaPath: schemaPath,
+        timeoutMs: 2_000
+      });
+
+      expect(JSON.parse(result.content)).toEqual({
+        summary: "Architect draft",
+        approaches: [
+          {
+            name: "Minimal",
+            description: "Update README.md only"
+          }
+        ],
+        recommendation: "Minimal",
+        changes: [
+          {
+            file: "README.md",
+            change: "Replace the placeholder",
+            rationale: "Required by the smoke task"
+          }
+        ],
+        acceptance_criteria: ["README updated"],
+        risks: ["Small repo task might overfit the plan"]
+      });
+
+      const prompts = readFileSync(promptLog, "utf8");
+      expect(prompts).toContain("OUTPUT_FORMAT_JSON: false");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      process.env.LINEUP_TEST_PROMPT_LOG = originalPromptLog;
+    }
+  });
+
+  it("uses JSON draft mode for Ollama-backed Claude developer runs", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-claude-ollama-developer-draft-"));
+    const homeDir = join(tempDir, "home");
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`,
+      "utf8"
+    );
+
+    const promptLog = join(tempDir, "claude-prompts.log");
+    const fakeClaudePath = join(binDir, "claude");
+    writeFakeHostScript(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs'
+
+const prompt = process.argv.slice(2).join(' ')
+const hasJsonOutputFormat = process.argv.includes('--output-format') && process.argv.includes('json')
+const logPath = process.env.LINEUP_TEST_PROMPT_LOG
+if (logPath) {
+  appendFileSync(logPath, \`PROMPT: \${prompt}\\nOUTPUT_FORMAT_JSON: \${hasJsonOutputFormat}\\n\`)
+}
+
+if (!hasJsonOutputFormat) {
+  process.stderr.write('developer draft pass should use json output mode\\n')
+  process.exit(1)
+}
+
+process.stdout.write(JSON.stringify({
+  status: 'complete',
+  summary: 'Updated README.md in the smoke repo.',
+  changes_made: [
+    {
+      file: 'README.md',
+      description: 'Replaced the smoke placeholder with the validation sentence.',
+      task_id: 'CHANGE-001'
+    }
+  ],
+  issues_encountered: []
+}))
+`
+    );
+
+    const fakeOllamaPath = join(binDir, "ollama");
+    writeFakeHostScript(
+      fakeOllamaPath,
+      `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+
+const args = process.argv.slice(2)
+const separatorIndex = args.indexOf('--')
+const childArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : []
+const child = spawnSync('claude', childArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  env: process.env
+})
+
+if (child.stdout) {
+  process.stdout.write(child.stdout)
+}
+if (child.stderr) {
+  process.stderr.write(child.stderr)
+}
+process.exit(child.status ?? 0)
+`
+    );
+
+    const originalPath = process.env.PATH;
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const originalPromptLog = process.env.LINEUP_TEST_PROMPT_LOG;
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    process.env.LINEUP_TEST_PROMPT_LOG = promptLog;
+
+    try {
+      const runner = createLocalAgentRunner("claude");
+      const schemaPath = join(tempDir, "implementation-output.schema.json");
+      writeFileSync(
+        schemaPath,
+        JSON.stringify(
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              status: { type: "string" },
+              summary: { type: "string" },
+              changes_made: { type: "array" },
+              issues_encountered: { type: "array" }
+            },
+            required: ["status", "summary", "changes_made", "issues_encountered"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const result = await runner.invoke({
+        projectRoot: tempDir,
+        workingDirectory: tempDir,
+        agent: "developer",
+        prompt: "Return the implementation result as structured JSON only.",
+        outputSchemaPath: schemaPath,
+        timeoutMs: 2_000
+      });
+
+      expect(JSON.parse(result.content)).toEqual({
+        status: "complete",
+        summary: "Updated README.md in the smoke repo.",
+        changes_made: [
+          {
+            file: "README.md",
+            description: "Replaced the smoke placeholder with the validation sentence.",
+            task_id: "CHANGE-001"
+          }
+        ],
+        issues_encountered: []
+      });
+
+      const prompts = readFileSync(promptLog, "utf8");
+      expect(prompts).toContain("OUTPUT_FORMAT_JSON: true");
     } finally {
       process.env.PATH = originalPath;
       process.env.HOME = originalHome;

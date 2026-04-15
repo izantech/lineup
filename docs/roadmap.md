@@ -243,17 +243,24 @@ Current instrumentation:
   so hung hosts still leave a `.trace.json`
 - smoke progress classification now also watches host trace/log/artifact file
   growth instead of relying only on bridge events
-- Ollama-backed Claude strict passes now run from a neutral temporary cwd while
-  still receiving repo access through explicit `--add-dir`
+- Ollama-backed Claude runs now execute from the real working directory instead
+  of a neutral temporary cwd, while still receiving explicit `--add-dir`
+  coverage for the repo and artifact roots
 - Ollama-backed Claude structured runs now go draft-first and keep the strict
   formatter as the final schema-preserving pass instead of starting with the
   direct strict host invocation
+- native developer/reviewer local-runner invocations now carry explicit output
+  schemas again (`ImplementationState` JSON and `Review` YAML), and Claude
+  developer/reviewer lanes use JSON draft mode under Ollama-backed execution
 - Ollama-backed researcher, architect, and teacher stages can use compact
   host-specific prompt bodies, and the stage contract itself is now shorter so
   local models receive compact JSON context plus a minimal required-fields
   summary instead of the older verbose prompt scaffold
 - the local smoke lane now uses a deterministic tiny-repo task instead of a
   generic freeform smoke request
+- the native plan normalizer now repairs absolute temp-checkout paths back into
+  repo-relative `changes[].file` values when local Claude planner drafts point
+  at isolated smoke checkout paths
 - the smoke runner no-progress deadline is now 5 minutes so slow local-model
   turns are not cut off immediately after the env fallback
 - pre-stage structured artifacts are now stricter:
@@ -297,10 +304,15 @@ Comprehensive fix plan:
        formatter flow for Ollama-backed Claude structured runs
      - fall back automatically to the Anthropic-compatible env lane when the
        headless wrapper returns empty output
+     - run Ollama-backed Claude from the real worktree cwd so tiny-repo smoke
+       runs stop hallucinating that `README.md` or other repo files are absent
+     - restore explicit implement/review schemas for native local Claude
+       execution and keep those lanes on JSON draft output
    - remaining:
-     - decide whether the env lane needs a longer per-invocation timeout or a
-       narrower direct repro that proves where the draft call spends time on
-       `qwen3-coder:30b`
+     - decide whether `strategy: auto` should keep wrapper-first behavior or
+       prefer the env transport by default for Claude on `qwen3-coder:30b`
+     - finish the env-only smoke lane and compare it directly against the
+       wrapper lane on the bounded README-only smoke task
      - trim or normalize any unsupported Anthropic-compatible request fields
        that Ollama still ignores so Claude headless runs do not block waiting on
        a feature the compatibility layer does not implement

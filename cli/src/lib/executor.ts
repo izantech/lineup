@@ -165,19 +165,22 @@ function ensureParentDirectory(filePath: string): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function normalizeApprovedPlan(rawPlan: string, source: string, projectRoot: string): { raw: string; parsed: ApprovedPlan } {
-  let parsed: NormalizedPlanArtifact;
-  let validatedRaw = rawPlan;
-
+export function normalizePlanForStage(rawPlan: string, source: string, projectRoot: string): string {
   try {
     validatePlanYaml(rawPlan, source);
-    parsed = parseRestrictedYaml(rawPlan, source) as NormalizedPlanArtifact;
+    return rawPlan;
   } catch {
     const normalized = normalizePlanDraft(parseRestrictedYaml(rawPlan, source), source, projectRoot);
-    validatedRaw = stringifyYaml(normalized);
+    const validatedRaw = stringifyYaml(normalized);
     validatePlanYaml(validatedRaw, source);
-    parsed = normalized;
+    return validatedRaw;
   }
+}
+
+function normalizeApprovedPlan(rawPlan: string, source: string, projectRoot: string): { raw: string; parsed: ApprovedPlan } {
+  let parsed: NormalizedPlanArtifact;
+  const validatedRaw = normalizePlanForStage(rawPlan, source, projectRoot);
+  parsed = parseRestrictedYaml(validatedRaw, source) as NormalizedPlanArtifact;
 
   if (parsed.status === "approved") {
     return { raw: validatedRaw, parsed: parsed as ApprovedPlan };
@@ -382,10 +385,26 @@ function normalizeDraftPath(value: string | undefined, projectRoot: string): str
 
   const relative = path.relative(projectRoot, value);
   if (!relative || relative.startsWith("..")) {
-    return value;
+    const recovered = recoverRepoRelativeSuffix(value, projectRoot);
+    return recovered ?? value;
   }
 
   return relative.replaceAll(path.sep, "/");
+}
+
+function recoverRepoRelativeSuffix(value: string, projectRoot: string): string | undefined {
+  const normalized = path.normalize(value);
+  const segments = normalized.split(path.sep).filter((segment) => segment.length > 0);
+
+  for (let start = 0; start < segments.length; start += 1) {
+    const candidate = path.join(...segments.slice(start));
+    const projectCandidate = path.join(projectRoot, candidate);
+    if (existsSync(projectCandidate)) {
+      return candidate.replaceAll(path.sep, "/");
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeDraftPaths(values: string[], projectRoot: string): string[] {
@@ -489,17 +508,27 @@ function normalizeAcceptanceCriteria(value: unknown): ApprovedPlan["acceptance_c
 }
 
 function normalizePlanRisks(value: unknown): ApprovedPlan["risks"] {
+  const defaultRisks = [
+    {
+      risk: "No explicit risks were captured in the draft plan.",
+      mitigation: "Review the implementation scope before execution.",
+      severity: "low" as const
+    }
+  ];
+
   if (!Array.isArray(value) || value.length === 0) {
-    return [
-      {
-        risk: "No explicit risks were captured in the draft plan.",
-        mitigation: "Review the implementation scope before execution.",
-        severity: "low"
-      }
-    ];
+    return defaultRisks;
   }
 
-  return value.flatMap((entry) => {
+  const normalized = value.flatMap((entry) => {
+    if (typeof entry === "string" && entry.trim().length > 0) {
+      return [
+        {
+          risk: entry.trim(),
+          mitigation: "Address during implementation review."
+        }
+      ];
+    }
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       return [];
     }
@@ -519,6 +548,8 @@ function normalizePlanRisks(value: unknown): ApprovedPlan["risks"] {
       }
     ];
   });
+
+  return normalized.length > 0 ? normalized : defaultRisks;
 }
 
 function normalizeStringArray(value: unknown): string[] {

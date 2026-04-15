@@ -11,6 +11,7 @@ import { createArtifactStore, type StoredArtifactRecord } from "./artifact-store
 import {
   applyWorkspacePatch,
   executeNativeExecutor,
+  normalizePlanForStage,
   normalizeTaskExecutionResult,
   normalizeReviewArtifact,
   prepareExecutionArtifacts,
@@ -836,6 +837,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         prompt: input.prompt,
         timeoutMs: input.timeoutMs,
         addDirs: [input.runRoot, input.artifactDir],
+        outputSchemaPath: resolveArtifactSchemaPath("developer", "ImplementationState"),
         tracePrefixPath: resolve(input.runRoot, "host", `implement-${taskTraceLabel(input.task.id)}-${localAgentRunner.host}`)
       });
       return normalizeTaskExecutionResult(result.content, input.task, `local-agent:${localAgentRunner.host}:${input.task.id}`);
@@ -849,6 +851,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
         prompt: input.prompt,
         timeoutMs: input.timeoutMs,
         addDirs: [input.runRoot, input.artifactDir],
+        outputSchemaPath: resolveArtifactSchemaPath("reviewer", "Review"),
         expectedOutputPath: reviewPath,
         tracePrefixPath: resolve(input.runRoot, "host", `verify-reviewer-${localAgentRunner.host}`)
       });
@@ -926,6 +929,10 @@ function describeStageOutputs(stage: WorkflowStage): string {
 }
 
 function describeCompactStageOutputs(stage: WorkflowStage): string {
+  if (stage.agent === "architect") {
+    return "summary, approaches, recommendation, changes (non-empty array of {file, change, rationale}), acceptance_criteria, risks";
+  }
+
   const entries = Object.entries(resolveEffectiveStageOutputs(stage));
   if (entries.length === 0) {
     return "structured payload only";
@@ -1007,6 +1014,12 @@ function resolveArtifactSchemaPath(agentName: string, outputSchema: string): str
   const packageSchemas = resolve(packageRoot(), "schemas");
   if (outputSchema === "Plan") {
     return resolve(packageSchemas, "yaml", "v3", "plan.schema.json");
+  }
+  if (outputSchema === "ImplementationState") {
+    return resolve(packageSchemas, "json", "implementation-state.schema.json");
+  }
+  if (outputSchema === "Review") {
+    return resolve(packageSchemas, "yaml", "v3", "review.schema.json");
   }
   if (agentName === "researcher") {
     return resolve(packageSchemas, "yaml", "agent-output", "researcher.schema.json");
@@ -1238,21 +1251,11 @@ function stringifyStructuredYaml(payload: unknown): string {
   return stringifyYaml(payload);
 }
 
-function isStructuredPlanDraft(raw: string, source: string): boolean {
-  try {
-    const parsed = parseRestrictedYaml(normalizePlanDraftArtifact(raw, source), source);
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
-  } catch {
-    return false;
-  }
-}
-
-function normalizePlanDraftArtifact(raw: string, source: string): string {
+function normalizePlanDraftArtifact(raw: string, source: string, projectRoot: string): string {
   const repaired = repairYamlOutput(raw).content;
 
   try {
-    parseRestrictedYaml(repaired, source);
-    return repaired;
+    return normalizePlanForStage(repaired, source, projectRoot);
   } catch (error) {
     if (!(error instanceof CliError) || error.code !== "yaml_parse_failed") {
       throw error;
@@ -1267,8 +1270,7 @@ function normalizePlanDraftArtifact(raw: string, source: string): string {
 
         const candidate = stringifyStructuredYaml(payload);
         try {
-          validatePlanYaml(candidate, source);
-          return candidate;
+          return normalizePlanForStage(candidate, source, projectRoot);
         } catch {
           return null;
         }
@@ -1314,7 +1316,9 @@ function normalizeResearchWhatFound(value: unknown): Record<string, unknown> | n
   }
 
   if (value.length === 0) {
-    return null;
+    return {
+      files: []
+    };
   }
 
   if (value.every((entry) => typeof entry === "string" && entry.trim().length > 0)) {
@@ -1371,12 +1375,17 @@ function normalizeResearchObjectField(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string): string {
+function buildPlannerRetryPrompt(originalPrompt: string, invalidOutput: string, reason?: string): string {
   return [
     originalPrompt.trimEnd(),
     "",
-    "Previous output was invalid because it was not a structured lineup/v3 Plan payload.",
+    reason
+      ? `Previous output was invalid because ${reason}.`
+      : "Previous output was invalid because it was not a structured lineup/v3 Plan payload.",
     "Return only the structured payload. Do not say that you wrote the plan. Do not add prose before or after the payload.",
+    "The payload must be a valid lineup/v3 Plan.",
+    "Include a non-empty `changes` array of objects. Each change object must include `file`, `change`, and `rationale`.",
+    "Every `changes[].file` value must be a repo-relative path such as `README.md` or `src/index.ts`, never an absolute filesystem path.",
     "",
     "Previous invalid output:",
     invalidOutput.trim()
@@ -1899,19 +1908,21 @@ async function executePlannerPhase(
           expectedOutputPath: planPath,
           tracePrefixPath: resolve(dirname(artifactDir), "host", `${stage.id}-${localAgentRunner.host}`)
         });
-        const repaired = normalizePlanDraftArtifact(result.content, planPath);
-        writeFileSync(planPath, repaired, "utf8");
-        if (isStructuredPlanDraft(repaired, planPath)) {
+        try {
+          const repaired = normalizePlanDraftArtifact(result.content, planPath, projectRoot);
+          writeFileSync(planPath, repaired, "utf8");
+          validatePlanYaml(repaired, planPath);
           break;
+        } catch (error) {
+          if (attempt === 1) {
+            throw error;
+          }
+          emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.");
+          const invalidOutput = existsSync(planPath) ? readFileSync(planPath, "utf8") : repairYamlOutput(result.content).content;
+          const reason = error instanceof Error ? error.message.replaceAll(planPath, "the plan artifact") : undefined;
+          prompt = buildPlannerRetryPrompt(basePrompt, invalidOutput, reason);
+          continue;
         }
-        if (attempt === 1) {
-          throw new CliError(`Plan response at ${planPath} was not a structured lineup/v3 Plan payload.`, {
-            code: "malformed_output"
-          });
-        }
-        emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.")
-        prompt = buildPlannerRetryPrompt(basePrompt, repaired);
-        continue;
       }
 
       emitProtocol(
@@ -1934,18 +1945,21 @@ async function executePlannerPhase(
         })
       );
       const rawPlan = await waitForResponseFile(planPath, "Plan response", 300_000);
-      const repaired = normalizePlanDraftArtifact(rawPlan, planPath);
-      writeFileSync(planPath, repaired, "utf8");
-      if (isStructuredPlanDraft(repaired, planPath)) {
+      try {
+        const repaired = normalizePlanDraftArtifact(rawPlan, planPath, projectRoot);
+        writeFileSync(planPath, repaired, "utf8");
+        validatePlanYaml(repaired, planPath);
         break;
+      } catch (error) {
+        if (attempt === 1) {
+          throw error;
+        }
+        emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.")
+        const invalidOutput = existsSync(planPath) ? readFileSync(planPath, "utf8") : repairYamlOutput(rawPlan).content;
+        const reason = error instanceof Error ? error.message.replaceAll(planPath, "the plan artifact") : undefined;
+        prompt = buildPlannerRetryPrompt(basePrompt, invalidOutput, reason);
+        continue;
       }
-      if (attempt === 1) {
-        throw new CliError(`Plan response at ${planPath} was not a structured lineup/v3 Plan payload.`, {
-          code: "malformed_output"
-        });
-      }
-      emitStatus(stage.id, "Planner returned non-structured output. Retrying with stricter instructions.")
-      prompt = buildPlannerRetryPrompt(basePrompt, repaired);
     }
   }
 

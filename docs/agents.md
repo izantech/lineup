@@ -98,9 +98,10 @@ runs are not misclassified as silent stalls, copies the repo's canonical full
 pipeline workflow into the temp repo before the run starts, and Claude can
 automatically fall back from the headless `ollama launch claude` wrapper path
 to the Anthropic-compatible env path when the wrapper exits without emitting a
-draft. It preserves temp workspaces on failure or stall, and it is not part of
-CI. Until all hosts are green, run per-host smoke lanes instead of `--host
-all`. For current real-host validation, prefer `qwen3-coder:30b`.
+draft. The smoke task now inspects `README.md` first instead of broad
+workflow/tactic files, preserves temp workspaces on failure or stall, and is
+not part of CI. Until all hosts are green, run per-host smoke lanes instead of
+`--host all`. For current real-host validation, prefer `qwen3-coder:30b`.
 
 Configuration is host-specific:
 

@@ -237,7 +237,8 @@ The local smoke lane also uses a deterministic tiny-repo task:
   `README.md` with exactly `This repo validates Ollama host execution.`
 - require the final `README.md` to contain that sentence exactly once and to no
   longer contain the placeholder
-- inspect only `README.md`, `.lineup-core/workflows/full-pipeline.yaml`, and `.lineup/tactics/example.yaml` during research unless later stages truly require more
+- inspect `README.md` first during research and stop once that is enough to
+  produce the required structured artifact
 - avoid host/service/config/runtime-log exploration during research
 - keep research read-only even when the overall smoke task later requires an implementation change
 
@@ -259,6 +260,11 @@ are now part of the local Ollama checkpoint:
   normalized into schema-valid objects before validation
 - the native plan normalizer accepts Claude-style change keys such as
   `file_path`, `what_to_change`, and `why_this_change_is_needed`
+- the native plan normalizer now also recovers Claude-style absolute temp
+  checkout paths back into repo-relative `changes[].file` values
+- native implement and review local-runner invocations now carry explicit
+  output schemas again, using `ImplementationState` JSON for implement and the
+  `Review` YAML schema for verify/review
 - the smoke lane copies the canonical full-pipeline workflow into the temp repo
   so plan prompts receive the same triage and research inputs as a real run
 
@@ -270,20 +276,27 @@ The hosts are still failing in different ways on the current branch state:
 - Ollama-backed Claude structured runs now go draft-first, and if the draft
   artifact is already parseable Lineup validates it locally instead of asking
   Claude for a second formatter pass
+- Ollama-backed Claude invocations now run from the real working directory
+  instead of a neutral temporary cwd, which removed the earlier false
+  conclusions that `README.md` or other repo files were missing
+- native implement/review stages now request JSON draft output with explicit
+  schema validation, so Claude developer/reviewer lanes no longer fall back to
+  unconstrained text during local native execution
 - headless `ollama launch claude` can return immediately with no output, so the
   runner now retries automatically through the Anthropic-compatible env path
-- `qwen3-coder:30b` can complete direct minimal prompts over both the wrapper
-  and the env transport, so the remaining failures are no longer explained by
-  a generic transport mismatch
+- the wrapper path still looks weaker than the env transport in full smoke
+  runs, so the remaining failures are now about stage-by-stage live behavior
+  rather than the original strict-schema contract
 - the next active Claude work is stage-by-stage live stabilization of the full
-  pipeline on `qwen3-coder:30b`, not another change to the original strict
-  schema transport contract
+  pipeline on `qwen3-coder:30b`, plus deciding whether `auto` should continue
+  to prefer wrapper-first launch behavior
 
 Implication:
 
 - the remaining Claude blocker is no longer the old strict-schema launch shape
 - the right next work is concrete live-pipeline debugging on
-  `qwen3-coder:30b` rather than another broad transport redesign
+  `qwen3-coder:30b`, plus a transport-default decision based on the env-only
+  smoke lane rather than another broad transport redesign
 
 ### OpenCode
 

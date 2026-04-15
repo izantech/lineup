@@ -573,6 +573,206 @@ gaps:
     }
   });
 
+  it("retries planner output when the draft plan uses string changes instead of change objects", async () => {
+    const projectRoot = join(tempDir, "project-plan-retry-invalid-changes");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: plan-retry-invalid-changes
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+`);
+
+    const prompts: string[] = [];
+    let attempt = 0;
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        if (input.agent !== "architect") {
+          throw new Error(`Unexpected agent ${input.agent}`);
+        }
+
+        prompts.push(input.prompt);
+        attempt += 1;
+        if (attempt === 1) {
+          return {
+            host: "claude",
+            stderr: "",
+            content: `summary: Update README.md for the smoke run
+approaches:
+  - name: Direct update
+    description: Replace the placeholder once in README.md
+changes:
+  - Update README.md to replace REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION with This repo validates Ollama host execution.
+acceptance_criteria:
+  - README.md contains the validation sentence exactly once
+risks:
+  - risk: Minimal repo context may lead to shorthand output
+    mitigation: Retry with stricter schema instructions
+`
+          };
+        }
+
+        return {
+          host: "claude",
+          stderr: "",
+          content: APPROVED_PLAN
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Replace the README placeholder once."
+        },
+        {
+          runId: "plnrt1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("The payload must be a valid lineup/v3 Plan.");
+      expect(prompts[1]).toContain("Include a non-empty `changes` array of objects. Each change object must include `file`, `change`, and `rationale`.");
+      expect(prompts[1]).toContain("Every `changes[].file` value must be a repo-relative path");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("normalizes planner drafts that use string risks into a schema-valid plan", async () => {
+    const projectRoot = join(tempDir, "project-plan-normalize-string-risks");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: plan-normalize-string-risks
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke() {
+        return {
+          host: "claude",
+          stderr: "",
+          content: `summary: Update the smoke repo files
+approaches:
+  - name: Minimal
+    description: Update the README and keep the repo tiny
+recommendation: Use the minimal approach
+changes:
+  - file: README.md
+    change: Replace the smoke placeholder with the validation sentence
+    rationale: README.md is the only file that must change for the smoke task
+acceptance_criteria:
+  - README.md contains the validation sentence exactly once
+risks:
+  - The placeholder text might not match exactly
+  - The smoke repo might already contain the replacement
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Replace the README placeholder once."
+        },
+        {
+          runId: "plnrk1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      const planPath = String(result.stageResults.get("plan")?.outputs.planPath);
+      const planArtifact = readFileSync(planPath, "utf8");
+      expect(planArtifact).toContain("risk: The placeholder text might not match exactly");
+      expect(planArtifact).toContain("mitigation: Address during implementation review.");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("normalizes planner drafts that use absolute temp paths into repo-relative changes", async () => {
+    const projectRoot = join(tempDir, "project-plan-normalize-absolute-paths");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+    mkdirSync(join(projectRoot, ".lineup-core", "workflows"), { recursive: true });
+    writeFileSync(join(projectRoot, ".lineup-core", "workflows", "full-pipeline.yaml"), "name: noop\n", "utf8");
+    mkdirSync(join(projectRoot, ".lineup", "tactics"), { recursive: true });
+    writeFileSync(join(projectRoot, ".lineup", "tactics", "example.yaml"), "name: example\n", "utf8");
+
+    const { normalizePlanForStage } = await import("../src/lib/executor.js");
+
+    const normalized = normalizePlanForStage(
+      `summary: Update the smoke repo files
+approaches:
+  - name: Minimal
+    strategy: Update the existing smoke inputs directly
+recommendation:
+  approach: Minimal
+  rationale: Keep the change surface tiny
+changes:
+  - file: /private/var/folders/test/lineup-claude-cwd-123/README.md
+    change: Replace the smoke placeholder with the validation sentence
+    rationale: README.md is the only file that must change for the smoke task
+  - file: /private/var/folders/test/lineup-claude-cwd-123/.lineup/tactics/example.yaml
+    change: Keep the tactic aligned with the smoke behavior
+    rationale: The tactic file already exists in the repo inputs
+acceptance_criteria:
+  - criterion: README.md contains the validation sentence exactly once
+risks:
+  - risk: The placeholder text might not match exactly
+    mitigation: Inspect README.md before editing
+`,
+      join(projectRoot, ".lineup", ".runs", "plan.yaml"),
+      projectRoot
+    );
+
+    expect(normalized).toContain("file: README.md");
+    expect(normalized).toContain("file: .lineup/tactics/example.yaml");
+    expect(normalized).not.toContain("/private/var/folders/test/lineup-claude-cwd-123");
+  });
+
   it("normalizes array-shaped research findings into a structured what_found object", async () => {
     const projectRoot = join(tempDir, "project-host-research-array");
     writeTemplatesTo(projectRoot);
@@ -778,7 +978,12 @@ stages:
 `);
 
     const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
-    const capturedInvocations: Array<{ agent: string; projectRoot: string; workingDirectory: string }> = [];
+    const capturedInvocations: Array<{
+      agent: string;
+      projectRoot: string;
+      workingDirectory: string;
+      outputSchemaPath?: string;
+    }> = [];
     const canonicalProjectRoot = realpathSync(projectRoot);
 
     const localAgentRunner: LocalAgentRunner = {
@@ -788,7 +993,8 @@ stages:
         capturedInvocations.push({
           agent: input.agent,
           projectRoot: input.projectRoot,
-          workingDirectory: input.workingDirectory
+          workingDirectory: input.workingDirectory,
+          outputSchemaPath: input.outputSchemaPath
         });
         if (input.agent === "researcher") {
           return {
@@ -887,11 +1093,13 @@ gaps:
       expect(developerInvocation).toBeDefined();
       expect(developerInvocation?.projectRoot).toBe(developerInvocation?.workingDirectory);
       expect(developerInvocation?.projectRoot).not.toBe(canonicalProjectRoot);
+      expect(developerInvocation?.outputSchemaPath).toContain("/schemas/json/implementation-state.schema.json");
 
       const reviewerInvocation = capturedInvocations.find((entry) => entry.agent === "reviewer");
       expect(reviewerInvocation).toBeDefined();
       expect(reviewerInvocation?.projectRoot).toBe(reviewerInvocation?.workingDirectory);
       expect(reviewerInvocation?.projectRoot).not.toBe(canonicalProjectRoot);
+      expect(reviewerInvocation?.outputSchemaPath).toContain("/schemas/yaml/v3/review.schema.json");
     } finally {
       process.chdir(origCwd);
     }
@@ -1000,6 +1208,7 @@ gaps:
         expect(prompt).not.toContain("Create or overwrite");
         expect(prompt).not.toContain("Follow this output template shape exactly.");
       }
+      expect(planPrompt).toContain("Required fields: summary, approaches, recommendation, changes (non-empty array of {file, change, rationale}), acceptance_criteria, risks");
     } finally {
       process.chdir(origCwd);
     }
@@ -1740,6 +1949,79 @@ gaps:
         },
         gaps: {
           items: ["none"]
+        }
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("normalizes an empty-array what_found into a schema-valid object with metadata", async () => {
+    const projectRoot = join(tempDir, "project-research-empty-array");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: research-empty-array
+stages:
+  - id: research
+    type: agent
+    agent: researcher
+    outputs:
+      what_found: { type: object }
+      how_it_works: { type: string }
+      constraints: { type: object }
+      gaps: { type: object }
+`);
+
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke() {
+        return {
+          host: "claude",
+          stderr: "",
+          content: `what_found: []
+how_it_works: The stage found no relevant files for this step.
+constraints: Research was limited to the requested smoke files.
+gaps:
+  - confirm whether additional files are needed in later stages
+`
+        };
+      }
+    };
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "human",
+          prompt: "Inspect the workspace"
+        },
+        {
+          runId: "rsempt1",
+          localAgentRunner
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("research")?.outputs).toMatchObject({
+        what_found: {
+          files: []
+        },
+        constraints: {
+          note: "Research was limited to the requested smoke files."
+        },
+        gaps: {
+          items: ["confirm whether additional files are needed in later stages"]
         }
       });
     } finally {

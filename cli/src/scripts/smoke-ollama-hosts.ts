@@ -140,7 +140,8 @@ const SUPPORTED_HOSTS: HostName[] = ["claude", "codex", "opencode"];
 const PIPELINE_SMOKE_PROMPT = [
   "Run the full Lineup smoke pipeline on this tiny repo.",
   "Replace `REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION` in README.md with exactly `This repo validates Ollama host execution.` once.",
-  "For research, inspect only README.md, .lineup-core/workflows/full-pipeline.yaml, and .lineup/tactics/example.yaml unless a later stage truly requires more.",
+  "For research, inspect README.md first and stop once you have enough evidence to complete the task.",
+  "Do not propose unrelated repo changes or create extra files for this smoke task.",
   "Do not inspect Ollama, host config, runtime logs, bridge files, or network endpoints.",
   "Keep artifacts concise and structured.",
   "Auto-answer bridge questions."

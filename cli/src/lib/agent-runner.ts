@@ -47,16 +47,6 @@ function uniqueDirs(input: string[]): string[] {
   return [...new Set(input.filter((value) => value.trim().length > 0))];
 }
 
-function createNeutralWorkingDirectory(): { cwd: string; cleanup: () => void } {
-  const cwd = mkdtempSync(path.join(os.tmpdir(), "lineup-claude-cwd-"));
-  return {
-    cwd,
-    cleanup: () => {
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  };
-}
-
 function readFileIfPresent(filePath?: string): string | null {
   if (!filePath) {
     return null;
@@ -293,6 +283,10 @@ function isOllamaBackedClaudeIntegration(integration: string): boolean {
   return integration === "ollama-launch" || integration === "ollama-env";
 }
 
+function shouldUseClaudeJsonDraftOutput(agent: AgentRole): boolean {
+  return agent === "researcher" || agent === "developer" || agent === "reviewer";
+}
+
 function extractStructuredPayload(raw: string): unknown {
   let parsed: { structured_output?: unknown; result?: unknown } | unknown;
   try {
@@ -441,65 +435,58 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       claudeForceEnvFallback: attempt.claudeForceEnvFallback ?? false
     });
 
-    const useNeutralCwd = launchPlan.integration === "ollama-launch" || launchPlan.integration === "ollama-env";
-    const neutralCwd = useNeutralCwd ? createNeutralWorkingDirectory() : null;
-
-    try {
-      const result = await runSpawnedCommand({
-        host: launchPlan.host,
-        command: launchPlan.command,
-        args: launchPlan.args,
-        cwd: neutralCwd?.cwd ?? input.workingDirectory,
-        env: launchPlan.env,
-        timeoutMs: input.timeoutMs,
-        stopOnExpectedOutputPath: input.expectedOutputPath,
-        tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
+    const result = await runSpawnedCommand({
+      host: launchPlan.host,
+      command: launchPlan.command,
+      args: launchPlan.args,
+      cwd: input.workingDirectory,
+      env: launchPlan.env,
+      timeoutMs: input.timeoutMs,
+      stopOnExpectedOutputPath: input.expectedOutputPath,
+      tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}` : undefined
+    });
+    const fileOutput = readFileIfPresent(input.expectedOutputPath);
+    const emittedContent = fileOutput ?? result.content;
+    const isEmptyEmission = emittedContent.trim().length === 0;
+    if (
+      isEmptyEmission &&
+      launchPlan.integration === "ollama-launch" &&
+      !attempt.claudeForceEnvFallback
+    ) {
+      return runClaudeAttempt({
+        ...attempt,
+        traceSuffix: `${attempt.traceSuffix}-env`,
+        claudeForceEnvFallback: true
       });
-      const fileOutput = readFileIfPresent(input.expectedOutputPath);
-      const emittedContent = fileOutput ?? result.content;
-      const isEmptyEmission = emittedContent.trim().length === 0;
-      if (
-        isEmptyEmission &&
-        launchPlan.integration === "ollama-launch" &&
-        !attempt.claudeForceEnvFallback
-      ) {
-        return runClaudeAttempt({
-          ...attempt,
-          traceSuffix: `${attempt.traceSuffix}-env`,
-          claudeForceEnvFallback: true
-        });
-      }
-      if (fileOutput && !attempt.schemaContent) {
-        return {
-          host: result.host,
-          stderr: result.stderr,
-          content: fileOutput
-        };
-      }
-      if (!attempt.schemaContent) {
-        return result;
-      }
-
-      const structured =
-        parseLocalAgentStructuredOutput(emittedContent) ??
-        (await formatStructuredOutputWithClaude({
-          projectRoot: input.projectRoot,
-          workingDirectory: input.workingDirectory,
-          agent: input.agent,
-          rawDraft: emittedContent,
-          schemaContent: attempt.schemaContent,
-          timeoutMs: input.timeoutMs,
-          tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
-        }));
-
+    }
+    if (fileOutput && !attempt.schemaContent) {
       return {
         host: result.host,
         stderr: result.stderr,
-        content: `${JSON.stringify(structured, null, 2)}\n`
+        content: fileOutput
       };
-    } finally {
-      neutralCwd?.cleanup();
     }
+    if (!attempt.schemaContent) {
+      return result;
+    }
+
+    const structured =
+      parseLocalAgentStructuredOutput(emittedContent) ??
+      (await formatStructuredOutputWithClaude({
+        projectRoot: input.projectRoot,
+        workingDirectory: input.workingDirectory,
+        agent: input.agent,
+        rawDraft: emittedContent,
+        schemaContent: attempt.schemaContent,
+        timeoutMs: input.timeoutMs,
+        tracePrefixPath: input.tracePrefixPath ? `${input.tracePrefixPath}-${attempt.traceSuffix}-format` : undefined
+      }));
+
+    return {
+      host: result.host,
+      stderr: result.stderr,
+      content: `${JSON.stringify(structured, null, 2)}\n`
+    };
   };
 
   if (!schemaContent) {
@@ -515,7 +502,7 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       prompt: input.prompt,
       schemaContent: null,
       traceSuffix: "draft",
-      claudeDraftJsonOutput: true
+      claudeDraftJsonOutput: shouldUseClaudeJsonDraftOutput(input.agent)
     });
     const rawDraft = readFileIfPresent(input.expectedOutputPath) ?? draftResult.content;
     const parsedDraft = parseLocalAgentStructuredOutput(rawDraft);
@@ -604,37 +591,29 @@ async function formatStructuredOutputWithClaude(input: {
     timeoutMs: input.timeoutMs,
     schemaContent: input.schemaContent
   });
+  const result = await runSpawnedCommand({
+    host: launchPlan.host,
+    command: launchPlan.command,
+    args: launchPlan.args,
+    cwd: input.workingDirectory,
+    env: launchPlan.env,
+    timeoutMs: input.timeoutMs,
+    tracePrefixPath: input.tracePrefixPath
+  });
 
-  const useNeutralCwd = launchPlan.integration === "ollama-launch" || launchPlan.integration === "ollama-env";
-  const neutralCwd = useNeutralCwd ? createNeutralWorkingDirectory() : null;
-
-  try {
-    const result = await runSpawnedCommand({
-      host: launchPlan.host,
-      command: launchPlan.command,
-      args: launchPlan.args,
-      cwd: neutralCwd?.cwd ?? input.workingDirectory,
-      env: launchPlan.env,
-      timeoutMs: input.timeoutMs,
-      tracePrefixPath: input.tracePrefixPath
-    });
-
-    const structured = extractStructuredPayload(result.content);
-    if (structured !== undefined) {
-      return structured;
-    }
-
-    const repaired = parseLocalAgentStructuredOutput(result.content);
-    if (repaired !== undefined) {
-      return repaired;
-    }
-
-    throw new CliError("Claude did not return structured output that could be parsed.", {
-      code: "malformed_output"
-    });
-  } finally {
-    neutralCwd?.cleanup();
+  const structured = extractStructuredPayload(result.content);
+  if (structured !== undefined) {
+    return structured;
   }
+
+  const repaired = parseLocalAgentStructuredOutput(result.content);
+  if (repaired !== undefined) {
+    return repaired;
+  }
+
+  throw new CliError("Claude did not return structured output that could be parsed.", {
+    code: "malformed_output"
+  });
 }
 
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {

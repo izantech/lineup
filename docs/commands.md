@@ -65,7 +65,7 @@ Practical split:
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
-- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task and file-activity-aware progress detection, routes the bundled `explain` tactic through the bridge API, automatically retries Claude through the env transport when the headless wrapper returns empty output, and until all hosts are green, run it per host instead of `--host all`
+- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task with `README.md` as the first research target, routes the bundled `explain` tactic through the bridge API, automatically retries Claude through the env transport when the headless wrapper returns empty output, and until all hosts are green, run it per host instead of `--host all`
 
 ## Run Modes
 
