@@ -449,7 +449,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
 
   program
     .command("config [subcommand]")
-    .description("Edit project config or inspect the effective Lineup runtime configuration")
+    .description("Open the full-screen project config editor or inspect the effective Lineup runtime configuration")
     .option("--host <host>", "Inspect config for a specific local execution host: claude|codex|opencode")
     .option("--json", "Emit machine-readable JSON output")
     .action((subcommand: string | undefined, opts: ConfigCommandOptions) => {

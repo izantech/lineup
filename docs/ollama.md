@@ -21,6 +21,18 @@ Ollama backend and does not rely on nested runner host-integration strategy.
 There is no implicit default model anymore: pass `--model <name>` or set
 `ollama.model` in `.lineup/config.yaml`.
 
+In the config screen, unsetting an Ollama field does not mean "disabled" unless the
+resolved higher layers also disable it. `Use higher-layer value` means "remove this
+project-level key and resolve through the normal chain instead":
+
+- host-specific user config such as `~/.claude/lineup/ollama.yaml`
+- environment variables such as `LINEUP_OLLAMA_*`
+- built-in defaults like `scope: research` and `baseUrl: http://127.0.0.1:11434/v1`
+
+The `ollama.model` picker in the config screen prefers the live Ollama daemon model
+list and also falls back to the local `~/.ollama/models/manifests` cache so locally
+pulled models still show up when daemon metadata is incomplete.
+
 ## Modes
 
 ### Research assist

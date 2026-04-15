@@ -604,7 +604,7 @@ stages:
 `);
 
     const { runPipeline } = await import("../src/lib/run-pipeline.js");
-    const { readPendingGate, writeGateResponse } = await import("../src/lib/gate-store.js");
+    const { waitForPendingGate, writeGateResponse } = await import("../src/lib/gate-store.js");
 
     const origCwd = process.cwd();
     process.chdir(projectRoot);
@@ -617,23 +617,28 @@ stages:
         );
       }, 50);
 
-      setTimeout(() => {
-        const gate = readPendingGate("hpactx", 1, projectRoot);
+      const gateResponseTask = (async () => {
+        const gate = await waitForPendingGate(
+          "hpactx",
+          projectRoot,
+          2_000,
+          (entry) => entry.stageId === "plan-approval" && entry.gateType === "approval"
+        );
         expect(gate).not.toBeNull();
-        expect(gate?.question).toBe("Approve the generated plan?");
-        expect(gate?.context).toContain("Plan artifact:");
-        expect(gate?.context).toContain("kind: Plan");
-        expect(gate?.context).toContain("summary: Integrate native executor");
+        expect(gate.question).toBe("Approve the generated plan?");
+        expect(gate.context).toContain("Plan artifact:");
+        expect(gate.context).toContain("kind: Plan");
+        expect(gate.context).toContain("summary: Integrate native executor");
         writeGateResponse(
           "hpactx",
           {
-            requestId: 1,
+            requestId: gate.requestId,
             choice: "approve",
             respondedAt: new Date().toISOString()
           },
           projectRoot
         );
-      }, 150);
+      })();
 
       const result = await runPipeline(
         {
@@ -645,6 +650,7 @@ stages:
         }
       );
 
+      await gateResponseTask;
       expect(result.status).toBe("success");
       expect(result.stageResults.get("plan-approval")?.outputs).toMatchObject({ approved: true });
     } finally {
@@ -1871,7 +1877,7 @@ stages:
           return {
             host: "opencode",
             stderr: "",
-            content: `Here is the research result.\n\`\`\`yaml\ntype: research\nagent: researcher\n\`\`\``
+            content: `Here is the research result.\n\`\`\`yaml\ntype: research\nagent: researcher\n---\ntype: research\nagent: researcher\n\`\`\``
           };
         }
 
@@ -2620,7 +2626,10 @@ date: 2026-04-14
 topic: retry
 status: complete
 pipeline_stage: research
-summary: This is still the wrong artifact shape.
+what_found:
+  - path: README.md
+    content: ok
+  - invalid
 `
           };
         }

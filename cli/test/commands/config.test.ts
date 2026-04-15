@@ -1,12 +1,11 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockedIsInteractive = vi.hoisted(() => vi.fn());
-const mockedQuestion = vi.hoisted(() => vi.fn());
-const mockedClose = vi.hoisted(() => vi.fn());
+const mockedRunConfigEditorScreen = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/lib/prompts.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/lib/prompts.js")>("../../src/lib/prompts.js");
@@ -16,14 +15,13 @@ vi.mock("../../src/lib/prompts.js", async () => {
   };
 });
 
-vi.mock("node:readline/promises", () => ({
-  default: {
-    createInterface: vi.fn(() => ({
-      question: mockedQuestion,
-      close: mockedClose
-    }))
-  }
-}));
+vi.mock("../../src/commands/config-screen.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/commands/config-screen.js")>("../../src/commands/config-screen.js");
+  return {
+    ...actual,
+    runConfigEditorScreen: mockedRunConfigEditorScreen
+  };
+});
 
 import { createConfigReport, runConfigCommand } from "../../src/commands/config.js";
 
@@ -42,8 +40,8 @@ beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), "lineup-config-"));
   stdout = [];
   mockedIsInteractive.mockReset();
-  mockedQuestion.mockReset();
-  mockedClose.mockReset();
+  mockedRunConfigEditorScreen.mockReset();
+  mockedRunConfigEditorScreen.mockResolvedValue(undefined);
   vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
     stdout.push(String(chunk));
     return true;
@@ -92,7 +90,6 @@ describe("config command", () => {
   });
 
   it("prints a readable summary in show mode", async () => {
-    const homeDir = join(tempDir, "home");
     const binDir = join(tempDir, "bin");
     mkdirSync(binDir, { recursive: true });
     writeExecutable(binDir, "claude");
@@ -108,22 +105,17 @@ describe("config command", () => {
     expect(output).toContain("ollama:");
   });
 
-  it("edits and saves the project config in interactive mode", async () => {
+  it("launches the full-screen editor in interactive edit mode", async () => {
     mockedIsInteractive.mockReturnValue(true);
-    mockedQuestion
-      .mockResolvedValueOnce("set ollama.enabled true")
-      .mockResolvedValueOnce("set ollama.model qwen3-coder:30b")
-      .mockResolvedValueOnce("set models.haiku gpt-5-mini")
-      .mockResolvedValueOnce("save");
 
-    await runConfigCommand({ mode: "edit" });
+    await runConfigCommand({ mode: "edit", host: "codex" });
 
-    const saved = readFileSync(join(tempDir, ".lineup", "config.yaml"), "utf8");
-    expect(saved).toContain("ollama:");
-    expect(saved).toContain("enabled: true");
-    expect(saved).toContain("model: qwen3-coder:30b");
-    expect(saved).toContain("haiku: gpt-5-mini");
-    expect(stdout.join("")).toContain("Saved project config:");
-    expect(mockedClose).toHaveBeenCalled();
+    expect(mockedRunConfigEditorScreen).toHaveBeenCalledTimes(1);
+    expect(mockedRunConfigEditorScreen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configPath: expect.stringContaining("/.lineup/config.yaml"),
+        initialHost: "codex"
+      })
+    );
   });
 });

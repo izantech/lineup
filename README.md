@@ -108,7 +108,13 @@ For first-run local usage, prefer `lineup start "<task>"`. It runs `init`-style
 scaffolding automatically, checks workflow and git readiness, and only hands off to
 the pipeline when the repo is ready. `lineup init` remains available when you want
 manual control over scaffolding, and the first interactive `lineup init` opens the
-project config editor automatically once scaffolding is in place.
+project config screen automatically once scaffolding is in place. `lineup config`
+opens the same full-screen editor directly, adapts its panel layout to the current
+terminal width, and shows detected Ollama models in the `ollama.model` picker using
+the live daemon endpoints plus the local `~/.ollama/models/manifests` cache when
+available. Ollama fields use `Use higher-layer value` when the project config entry
+is unset and resolution falls back to host config, environment variables, or built-in
+defaults.
 
 `./dev install local` is a clean replace flow: it removes the previously installed
 global CLI, clears managed host installs, installs missing CLI build dependencies if

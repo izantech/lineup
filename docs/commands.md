@@ -135,8 +135,11 @@ For first-run onboarding:
 
 - `lineup start "<task>"` runs `init`-style scaffolding automatically, checks readiness, and only hands off to the native pipeline when the repo is ready
 - if the repo still needs an initial commit, `lineup start` stops with the exact `git add -A && git commit -m "Initial commit"` command and a rerun command
-- the first interactive `lineup init` opens the project config editor after scaffolding finishes
-- `lineup config` opens the project config editor for `.lineup/config.yaml`
+- the first interactive `lineup init` opens the project config screen after scaffolding finishes
+- `lineup config` opens the full-screen project config editor for `.lineup/config.yaml`
+- the config editor adapts to narrow terminals by stacking panes instead of forcing the review preview into a fixed side column
+- the `ollama.model` field offers detected models from the active Ollama daemon and the local `~/.ollama/models/manifests` cache, with `Custom value...` available when you want to type a model manually
+- Ollama fields use `Use higher-layer value` / `Unset in project config` instead of the generic `Inherited` label because unsetting a project value falls back to host config, environment variables, or built-in defaults
 - `lineup config show` shows the resolved local host, alias routing, per-agent model targets, and any host-specific Ollama configuration that a human run would use
 - `lineup run --host claude|codex|opencode` keeps the normal native path and may still use Ollama integration if config enables it
 - `lineup run --host ollama --runner claude|codex|opencode --model <name>` forces the selected runner through the local Ollama backend and does not depend on nested runner host-integration config

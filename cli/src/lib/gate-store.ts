@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { lineupRunDir } from "./paths.js";
 import type { JsonRpcId, LineupGateType } from "./protocol.js";
@@ -48,6 +48,39 @@ export function readPendingGate(runId: string, requestId: JsonRpcId, projectRoot
     return null;
   }
   return JSON.parse(readFileSync(filePath, "utf8")) as PendingGate;
+}
+
+export function listPendingGates(runId: string, projectRoot: string): PendingGate[] {
+  const dir = gatesDir(runId, projectRoot);
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  return readdirSync(dir)
+    .filter((name) => /^pending-.+\.json$/.test(name))
+    .map((name) => JSON.parse(readFileSync(resolve(dir, name), "utf8")) as PendingGate)
+    .sort((left, right) => String(left.requestId).localeCompare(String(right.requestId), undefined, { numeric: true }));
+}
+
+export async function waitForPendingGate(
+  runId: string,
+  projectRoot: string,
+  timeoutMs = 600000,
+  match?: (gate: PendingGate) => boolean
+): Promise<PendingGate> {
+  const startTime = Date.now();
+  const pollIntervalMs = 50;
+
+  while (Date.now() - startTime < timeoutMs) {
+    const pending = listPendingGates(runId, projectRoot);
+    const gate = match ? pending.find(match) : pending[0];
+    if (gate) {
+      return gate;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new GateTimeoutError(runId, "pending-gate", "pending-gate", timeoutMs);
 }
 
 export function readGateResponse(runId: string, requestId: JsonRpcId, projectRoot: string): GateResponse | null {

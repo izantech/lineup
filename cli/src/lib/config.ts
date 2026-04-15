@@ -69,6 +69,7 @@ export type ResolveConfigOptions = {
   homeDir?: string;
   host?: "claude" | "codex" | "opencode";
   env?: NodeJS.ProcessEnv;
+  projectConfig?: LineupConfigFile;
   cli?: {
     models?: Partial<Record<ModelAlias, string>>;
     agents?: Partial<Record<AgentName, Partial<AgentConfig>>>;
@@ -244,6 +245,40 @@ function readProjectConfig(filePath: string): { config: LineupConfigFile; warnin
       warnings: [`Warning: ${filePath} is malformed. Ignoring project config. ${error instanceof Error ? error.message : String(error)}`]
     };
   }
+}
+
+function readProjectOllamaLayerFromConfig(projectConfig: LineupConfigFile): OllamaConfigLayer {
+  const raw = projectConfig.ollama;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+
+  const override: OllamaConfigLayer = {};
+
+  if (typeof raw.enabled === "boolean") {
+    override.enabled = raw.enabled;
+  }
+
+  if (typeof raw.model === "string" && raw.model.trim().length > 0) {
+    override.model = raw.model.trim();
+  }
+
+  if (isOllamaScope(raw.scope)) {
+    override.scope = raw.scope;
+  }
+
+  if (typeof raw.baseUrl === "string" && raw.baseUrl.trim().length > 0) {
+    override.baseUrl = normalizeBaseUrl(raw.baseUrl);
+  }
+
+  const hostIntegration = readHostIntegrationLayer(
+    (raw.host_integration as Record<string, unknown> | undefined) ?? (raw.hostIntegration as Record<string, unknown> | undefined) ?? null
+  );
+  if (Object.keys(hostIntegration).length > 0) {
+    override.hostIntegration = hostIntegration;
+  }
+
+  return override;
 }
 
 export function readProjectConfigFile(filePath: string): { config: LineupConfigFile; warnings: string[] } {
@@ -513,7 +548,9 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
   const env = options.env ?? process.env;
   const warnings: string[] = [];
 
-  const projectConfigResult = readProjectConfig(projectConfigPath(root));
+  const projectConfigResult = options.projectConfig
+    ? { config: options.projectConfig, warnings: [] as string[] }
+    : readProjectConfig(projectConfigPath(root));
   warnings.push(...projectConfigResult.warnings);
 
   const globalEnv = readGlobalEnvConfig(env);
@@ -533,7 +570,9 @@ export function resolveLineupConfig(options: ResolveConfigOptions = {}): Resolve
   }
 
   const userOllamaLayer = readOllamaLayer(hostOllamaPath(options.host, homeDir), false);
-  const projectOllamaLayer = readOllamaLayer(projectConfigPath(root), true);
+  const projectOllamaLayer = options.projectConfig
+    ? { override: readProjectOllamaLayerFromConfig(projectConfigResult.config), warnings: [] as string[] }
+    : readOllamaLayer(projectConfigPath(root), true);
   warnings.push(...projectOllamaLayer.warnings, ...userOllamaLayer.warnings);
 
   const ollamaCandidate = {
@@ -642,7 +681,9 @@ export function readOllamaConfig(options: ResolveConfigOptions = {}): OllamaConf
   const env = options.env ?? process.env;
 
   const userLayer = readOllamaLayer(hostOllamaPath(options.host, homeDir), false);
-  const projectLayer = readOllamaLayer(projectConfigPath(root), true);
+  const projectLayer = options.projectConfig
+    ? { override: readProjectOllamaLayerFromConfig(options.projectConfig), warnings: [] as string[] }
+    : readOllamaLayer(projectConfigPath(root), true);
   const globalEnv = readGlobalEnvConfig(env);
 
   const merged = {
