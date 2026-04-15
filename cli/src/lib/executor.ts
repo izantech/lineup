@@ -1864,6 +1864,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
       outputPath: path.join(options.artifactDir, "review.yaml"),
       workspaceDiff
     });
+    options.emitStatus("verify", "Reviewing implemented changes...");
 
     options.emitProtocol(
       createLineupRequest({

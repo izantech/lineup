@@ -123,7 +123,6 @@ export function resolveHostLaunchStrategy(host: HostName, ollama: OllamaConfig |
 function buildClaudeDirectArgs(input: HostLaunchPlanInput, model: string): string[] {
   const args = [
     "-p",
-    "--bare",
     "--output-format",
     input.schemaContent || input.claudeDraftJsonOutput ? "json" : "text",
     "--permission-mode",

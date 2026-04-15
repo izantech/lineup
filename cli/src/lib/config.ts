@@ -197,7 +197,7 @@ function firstExisting(paths: string[]): string | null {
   return null;
 }
 
-function hostOverrideDir(host: ResolveConfigOptions["host"], homeDir: string): string {
+export function hostOverrideDir(host: ResolveConfigOptions["host"], homeDir: string): string {
   switch (host ?? "claude") {
     case "claude":
       return path.join(homeDir, ".claude", "lineup", "agents");
@@ -208,7 +208,7 @@ function hostOverrideDir(host: ResolveConfigOptions["host"], homeDir: string): s
   }
 }
 
-function hostOllamaPath(host: ResolveConfigOptions["host"], homeDir: string): string {
+export function hostOllamaPath(host: ResolveConfigOptions["host"], homeDir: string): string {
   switch (host ?? "claude") {
     case "claude":
       return path.join(homeDir, ".claude", "lineup", "ollama.yaml");
@@ -459,7 +459,7 @@ function mergeModelRouting(...layers: Array<Partial<Record<ModelAlias, string>> 
   return routing;
 }
 
-function projectConfigPath(root = projectRoot()): string {
+export function projectConfigPath(root = projectRoot()): string {
   return path.join(root, ".lineup", "config.yaml");
 }
 

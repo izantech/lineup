@@ -60,6 +60,21 @@ describe("handleInteractiveGate", () => {
     expect(response.choice).toBe("reject");
   });
 
+  it("approval gate prints context before the prompt", async () => {
+    const mockRl = makeMockRl([""]);
+    vi.mocked(createInterface).mockReturnValue(mockRl as never);
+
+    const gate = makeGate({
+      gateType: "approval",
+      context: "Plan artifact: /tmp/plan.yaml\n\nsummary: Improve the TUI"
+    });
+    await handleInteractiveGate(gate);
+
+    expect(mockRl.question).toHaveBeenCalledWith(
+      "Plan artifact: /tmp/plan.yaml\n\nsummary: Improve the TUI\n\nApprove the plan? [Y/n]: "
+    );
+  });
+
   it("clarify gate: captures free-text input", async () => {
     const mockRl = makeMockRl(["Please clarify the scope"]);
     vi.mocked(createInterface).mockReturnValue(mockRl as never);

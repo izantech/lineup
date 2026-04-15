@@ -198,6 +198,27 @@ describe("launch planner", () => {
     expect(plan.env.OLLAMA_HOST).toBe("http://127.0.0.1:11434")
   })
 
+  it("does not force Claude bare mode for direct launches", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+
+    const plan = planHostLaunch({
+      host: "claude",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "researcher",
+      prompt: "inspect"
+    })
+
+    expect(plan.command).toBe("claude")
+    expect(plan.integration).toBe("direct")
+    expect(plan.args).not.toContain("--bare")
+    expect(plan.args).toContain("-p")
+    expect(plan.args).toContain("--permission-mode")
+    expect(plan.args).toContain("bypassPermissions")
+  })
+
   it("wraps Claude with ollama launch when the wrapper is available", () => {
     root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
     home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))

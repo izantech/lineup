@@ -40,6 +40,7 @@ lineup install --host all
 lineup update --host all
 lineup status --host all
 lineup status --host all --artifacts
+lineup config --host codex
 lineup doctor
 lineup uninstall --host opencode
 ```
@@ -51,6 +52,7 @@ lineup install [--host claude|codex|opencode|all] [--version <tag>|latest] [--ye
 lineup update [--host claude|codex|opencode|all] [--version <tag>|latest] [--yes]
 lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
+lineup config [show] [--host claude|codex|opencode] [--json]
 lineup doctor [--json]
 lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup init [--workflow <name>] [--json]

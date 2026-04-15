@@ -17,6 +17,7 @@ import {
 } from "./commands/bridge";
 import { runCancelCommand, type CancelCommandOptions } from "./commands/cancel";
 import { runCompletionCommand, type CompletionCommandOptions } from "./commands/completion";
+import { runConfigCommand, type ConfigCommandOptions } from "./commands/config";
 import { runDagCommand, type DagCommandOptions } from "./commands/dag";
 import { runGateRespondCommand, type GateRespondOptions } from "./commands/gate";
 import { runWavesCommand, type WavesCommandOptions } from "./commands/waves";
@@ -92,6 +93,7 @@ export type CliHandlers = {
   tacticConvert: (options: TacticConvertOptions) => Promise<void>;
   gateRespond: (options: GateRespondOptions) => Promise<void>;
   completion: (options: CompletionCommandOptions) => Promise<void>;
+  config: (options: ConfigCommandOptions) => Promise<void>;
   dag: (options: DagCommandOptions) => Promise<void>;
   waves: (options: WavesCommandOptions) => Promise<void>;
   history: (options: HistoryCommandOptions) => Promise<void>;
@@ -137,6 +139,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     tacticConvert: runTacticConvertCommand,
     gateRespond: runGateRespondCommand,
     completion: runCompletionCommand,
+    config: runConfigCommand,
     dag: runDagCommand,
     waves: runWavesCommand,
     history: runHistoryCommand,
@@ -439,6 +442,20 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     .command("completion <shell>")
     .description("Generate shell completion script (bash, zsh, fish)")
     .action((shell: string) => commandHandlers.completion({ shell }));
+
+  program
+    .command("config [subcommand]")
+    .description("Show the effective Lineup runtime configuration")
+    .option("--host <host>", "Inspect config for a specific local execution host: claude|codex|opencode")
+    .option("--json", "Emit machine-readable JSON output")
+    .action((subcommand: string | undefined, opts: ConfigCommandOptions) => {
+      if (subcommand && subcommand !== "show") {
+        throw new CliError(`Unknown config subcommand '${subcommand}'. Use \`lineup config\` or \`lineup config show\`.`, {
+          code: "invalid_args"
+        });
+      }
+      return commandHandlers.config(opts);
+    });
 
   program
     .command("dag")

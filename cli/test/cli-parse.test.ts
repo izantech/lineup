@@ -8,6 +8,7 @@ function createMockHandlers() {
     update: vi.fn(async () => undefined),
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
+    config: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
     start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
@@ -24,6 +25,7 @@ describe("CLI command parsing", () => {
     update: vi.fn(async () => undefined),
     uninstall: vi.fn(async () => undefined),
     status: vi.fn(async () => undefined),
+    config: vi.fn(async () => undefined),
     doctor: vi.fn(async () => undefined),
     start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
@@ -150,6 +152,18 @@ describe("CLI command parsing", () => {
       expect.anything()
     );
   });
+
+  it("parses config options", async () => {
+    const program = buildProgram(handlers);
+    await program.parseAsync(["config", "--host", "codex", "--json"], { from: "user" });
+
+    expect(handlers.config).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "codex",
+        json: true
+      })
+    );
+  });
 });
 
 describe("run command", () => {
@@ -240,6 +254,15 @@ describe("run command", () => {
     await program.parseAsync(["node", "lineup", "run", "Fix the login bug", "--host", "claude"]);
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: "Fix the login bug", host: "claude" })
+    );
+  });
+
+  it("parses config show alias", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "config", "show", "--host", "claude"]);
+    expect(handlers.config).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "claude" })
     );
   });
 

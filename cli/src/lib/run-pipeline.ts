@@ -320,6 +320,8 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             stageResults.set(stageId, approvalResult);
             expressionCtx.stages[stageId] = { outputs: approvalResult.outputs };
           } else {
+            const planPath = expressionCtx.stages["plan"]?.outputs?.planPath as string | undefined;
+            const planContext = buildPlanApprovalContext(planPath);
             const reqId = protocolRequestId++;
             const pendingGate: PendingGate = {
               requestId: reqId,
@@ -328,6 +330,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
               question: "Approve the generated plan?",
               choices: ["approve", "reject"],
               defaultChoice: "approve",
+              ...(planContext ? { context: planContext } : {}),
               createdAt: new Date().toISOString()
             };
             let gateResponse;
@@ -346,7 +349,8 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     gateType: "approval",
                     question: "Approve the generated plan?",
                     choices: ["approve", "reject"],
-                    defaultChoice: "approve"
+                    defaultChoice: "approve",
+                    ...(planContext ? { context: planContext } : {})
                   }
                 })
               );
@@ -600,7 +604,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
-    notifyPipelineComplete(runId, "succeeded", "Pipeline completed successfully.");
+    if (runMode === "human") {
+      notifyPipelineComplete(runId, "succeeded", "Pipeline completed successfully.");
+    }
     // 10. Cleanup on success
     cleanup(artifactDir, cacheDir, true);
   } catch (error) {
@@ -634,7 +640,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
-    notifyPipelineComplete(runId, "failed", error instanceof Error ? error.message : String(error));
+    if (runMode === "human") {
+      notifyPipelineComplete(runId, "failed", error instanceof Error ? error.message : String(error));
+    }
     writeDebugBundle(projectRoot, runId, {
       run_id: runId,
       workflow: workflowPath,
@@ -1569,6 +1577,12 @@ async function executePreStage(
     // to get LLM-driven classification. Otherwise, return stats only.
     const hasOutputSchema = stage.outputs && Object.keys(stage.outputs).length > 0;
     if (hasOutputSchema) {
+      if (runMode === "human") {
+        const classification = autoClassifyTriage(stats);
+        emitStatus(stage.id, `Triage complete: ${classification.complexity}, ${classification.affected_areas.length} areas.`, true);
+        return { id: stage.id, status: "complete", outputs: classification };
+      }
+
       const contextPayload = formatTriageContext(stats);
       const classifyResult = await emitGateAndWait(
         stage, "classify",
@@ -1842,6 +1856,33 @@ function parseClassifyResponse(
   };
 }
 
+function autoClassifyTriage(stats: TriageStats): TriageOutputs {
+  const affected_areas = deriveAreasFromPaths(stats.changedPaths);
+  const search_targets = affected_areas.map((area) => ({
+    area: area.name,
+    targets: stats.changedPaths.filter((path) => path.startsWith(area.name))
+  }));
+  const independent_areas = affected_areas.filter((area) => !area.coupled).map((area) => [area.name]);
+
+  let complexity: TriageOutputs["complexity"] = "moderate";
+  if (stats.changedFiles >= 8 || affected_areas.length >= 4) {
+    complexity = "complex";
+  } else if (stats.changedFiles > 0 && stats.changedFiles <= 2 && affected_areas.length <= 1) {
+    complexity = "simple";
+  }
+
+  return {
+    complexity,
+    affected_areas,
+    search_targets,
+    independent_areas,
+    fileCount: stats.fileCount,
+    changedFiles: stats.changedFiles,
+    insertions: stats.insertions,
+    deletions: stats.deletions
+  };
+}
+
 function deriveAreasFromPaths(paths: string[]): Array<{ name: string; coupled: boolean }> {
   const dirs = new Map<string, number>();
   for (const p of paths) {
@@ -2045,6 +2086,19 @@ function executePostStage(
     validateAndWarnAgentOutput(stage.id, stage.agent as AgentOutputKind, result.outputs["output_yaml"] as string, emitStatus, validateOutputs);
   }
   return result;
+}
+
+function buildPlanApprovalContext(planPath: string | undefined): string | undefined {
+  if (!planPath || !existsSync(planPath)) {
+    return undefined;
+  }
+
+  const content = readFileSync(planPath, "utf8").trim();
+  if (content.length === 0) {
+    return `Plan artifact: ${planPath}`;
+  }
+
+  return `Plan artifact: ${planPath}\n\n${content}`;
 }
 
 export function validateAndWarnAgentOutput(

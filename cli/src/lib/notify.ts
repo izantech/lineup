@@ -16,8 +16,21 @@ function isTTY(): boolean {
   return !!process.stdout.isTTY;
 }
 
+function isTestEnv(): boolean {
+  return process.env.NODE_ENV === "test" || !!process.env.VITEST;
+}
+
+function notificationsDisabled(): boolean {
+  const raw = process.env.LINEUP_DISABLE_NOTIFICATIONS;
+  if (!raw) {
+    return false;
+  }
+
+  return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
 export function sendNotification(options: NotificationOptions): void {
-  if (isCI()) return;
+  if (isCI() || isTestEnv() || notificationsDisabled() || !isTTY()) return;
 
   const os = platform();
 

@@ -176,6 +176,67 @@ stages:
     }
   });
 
+  it("auto-classifies triage in human mode instead of prompting the user", async () => {
+    const projectRoot = join(tempDir, "project-human-triage");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: human-triage
+stages:
+  - id: triage
+    type: builtin
+    outputs:
+      complexity:
+        type: enum
+        values: [simple, moderate, complex]
+      affected_areas:
+        type: list
+        items:
+          type: object
+          properties:
+            name: { type: string }
+            coupled: { type: boolean }
+      search_targets:
+        type: list
+        items:
+          type: object
+          properties:
+            area: { type: string }
+            targets: { type: list, items: { type: string } }
+      independent_areas:
+        type: list
+        items:
+          type: list
+          items: { type: string }
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      const result = await runPipeline({
+        workflow: workflowPath,
+        mode: "human",
+      });
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("triage")?.outputs).toMatchObject({
+        complexity: "moderate",
+        affected_areas: [],
+        search_targets: [],
+        independent_areas: []
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("fails fast with a clear message when native execution is launched outside git", async () => {
     const projectRoot = join(tempDir, "project-requires-git");
     mkdirSync(projectRoot, { recursive: true });
@@ -513,6 +574,79 @@ stages:
 
       expect(result.status).toBe("success");
       expect(readFileSync(join(projectRoot, ".lineup", ".runs", "host01", "artifacts", "plan.yaml"), "utf8")).toContain("kind: Plan");
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("includes the generated plan content in the plan-approval gate context", async () => {
+    const projectRoot = join(tempDir, "project-host-plan-approval-context");
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: host-plan-approval-context
+stages:
+  - id: triage
+    type: builtin
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
+`);
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const { readPendingGate, writeGateResponse } = await import("../src/lib/gate-store.js");
+
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+    try {
+      setTimeout(() => {
+        writeFileSync(
+          join(projectRoot, ".lineup", ".runs", "hpactx", "artifacts", "plan.yaml"),
+          APPROVED_PLAN,
+          "utf8"
+        );
+      }, 50);
+
+      setTimeout(() => {
+        const gate = readPendingGate("hpactx", 1, projectRoot);
+        expect(gate).not.toBeNull();
+        expect(gate?.question).toBe("Approve the generated plan?");
+        expect(gate?.context).toContain("Plan artifact:");
+        expect(gate?.context).toContain("kind: Plan");
+        expect(gate?.context).toContain("summary: Integrate native executor");
+        writeGateResponse(
+          "hpactx",
+          {
+            requestId: 1,
+            choice: "approve",
+            respondedAt: new Date().toISOString()
+          },
+          projectRoot
+        );
+      }, 150);
+
+      const result = await runPipeline(
+        {
+          workflow: workflowPath,
+          mode: "host"
+        },
+        {
+          runId: "hpactx"
+        }
+      );
+
+      expect(result.status).toBe("success");
+      expect(result.stageResults.get("plan-approval")?.outputs).toMatchObject({ approved: true });
     } finally {
       process.chdir(origCwd);
     }
