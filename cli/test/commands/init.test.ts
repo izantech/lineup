@@ -68,6 +68,8 @@ describe("init command", () => {
     const gitignore = readFileSync(join(tempDir, ".lineup", ".gitignore"), "utf8");
     expect(gitignore).toContain(".runs/");
     expect(gitignore).toContain("runtime.lock");
+    expect(gitignore).toContain("config.yaml");
+    expect(gitignore).toContain("tactics/example.yaml");
 
     const output = stdout.join("");
     expect(output).toContain("created:");

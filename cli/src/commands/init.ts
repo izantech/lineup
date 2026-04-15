@@ -90,6 +90,8 @@ const GITIGNORE_CONTENT = `.runs/
 .ephemeral/
 .artifacts/
 runtime.lock
+config.yaml
+tactics/example.yaml
 `;
 
 function ensureDir(dirPath: string, entries: InitEntry[]): void {

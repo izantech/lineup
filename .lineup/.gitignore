@@ -3,3 +3,5 @@
 .ephemeral/
 .artifacts/
 runtime.lock
+config.yaml
+tactics/example.yaml
