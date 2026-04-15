@@ -5,6 +5,7 @@ import { type HostName } from "./constants.js"
 import { readOllamaConfig, resolveAgentModelTarget, type OllamaConfig, type OllamaHostIntegrationStrategy } from "./config.js"
 import { LINEUP_CODEX_OLLAMA_PROFILE, LINEUP_CODEX_OLLAMA_PROVIDER, codexConfigPath, upsertLineupCodexConfig } from "./codex-config.js"
 import { LINEUP_OPENCODE_OLLAMA_PROVIDER, opencodeConfigPath, upsertLineupOpencodeConfig } from "./opencode-config.js"
+import { CliError } from "./errors.js"
 import type { AgentRole } from "./types.js"
 
 export type HostLaunchStrategy = "launch" | "managed"
@@ -22,6 +23,7 @@ export type HostLaunchPlanInput = {
   schemaPath?: string | null
   claudeDraftJsonOutput?: boolean
   claudeForceEnvFallback?: boolean
+  forceOllamaBackend?: boolean
   env?: NodeJS.ProcessEnv
   homeDir?: string
   ollama?: OllamaConfig | null
@@ -243,17 +245,43 @@ function planDirectLaunch(input: HostLaunchPlanInput, effectiveModel: string, en
 
 export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
   const env = { ...process.env, ...(input.env ?? {}) }
-  const ollama = input.ollama ?? readOllamaConfig({
+  const configuredOllama = input.ollama ?? readOllamaConfig({
     projectRoot: input.projectRoot,
     host: input.host,
     homeDir: input.homeDir ?? os.homedir(),
     env
   })
+  const ollama = input.forceOllamaBackend
+    ? configuredOllama
+      ? {
+          ...configuredOllama,
+          hostIntegration: {
+            enabled: true,
+            strategy: "launch" as const
+          }
+        }
+      : (() => {
+          throw new CliError(
+            "Execution host 'ollama' requires Ollama to be enabled in Lineup config. Set ollama.enabled: true and choose a model.",
+            { code: "invalid_args" }
+          )
+        })()
+    : configuredOllama
   const effectiveModel = resolveAgentModelTarget(input.agent, {
     projectRoot: input.projectRoot,
     host: input.host,
     homeDir: input.homeDir ?? os.homedir(),
-    env
+    env,
+    ...(input.forceOllamaBackend
+      ? {
+          cli: {
+            ollama: {
+              enabled: true,
+              scope: "full"
+            }
+          }
+        }
+      : {})
   })
 
   if (!ollama?.hostIntegration?.enabled) {

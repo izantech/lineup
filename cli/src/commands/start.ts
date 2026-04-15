@@ -49,6 +49,10 @@ function rerunCommand(options: StartCommandOptions): string {
     parts.push("--host", options.host);
   }
 
+  if (options.runner) {
+    parts.push("--runner", options.runner);
+  }
+
   if (options.mode) {
     parts.push("--mode", options.mode);
   }

@@ -21,6 +21,7 @@ export type LocalAgentInvocationInput = {
   outputSchemaPath?: string;
   expectedOutputPath?: string;
   tracePrefixPath?: string;
+  forceOllamaBackend?: boolean;
 };
 
 export type LocalAgentInvocationResult = {
@@ -497,7 +498,8 @@ async function runClaudeAgent(host: HostName, input: LocalAgentInvocationInput):
       addDirs: input.addDirs,
       schemaContent: attempt.schemaContent,
       claudeDraftJsonOutput: attempt.claudeDraftJsonOutput ?? false,
-      claudeForceEnvFallback: attempt.claudeForceEnvFallback ?? false
+      claudeForceEnvFallback: attempt.claudeForceEnvFallback ?? false,
+      forceOllamaBackend: input.forceOllamaBackend ?? false
     });
 
     const result = await runSpawnedCommand({
@@ -693,7 +695,8 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
     prompt: input.prompt,
     timeoutMs: input.timeoutMs,
     addDirs: input.addDirs,
-    outputPath
+    outputPath,
+    forceOllamaBackend: input.forceOllamaBackend ?? false
   });
   const nativeSchemaEnabled = shouldUseCodexNativeOutputSchema(input.agent, initialLaunchPlan.integration);
   const normalizedSchema = nativeSchemaEnabled && input.outputSchemaPath
@@ -707,10 +710,11 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
         workingDirectory: input.workingDirectory,
         agent: input.agent,
         prompt: input.prompt,
-        timeoutMs: input.timeoutMs,
-        addDirs: input.addDirs,
-        outputPath,
-        schemaPath: normalizedSchemaPath
+      timeoutMs: input.timeoutMs,
+      addDirs: input.addDirs,
+      outputPath,
+      schemaPath: normalizedSchemaPath,
+      forceOllamaBackend: input.forceOllamaBackend ?? false
       })
     : initialLaunchPlan;
   const isolatedLaunchPlan = {
@@ -764,7 +768,8 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
     agent: input.agent,
     prompt: input.prompt,
     timeoutMs: input.timeoutMs,
-    addDirs: input.addDirs
+    addDirs: input.addDirs,
+    forceOllamaBackend: input.forceOllamaBackend ?? false
   });
 
   const result = await runSpawnedCommand({
@@ -1051,19 +1056,26 @@ async function runSpawnedCommand(input: {
   });
 }
 
-export function createLocalAgentRunner(preferredHost?: HostName): LocalAgentRunner {
+export function createLocalAgentRunner(
+  preferredHost?: HostName,
+  options: { forceOllamaBackend?: boolean } = {}
+): LocalAgentRunner {
   const host = resolveLocalExecutionHost(preferredHost);
 
   return {
     host,
     async invoke(input) {
+      const invocation = {
+        ...input,
+        forceOllamaBackend: options.forceOllamaBackend ?? false
+      };
       switch (host) {
         case "claude":
-          return runClaudeAgent(host, input);
+          return runClaudeAgent(host, invocation);
         case "codex":
-          return runCodexAgent(host, input);
+          return runCodexAgent(host, invocation);
         case "opencode":
-          return runOpencodeAgent(host, input);
+          return runOpencodeAgent(host, invocation);
       }
     }
   };

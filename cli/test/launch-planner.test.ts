@@ -198,6 +198,31 @@ describe("launch planner", () => {
     expect(plan.env.OLLAMA_HOST).toBe("http://127.0.0.1:11434")
   })
 
+  it("forces Codex onto the local Ollama launch path when the execution host is ollama", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3.5:9b\n  scope: research\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "codex",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "developer",
+      prompt: "inspect",
+      forceOllamaBackend: true
+    })
+
+    expect(plan.command).toBe("codex")
+    expect(plan.integration).toBe("ollama-launch")
+    expect(plan.args.slice(0, 4)).toEqual(["exec", "--oss", "--local-provider", "ollama"])
+    expect(plan.args).toContain("-m")
+    expect(plan.args).toContain("qwen3.5:9b")
+  })
+
   it("does not force Claude bare mode for direct launches", () => {
     root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
     home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))

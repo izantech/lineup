@@ -180,6 +180,19 @@ describe("run command", () => {
     );
   });
 
+  it("parses ollama host with explicit runner", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "run", "Ship the fix", "--host", "ollama", "--runner", "codex"]);
+    expect(handlers.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Ship the fix",
+        host: "ollama",
+        runner: "codex"
+      })
+    );
+  });
+
   it("parses --dry-run flag", async () => {
     const handlers = createMockHandlers();
     const program = buildProgram(handlers);

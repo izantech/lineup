@@ -54,9 +54,9 @@ lineup uninstall [--host claude|codex|opencode|all] [--yes] [--purge]
 lineup status [--host claude|codex|opencode|all] [--artifacts] [--json]
 lineup config [show] [--host claude|codex|opencode] [--json]
 lineup doctor [--json]
-lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
+lineup start [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--mode human|host] [--max-parallel <n>] [--isolation <mode>] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup init [--workflow <name>] [--json]
-lineup run [task] [--workflow <path>] [--tactic <name>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
+lineup run [task] [--workflow <path>] [--tactic <name>] [--host <host>] [--runner <host>] [--from-stage <id>] [--dry-run] [--force-rerun] [--max-parallel <n>] [--isolation <mode>] [--mode human|host] [--implement-method <method>] [--approve-plan] [--gate-timeout <seconds>]
 lineup bridge start <task> --executor-host <host> [--workflow <path>] [--tactic <name>] [--approve-plan] [--gate-timeout <seconds>] [--json]
 lineup bridge events <run-id> --after <seq> --wait <seconds> [--json]
 lineup bridge answer <run-id> <request-id> --choice <value> [--reason <text>] [--json]
@@ -87,6 +87,11 @@ See [docs/commands.md](/Users/izan/Dev/Projects/lineup/docs/commands.md:1) for t
 - `--mode host` for raw protocol consumers, advanced integrations, and CI. The CLI emits NDJSON protocol messages on stdout and expects gate responses via `lineup gate respond`.
 
 If `--mode` is omitted, Lineup defaults to `human` on a TTY and `host` otherwise.
+
+For local execution:
+
+- `--host claude|codex|opencode` uses the normal runner directly, with optional Ollama integration if enabled in config
+- `--host ollama --runner claude|codex|opencode` forces that runner through the local Ollama backend
 
 Generated skills should prefer the bridge API:
 

@@ -8,6 +8,7 @@ export const CLAUDE_LOCAL_PLUGIN = `${LINEUP_PLUGIN_NAME}@${CLAUDE_LOCAL_MARKETP
 export const SUPPORTED_HOSTS = ["claude", "codex", "opencode"] as const;
 
 export type HostName = (typeof SUPPORTED_HOSTS)[number];
+export type ExecutionHostName = HostName | "ollama";
 
 export const CODEX_SKILL_DIRS = [
   "lineup-kick-off",

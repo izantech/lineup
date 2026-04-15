@@ -60,4 +60,24 @@ describe("run command", () => {
     expect(stderr.join("")).toContain("lineup resume run-blocked");
     expect(stderr.join("")).toContain("lineup show run-blocked");
   });
+
+  it("uses the explicit ollama host with the selected runner", async () => {
+    mockedCreateLocalAgentRunner.mockReturnValue({ host: "codex" });
+    mockedRunPipeline.mockResolvedValue({
+      runId: "run-ok",
+      status: "success",
+      stageResults: new Map()
+    });
+
+    await runRunCommand({ prompt: "Ship it", mode: "human", host: "ollama", runner: "codex" });
+
+    expect(mockedCreateLocalAgentRunner).toHaveBeenCalledWith("codex", { forceOllamaBackend: true });
+    expect(stderr.join("")).toContain("Using local host 'ollama' with runner 'codex'");
+  });
+
+  it("rejects --runner unless --host ollama is selected", async () => {
+    await expect(
+      runRunCommand({ prompt: "Ship it", mode: "human", host: "codex", runner: "claude" })
+    ).rejects.toThrow("--runner is only valid when --host ollama.");
+  });
 });
