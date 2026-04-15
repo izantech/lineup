@@ -26,7 +26,7 @@ import {
   type LineupGateType,
   type LineupProtocolMessage
 } from "./protocol.js";
-import { writePendingGate, waitForGateResponse, GateTimeoutError, type PendingGate } from "./gate-store.js";
+import { writePendingGate, waitForGateResponse, GateTimeoutError, type GateResponse, type PendingGate } from "./gate-store.js";
 import { handleInteractiveGate } from "./interactive-gate.js";
 import {
   lineupArtifactStoreDir,
@@ -95,6 +95,8 @@ export type RunPipelineHooks = {
   localAgentRunner?: LocalAgentRunner;
   emitProtocolToStdout?: boolean;
   onProtocolMessage?: (message: LineupProtocolMessage) => void;
+  emitHumanTextToStderr?: boolean;
+  handleHumanGate?: (gate: PendingGate) => Promise<GateResponse>;
   native?: {
     driver?: NativeExecutionDriver;
     planContent?: string;
@@ -108,6 +110,9 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
   const runMode = options.mode ?? (process.stdin.isTTY && process.stdout.isTTY ? "human" : "host");
   const projectRoot = resolve(".");
   const localAgentRunner = hooks.localAgentRunner;
+  const shouldEmitHumanText = runMode === "human" && hooks.emitHumanTextToStderr !== false;
+  const resolveHumanGate = async (gate: PendingGate): Promise<GateResponse> =>
+    hooks.handleHumanGate ? hooks.handleHumanGate(gate) : handleInteractiveGate(gate);
   // 1. Load workflow
   let workflow: WorkflowDefinition;
   let workflowPath: string;
@@ -189,7 +194,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       }
     });
     emitProtocol(message);
-    if (runMode === "human") {
+    if (shouldEmitHumanText) {
       process.stderr.write(`[${stageId}] ${chunk}\n`);
     }
   };
@@ -275,6 +280,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             options.validateOutputs !== false,
             runMode,
             localAgentRunner,
+            resolveHumanGate,
             (error, blockedStageId, timeoutMs) => {
               pipelineState = recordGateTimeout(
                 pipelineState,
@@ -332,7 +338,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             };
             let gateResponse;
             if (runMode === "human") {
-              gateResponse = await handleInteractiveGate(pendingGate);
+              gateResponse = await resolveHumanGate(pendingGate);
             } else {
               writePendingGate(runId, pendingGate, projectRoot);
 
@@ -454,7 +460,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
 
                 let gateResponse;
                 if (runMode === "human") {
-                  gateResponse = await handleInteractiveGate(pendingGate);
+                  gateResponse = await resolveHumanGate(pendingGate);
                 } else {
                   writePendingGate(runId, pendingGate, projectRoot);
                   emitProtocol(
@@ -586,7 +592,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
         }
       })
     );
-    if (runMode === "human") {
+    if (shouldEmitHumanText) {
       process.stderr.write(`${completionSummary}\n`);
     }
     persistProtocolArtifact();
@@ -620,7 +626,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
         }
       })
     );
-    if (runMode === "human") {
+    if (shouldEmitHumanText) {
       process.stderr.write(`${failureMessage}\n`);
     }
     persistProtocolArtifact();
@@ -1544,18 +1550,19 @@ async function executePreStage(
   validateOutputs = true,
   runMode: "human" | "host" = "human",
   localAgentRunner?: LocalAgentRunner,
+  handleHumanGate?: (gate: PendingGate) => Promise<GateResponse>,
   onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGateTimeout);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, handleHumanGate, onGateTimeout);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGateTimeout);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, handleHumanGate, onGateTimeout);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
@@ -1577,6 +1584,7 @@ async function executePreStage(
         "moderate", runId, projectRoot, nextRequestId,
         emitProtocol, emitStatus, true, gateTimeoutMs, runMode,
         contextPayload,
+        handleHumanGate,
         onGateTimeout
       );
 
@@ -1868,6 +1876,7 @@ async function emitGateAndWait(
   gateTimeoutMs?: number,
   runMode: "human" | "host" = "human",
   context?: string,
+  handleHumanGate?: (gate: PendingGate) => Promise<GateResponse>,
   onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
 ): Promise<StageResult> {
   const reqId = nextRequestId();
@@ -1884,7 +1893,7 @@ async function emitGateAndWait(
 
   let gateResponse;
   if (runMode === "human") {
-    gateResponse = await handleInteractiveGate(pendingGate);
+    gateResponse = handleHumanGate ? await handleHumanGate(pendingGate) : await handleInteractiveGate(pendingGate);
   } else {
     writePendingGate(runId, pendingGate, projectRoot);
 

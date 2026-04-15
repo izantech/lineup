@@ -1,214 +1,84 @@
 # CLI Overview
 
-This document explains how the `lineup` CLI works as a runtime, not just as a command list.
+Lineup has one engine and two frontends:
 
-At a high level, the CLI is the engine. Host skills for Claude Code, Codex CLI, and OpenCode are wrappers around that same engine rather than separate orchestrators.
+- the interactive frontend, where `lineup` opens the TUI in a terminal and `lineup tui` is the explicit alias
+- the operator frontend, where `lineup <subcommand>` stays available for scripts, maintenance, and CI
+
+The same engine powers both frontends and the detached bridge used by generated skills. The TUI does not introduce a separate orchestrator; it renders the same run state, readiness checks, and artifact data that the command layer already uses.
 
 Relevant implementation files:
 
-- `cli/src/cli.ts` — command registration and dispatch
-- `cli/src/commands/start.ts` — first-run preparation and readiness checks
-- `cli/src/commands/run.ts` — direct execution entrypoint and mode selection
-- `cli/src/commands/bridge.ts` — detached bridge session lifecycle
-- `cli/src/lib/run-pipeline.ts` — orchestration engine
-- `cli/src/lib/executor.ts` — native implement/verify execution
-- `cli/src/lib/bridge.ts` — bridge session and event persistence
+- `cli/src/cli.ts` - command registration and dispatch
+- `cli/src/lib/run-pipeline.ts` - orchestration engine
+- `cli/src/commands/bridge.ts` - detached bridge session lifecycle
+- `cli/src/lib/bridge.ts` - bridge session and event persistence
+- `cli/src/lib/executor.ts` - native implement/verify execution
+- `cli/src/lib/protocol.ts` - raw host protocol types
 
-## Mental model
-
-Lineup has three practical entrypoints:
-
-- `lineup start` for first-run or onboarding flows
-- `lineup run` for direct terminal execution
-- `lineup bridge start|events|answer` for generated host wrappers
+## Frontends
 
 ```mermaid
 flowchart LR
-  user["User or host wrapper"] --> start["lineup start"]
-  user --> run["lineup run"]
-  user --> bridge["lineup bridge start/events/answer"]
+  interactive["Interactive terminal"] --> tui["lineup / lineup tui"]
+  tui --> ui["TUI"]
+  ui --> engine["runPipeline()"]
 
-  start --> prep["Prepare repo"]
-  prep --> init["Scaffold Lineup files if needed"]
-  prep --> doctor["Check git and runtime readiness"]
-  doctor --> ready{"Ready to run?"}
-  ready -- yes --> run
-  ready -- no --> next["Print exact next commands and stop"]
+  operator["Operator / script"] --> sub["lineup <subcommand>"]
+  sub --> engine
 
-  run --> engine["runPipeline()"]
+  skill["Generated skill"] --> bridge["lineup bridge start/events/answer"]
   bridge --> engine
+
+  ci["Advanced integration / CI"] --> host["lineup run --mode host"]
+  host --> engine
 ```
 
-## Command roles
+`--no-tui` is the escape hatch when you want the interactive terminal path to stay in classic text mode.
 
-`lineup start` is the safest first entrypoint in a repo. It initializes Lineup structure if needed, runs readiness checks, and only delegates to `run` when the project is actually ready.
+## Shared Runtime
 
-`lineup run` is the normal direct executor. It resolves the runtime mode automatically:
+Everything still flows through `runPipeline()`. It loads the workflow or tactic, validates the workflow DAG and project prerequisites, creates the run state under `.lineup`, acquires the runtime lock, resolves execution waves, and runs the stages.
 
-- `human` on an interactive TTY
-- `host` otherwise
-
-In `human` mode, progress and questions are shown for a person in the terminal. In `host` mode, the CLI emits protocol messages and waits for gate responses through CLI commands.
-
-`lineup bridge` exists so installed host skills do not need to supervise raw protocol streams directly. The bridge starts a detached worker, persists a session, converts low-level protocol messages into compact events, and supports reconnect-safe polling.
-
-## Pipeline execution
-
-The orchestration engine lives in `runPipeline()`. It loads a workflow or tactic, validates it, creates a run id and state directories, acquires a runtime lock, resolves execution waves, and then executes stages.
-
-```mermaid
-flowchart TD
-  A["runPipeline(options)"] --> B["Load workflow or convert tactic to workflow"]
-  B --> C["Validate workflow DAG and project prerequisites"]
-  C --> D["Create run id, run dirs, artifact store, pipeline state"]
-  D --> E["Acquire runtime lock"]
-  E --> F["Resolve workflow execution order"]
-  F --> G["Execute stages in wave order"]
-
-  G --> H["Pre-pipeline stages"]
-  H --> H1["Triage"]
-  H --> H2["Clarify"]
-  H --> H3["Research"]
-  H --> H4["Clarification gate"]
-
-  G --> I["Plan"]
-  I --> J["Plan approval gate"]
-  J --> K["Implement and Verify"]
-  K --> L["Optional Document stage"]
-  L --> M["Persist artifacts and complete"]
-```
-
-The default full pipeline is:
+The default full pipeline remains:
 
 `Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Implement -> Verify -> Document?`
 
 Not every task runs every stage. Triage can reduce the task to a lighter path when the scope is simple.
 
-## What happens inside Implement and Verify
+The `implement` and `verify` stages still compile the approved plan into executable tasks and waves, run implementation in isolated workspaces, and then produce review and verification output. That split is what makes task-wave inspection, targeted retry, and artifact comparison practical.
 
-The `implement` and `verify` stages are special. They do not behave like the earlier orchestration stages.
+## Human, Host, and Bridge
 
-The engine first reads the approved plan artifact, compiles it into executable tasks and waves, runs implementation in isolated workspaces, and then runs review plus verification hooks.
+`lineup run` still supports two runtime modes:
 
-```mermaid
-flowchart TD
-  P["Approved plan artifact"] --> T["Compile plan into task DAG and waves"]
-  T --> M{"Implement method"}
-  M -- phase --> W1["One agent session per wave"]
-  M -- task --> W2["One agent session per task"]
-  M -- single-session --> W3["One cumulative agent session"]
+- `human` - interactive terminal use. The TUI is the normal human surface.
+- `host` - NDJSON protocol output for skills, automation, and CI.
 
-  W1 --> X["Apply workspace patch"]
-  W2 --> X
-  W3 --> X
+If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
 
-  X --> V["Run verification hooks"]
-  V --> R["Reviewer produces review artifact"]
-  R --> S{"Review status"}
-  S -- PASS --> done["Complete run"]
-  S -- WARN/FAIL --> gate["Verify decision gate: retry, accept, abort"]
-  gate --> retry["Retry failed tasks only"]
-  retry --> X
-```
+Generated skills should prefer the bridge API instead of supervising raw host protocol:
 
-This split is why Lineup can:
+- `lineup bridge start` launches a CLI-owned detached session
+- `lineup bridge events` returns compact replayable `status`, `question`, and `complete` events plus reconnect-safe `session`, `pendingQuestion`, and `recovery` fields
+- `lineup bridge answer` responds to pending bridge questions
 
-- show task waves with `lineup waves`
-- retry only failed implementation work after review
-- keep plan, tasks, review, and protocol as separate inspectable artifacts
+Bridge sessions persist more than a cursor. They keep the unresolved gate and recovery state so a host can reconnect cleanly after interruptions. The same persistence also powers `lineup show`, `lineup logs`, `lineup replay`, `lineup resume`, and `lineup bridge events`.
 
-## Human mode vs host mode
+## Recovery and Artifacts
 
-Both modes use the same engine. The difference is how questions and progress are surfaced.
-
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant C as CLI
-  participant P as Pipeline
-
-  U->>C: lineup run "<task>"
-  C->>P: runPipeline()
-  P-->>C: status updates
-
-  alt human mode
-    C-->>U: print progress to stderr
-    P-->>C: gate request
-    C-->>U: interactive question
-    U-->>C: answer in terminal
-    C->>P: continue
-  else host mode
-    C-->>U: emit NDJSON protocol on stdout
-    P-->>C: gate request
-    U->>C: lineup gate respond ...
-    C->>P: continue
-  end
-```
-
-`host` mode is the low-level integration path. It is appropriate for CI or advanced custom integrations that want raw protocol messages.
-
-Generated skills should usually prefer the bridge API instead.
-
-## Bridge mode
-
-Bridge mode wraps the same pipeline engine in a detached, replayable session that host skills can poll safely.
-
-```mermaid
-sequenceDiagram
-  participant H as Host wrapper
-  participant B as bridge start
-  participant W as Detached worker
-  participant P as runPipeline()
-  participant S as Bridge session and event store
-
-  H->>B: lineup bridge start "<task>"
-  B->>S: create BridgeSession
-  B->>W: spawn detached _worker
-  W->>P: run pipeline
-
-  P-->>S: status events
-  P-->>S: question events
-  P-->>S: complete event
-
-  loop poll
-    H->>S: lineup bridge events <run-id>
-    S-->>H: events + pendingQuestion + recovery
-  end
-
-  alt question is pending
-    H->>S: lineup bridge answer <run-id> <request-id>
-    S-->>W: response available
-    W->>P: continue run
-  end
-```
-
-The important design point is that bridge sessions persist more than a cursor. They also keep the unresolved gate and recovery state, which lets a host reconnect cleanly after interruptions.
-
-## State and artifacts
-
-Each run gets a persistent state bundle under `.lineup`. In practice, the CLI stores:
+The CLI keeps run state and artifacts on disk so inspection and resume stay deterministic:
 
 - pipeline state for resume and inspection
-- artifacts such as plan, tasks, review, and protocol
-- bridge session and bridge event files for detached runs
+- plan, tasks, review, and protocol artifacts
+- bridge session and event files for detached runs
 - pending gate requests and responses
 
-That persistence is what makes `lineup show`, `lineup logs`, `lineup replay`, `lineup resume`, and `lineup bridge events` practical instead of best-effort.
+That persistence lets the TUI show live progress, the operator commands inspect completed runs, and generated skills recover blocked sessions without re-running work blindly.
 
-## Why the architecture is split this way
+## Where To Read Next
 
-Lineup keeps orchestration inside the CLI so behavior stays consistent across hosts.
-
-That gives the project a few useful properties:
-
-- one runtime contract instead of per-host orchestration logic
-- one bridge contract for generated skills
-- one place to add output normalization, retries, and validation
-- one persistent run model for inspection and resume
-
-If you need the lower-level details after this overview, continue with:
-
-- [Architecture](./architecture.md)
+- [TUI guide](./tui.md)
 - [Commands](./commands.md)
 - [Pipeline](./pipeline.md)
 - [Gate Protocol](./gate-protocol.md)

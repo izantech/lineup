@@ -6,7 +6,14 @@ Pipeline: **Triage -> Clarify -> Research -> Clarification Gate -> Plan -> Imple
 
 Stage 0 (Triage) classifies complexity, identifies affected areas, and produces search targets before any agent is spawned. Distributed via a single CLI (`lineup`) across all supported hosts.
 
-`lineup run` has two public modes:
+Lineup has two frontends:
+
+- `lineup` / `lineup tui` is the primary human frontend in interactive terminals
+- `lineup <subcommand>` is the operator/programmatic surface for scripts, CI, generated skills, and bridge consumers
+
+Non-interactive shells should stay on the operator surface, and `--no-tui` forces classic text output in an interactive terminal.
+
+`lineup run` still has two public modes:
 
 - `human` — interactive local terminal execution
 - `host` — raw NDJSON protocol mode for advanced integrations and CI
@@ -31,6 +38,10 @@ The runtime now includes a small amount of defensive normalization for raw host
 output (fenced payload repair, one planner retry when prose is returned, tolerant
 developer/reviewer parsing), but keep generated skills and docs aligned with the
 bridge contract rather than relying on recovery behavior.
+
+When updating TUI-facing behavior, keep `AGENTS.md`, `README.md`, `docs/tui.md`,
+and the CLI help text aligned with the same contract. TUI-only changes must not
+alter `bridge` or `run --mode host`.
 
 Ollama host integration is validated in three layers:
 
@@ -64,6 +75,7 @@ Detailed agent-facing documentation lives in `docs/`:
 - [Commands](docs/commands.md) — dev script and CLI runtime reference
 - [Architecture](docs/architecture.md) — canonical+adapter model, CLI package internals
 - [Pipeline](docs/pipeline.md) — triage optimizations, task compilation, caching, snapshots
+- [Status](docs/status.md) — current host/orchestrator validation state and remaining test plan
 - [Agents](docs/agents.md) — agent definitions, Ollama appendices, config overrides, memory
 - [Ollama](docs/ollama.md) — research assist, legacy full routing, and true host integration
 - [Skills](docs/skills.md) — lean skill architecture, host command surface

@@ -33,6 +33,7 @@ import { runRunsCommand, type RunsCommandOptions } from "./commands/runs";
 import { runShowCommand, type ShowCommandOptions } from "./commands/show";
 import { runStatusCommand, type StatusCommandOptions } from "./commands/status";
 import { runDoctorCommand, type DoctorCommandOptions } from "./commands/doctor";
+import { runTuiCommand, type TuiCommandOptions } from "./commands/tui";
 import {
   runTacticNewCommand,
   runTacticListCommand,
@@ -68,6 +69,7 @@ export type CliHandlers = {
   doctor: (options: DoctorCommandOptions) => Promise<void>;
   start: (options: StartCommandOptions) => Promise<void>;
   run: (options: RunCommandOptions) => Promise<void>;
+  tui: (options: TuiCommandOptions) => Promise<void>;
   resume: (options: ResumeCommandOptions) => Promise<void>;
   cancel: (options: CancelCommandOptions) => Promise<void>;
   runs: (options: RunsCommandOptions) => Promise<void>;
@@ -113,6 +115,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     doctor: runDoctorCommand,
     start: runStartCommand,
     run: runRunCommand,
+    tui: runTuiCommand,
     resume: runResumeCommand,
     cancel: runCancelCommand,
     runs: runRunsCommand,
@@ -147,8 +150,31 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
 
   program
     .name("lineup")
-    .description("Lineup multi-host manager for Claude Code, Codex, and OpenCode")
+    .description("Lineup multi-agent pipeline for Claude Code, Codex, and OpenCode")
     .showHelpAfterError();
+
+  program.addHelpText(
+    "after",
+    `
+Interactive use:
+  lineup
+  lineup tui
+  lineup --no-tui --help
+
+Programmatic and operator use:
+  lineup run "<task>" --mode host
+  lineup bridge start "<task>" --executor-host codex --json
+  lineup doctor --json
+  lineup status --host all --json
+
+Command groups:
+  Hosts: install, update, uninstall, status, doctor
+  Runs: start, run, tui, runs, show, logs, replay, resume, cancel, history
+  Artifacts: artifacts, validate, dag, waves
+  Authoring: init, workflow, tactic, completion
+  Automation: bridge, gate, approve, pending
+`
+  );
 
   program
     .command("install")
@@ -234,6 +260,11 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
       commandHandlers.run({ ...opts, prompt: task ?? opts.prompt })
     );
 
+  program
+    .command("tui")
+    .description("Launch the interactive Lineup terminal UI")
+    .action(commandHandlers.tui);
+
   const bridge = program.command("bridge").description("Detached host bridge commands");
 
   bridge
@@ -275,7 +306,7 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
     );
 
   bridge
-    .command("_worker <task>")
+    .command("_worker <task>", { hidden: true })
     .description("Internal detached bridge worker")
     .requiredOption("--run-id <id>", "Run identifier")
     .requiredOption("--executor-host <host>", "Execution host")
@@ -485,12 +516,56 @@ export function handleFatalError(error: unknown): never {
 }
 
 export async function run(argv: string[] = process.argv): Promise<void> {
-  if (isTopLevelVersionRequest(argv)) {
+  const { argv: normalizedArgv, noTui } = stripGlobalNoTui(argv);
+
+  if (isTopLevelVersionRequest(normalizedArgv)) {
     process.stdout.write(`${packageVersion()}\n`);
     return;
   }
+
+  if (shouldLaunchDefaultTui(normalizedArgv, noTui)) {
+    await runTuiCommand({});
+    return;
+  }
+
   const program = buildProgram();
-  await program.parseAsync(argv);
+  if (normalizedArgv.slice(2).length === 0) {
+    program.outputHelp();
+    return;
+  }
+  await program.parseAsync(normalizedArgv);
+}
+
+function stripGlobalNoTui(argv: string[]): { argv: string[]; noTui: boolean } {
+  const prefix = argv.slice(0, 2);
+  const args = argv.slice(2);
+  const normalizedArgs: string[] = [];
+  let noTui = false;
+
+  for (const arg of args) {
+    if (arg === "--no-tui") {
+      noTui = true;
+      continue;
+    }
+    normalizedArgs.push(arg);
+  }
+
+  return {
+    argv: [...prefix, ...normalizedArgs],
+    noTui
+  };
+}
+
+function shouldLaunchDefaultTui(argv: string[], noTui: boolean): boolean {
+  if (noTui) {
+    return false;
+  }
+
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) {
+    return false;
+  }
+
+  return argv.slice(2).length === 0;
 }
 
 function isTopLevelVersionRequest(argv: string[]): boolean {

@@ -90,6 +90,14 @@ export function lineupHome(homeDir = os.homedir()): string {
   return path.join(homeDir, ".lineup");
 }
 
+export function lineupUserConfigDir(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".config", "lineup");
+}
+
+export function lineupTuiConfigFile(homeDir = os.homedir()): string {
+  return path.join(lineupUserConfigDir(homeDir), "tui.json");
+}
+
 export function lineupStateFile(homeDir = os.homedir()): string {
   return path.join(lineupHome(homeDir), "state.json");
 }

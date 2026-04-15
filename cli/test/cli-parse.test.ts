@@ -11,6 +11,7 @@ function createMockHandlers() {
     doctor: vi.fn(async () => undefined),
     start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
+    tui: vi.fn(async () => undefined),
     bridgeStart: vi.fn(async () => undefined),
     bridgeEvents: vi.fn(async () => undefined),
     bridgeAnswer: vi.fn(async () => undefined),
@@ -27,6 +28,7 @@ describe("CLI command parsing", () => {
     doctor: vi.fn(async () => undefined),
     start: vi.fn(async () => undefined),
     run: vi.fn(async () => undefined),
+    tui: vi.fn(async () => undefined),
     bridgeStart: vi.fn(async () => undefined),
     bridgeEvents: vi.fn(async () => undefined),
     bridgeAnswer: vi.fn(async () => undefined),
@@ -241,6 +243,13 @@ describe("run command", () => {
     expect(handlers.run).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: "Fix the login bug", host: "claude" })
     );
+  });
+
+  it("parses the tui command", async () => {
+    const handlers = createMockHandlers();
+    const program = buildProgram(handlers);
+    await program.parseAsync(["node", "lineup", "tui"]);
+    expect(handlers.tui).toHaveBeenCalled();
   });
 
   it("parses bridge start options", async () => {

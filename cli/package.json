@@ -59,9 +59,13 @@
     "validate:direct-hosts": "tsx src/scripts/validate-direct-hosts.ts"
   },
   "dependencies": {
+    "@types/react": "^19.2.14",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "commander": "^14.0.3",
+    "ink": "^7.0.0",
+    "react": "^19.2.5",
+    "react-test-renderer": "^19.2.5",
     "yaml": "^2.8.3"
   },
   "devDependencies": {

@@ -1,77 +1,21 @@
-import { existsSync, readFileSync, rmSync } from "node:fs";
-
-import { CliError } from "../lib/errors.js";
 import { printJson, printTableLine } from "../lib/output.js";
-import { lineupRuntimeLockFile } from "../lib/paths.js";
-import { loadPipelineState, savePipelineState } from "../lib/state.js";
-import { appendBridgeCompleteEvent, loadBridgeSession } from "../lib/bridge.js";
+import { cancelPipelineRun } from "../lib/run-control.js";
 
 export type CancelCommandOptions = {
   runId: string;
   json?: boolean;
 };
 
-const TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled"]);
-
 export async function runCancelCommand(options: CancelCommandOptions): Promise<void> {
-  const state = loadPipelineState(options.runId);
-
-  if (!state) {
-    throw new CliError(`Run not found: ${options.runId}`, { code: "invalid_path" });
-  }
-
-  if (TERMINAL_STATUSES.has(state.status)) {
-    if (state.status === "canceled") {
-      syncBridgeCancellation(options.runId);
-    }
-    if (options.json) {
-      printJson({ run_id: options.runId, status: state.status, already_terminal: true });
-    } else {
-      printTableLine(`Run ${options.runId} is already '${state.status}'.`);
-    }
-    return;
-  }
-
-  savePipelineState({ ...state, status: "canceled" });
-  syncBridgeCancellation(options.runId);
-
-  releaseRuntimeLockIfHeld(options.runId);
+  const result = cancelPipelineRun({ runId: options.runId });
 
   if (options.json) {
-    printJson({ run_id: options.runId, status: "canceled" });
+    printJson({ run_id: result.runId, status: result.status, ...(result.alreadyTerminal ? { already_terminal: true } : {}) });
   } else {
-    printTableLine(`Canceled run ${options.runId}.`);
-  }
-}
-
-function syncBridgeCancellation(runId: string): void {
-  const session = loadBridgeSession(runId);
-  if (!session || session.status === "canceled") {
-    return;
-  }
-
-  appendBridgeCompleteEvent(
-    runId,
-    {
-      status: "canceled",
-      summary: "Run was canceled by the user.",
-      completedAt: new Date().toISOString()
-    }
-  );
-}
-
-function releaseRuntimeLockIfHeld(runId: string): void {
-  const lockPath = lineupRuntimeLockFile();
-  if (!existsSync(lockPath)) {
-    return;
-  }
-
-  try {
-    const current = JSON.parse(readFileSync(lockPath, "utf8")) as { runId?: string };
-    if (current.runId === runId) {
-      rmSync(lockPath, { force: true });
-    }
-  } catch {
-    // Lock file is unreadable; leave it in place.
+    printTableLine(
+      result.alreadyTerminal
+        ? `Run ${options.runId} is already '${result.status}'.`
+        : `Canceled run ${options.runId}.`
+    );
   }
 }
