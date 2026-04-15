@@ -27,6 +27,7 @@ import type {
 import { runPipeline } from "../lib/run-pipeline.js";
 import type { HostName } from "../lib/constants.js";
 import type { BridgeEvent, BridgeSessionRecord, RunOptions } from "../lib/types.js";
+import { renderBridgeEventLines, renderPendingBridgeQuestionLines } from "../lib/ui/runtime.js";
 
 export type BridgeStartOptions = RunOptions & {
   executorHost?: HostName;
@@ -64,16 +65,6 @@ function createRunId(): string {
     .update(Date.now().toString() + Math.random().toString())
     .digest("hex")
     .slice(0, 6);
-}
-
-function formatBridgeEvent(event: BridgeEvent): string {
-  if (event.type === "status") {
-    return `[${event.stageLabel}:${event.kind}] ${event.text}`;
-  }
-  if (event.type === "question") {
-    return `[question:${event.gateType}:${event.stageId}] ${event.question}`;
-  }
-  return `[complete:${event.status}] ${event.summary ?? "Run completed."}`;
 }
 
 function stageLabel(stageId: string): string {
@@ -292,10 +283,18 @@ export async function runBridgeEventsCommand(options: BridgeEventsOptions): Prom
   }
 
   for (const event of result.events) {
-    printTableLine(formatBridgeEvent(event));
+    for (const line of renderBridgeEventLines(event, options.runId)) {
+      printTableLine(line);
+    }
   }
   if (result.pendingQuestion && !result.events.some((event) => event.type === "question")) {
-    printTableLine(`[pending:${result.pendingQuestion.gateType}:${result.pendingQuestion.stageId}] ${result.pendingQuestion.question}`);
+    for (const line of renderPendingBridgeQuestionLines(
+      options.runId,
+      result.pendingQuestion,
+      result.recovery.action === "resume"
+    )) {
+      printTableLine(line);
+    }
   }
   printTableLine(`next_cursor: ${result.nextCursor}`);
   printTableLine(`continue_with: lineup bridge events ${options.runId} --after ${result.nextCursor}`);

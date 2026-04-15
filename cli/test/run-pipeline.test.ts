@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -233,6 +233,49 @@ stages:
         independent_areas: []
       });
     } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it("emits structured human stage headers to stderr in human mode", async () => {
+    const projectRoot = join(tempDir, "project-human-render");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: human-render
+stages:
+  - id: triage
+    type: builtin
+    description: "Classify the task before planning."
+`);
+
+    const stderr: string[] = [];
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+      stderr.push(String(chunk));
+      return true;
+    });
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      const result = await runPipeline({
+        workflow: workflowPath,
+        mode: "human",
+      });
+
+      expect(result.status).toBe("success");
+      const output = stderr.join("");
+      expect(output).toContain("Stage 1/1 | Triage | Classify the task before planning.");
+      expect(output).toContain("Pipeline completed successfully.");
+    } finally {
+      stderrSpy.mockRestore();
       process.chdir(origCwd);
     }
   });

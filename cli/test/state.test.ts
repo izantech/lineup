@@ -7,14 +7,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CliError } from "../src/lib/errors.js";
 import {
   assertPipelineStateFresh,
+  clearPipelinePendingGate,
   defaultPipelineState,
   isPipelineStateStale,
   loadPipelineState,
   markPipelineCurrentStage,
   pipelineStateFile,
   savePipelineState,
+  setPipelinePendingGate,
   updatePipelineArtifactHashes,
-  appendPipelineCompletedStage
+  appendPipelineCompletedStage,
+  updatePipelineStageState
 } from "../src/lib/state.js";
 import { lineupArtifactStoreDir, lineupRunArtifactsDir, lineupRunDir, lineupRunStateFile, lineupRunsDir } from "../src/lib/paths.js";
 
@@ -87,5 +90,47 @@ describe("pipeline state", () => {
     expect(isPipelineStateStale(withStage, "tree-1")).toBe(false);
     expect(isPipelineStateStale(withStage, "tree-2")).toBe(true);
     expect(() => assertPipelineStateFresh(withStage, "tree-2")).toThrow(CliError);
+  });
+
+  it("round-trips structured stage and pending gate state", () => {
+    const base = defaultPipelineState({
+      runId: "run-789",
+      workflow: "/repo/workflows/full-pipeline.yaml",
+      gitTreeSha: "tree-3"
+    });
+    const withStageState = updatePipelineStageState(base, "plan", {
+      status: "running",
+      last_message: "Drafting the plan",
+      attempt: 1,
+      max_attempts: 2
+    });
+    const withPendingGate = setPipelinePendingGate(withStageState, {
+      request_id: "42",
+      stage_id: "plan-approval",
+      gate_type: "approval",
+      question: "Approve the generated plan?",
+      choices: ["approve", "reject"],
+      default_choice: "approve",
+      created_at: "2026-04-12T11:00:00.000Z",
+      expires_at: "2026-04-12T11:05:00.000Z"
+    });
+
+    const saved = savePipelineState(withPendingGate, tempDir);
+    const loaded = loadPipelineState("run-789", tempDir);
+
+    expect(saved.stage_state?.plan).toMatchObject({
+      status: "running",
+      last_message: "Drafting the plan",
+      attempt: 1,
+      max_attempts: 2
+    });
+    expect(loaded?.pending_gate).toMatchObject({
+      request_id: "42",
+      stage_id: "plan-approval",
+      gate_type: "approval"
+    });
+
+    const cleared = clearPipelinePendingGate(saved);
+    expect(cleared.pending_gate).toBeUndefined();
   });
 });

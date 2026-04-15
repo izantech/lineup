@@ -120,12 +120,13 @@ describe("lineup show", () => {
       await runShowCommand({ runId: "watch-run-blocked", watch: true });
 
       const output = writeSpy.mock.calls.map(([chunk]) => String(chunk)).join("");
-      expect(output).toContain("status: blocked");
-      expect(output).toContain("what changed in this run?");
+      expect(output).toContain("status: Blocked");
+      expect(output).toContain("Changes");
       expect(output).toContain("completed stages: triage, plan");
-      expect(output).toContain("next:");
+      expect(output).toContain("Next Actions");
       expect(output).toContain("resume with `lineup resume watch-run-blocked`");
       expect(output).toContain("Next step: run `lineup resume watch-run-blocked`");
+      expect(output).not.toContain("\u001B[");
       writeSpy.mockRestore();
     });
 

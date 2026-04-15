@@ -86,6 +86,13 @@ The engine is the same in both modes. The difference is how progress and questio
 
 ![Human mode compared with host mode](/diagrams/how-it-works-human-vs-host.svg)
 
+In `human` mode, Lineup now renders a structured stage view on `stderr`:
+
+- a stage header when each stage begins
+- a live stage table on TTYs
+- plain append-only progress in non-interactive environments
+- framed prompts for approvals and other gates
+
 Use `host` mode when you need raw protocol integration, such as CI or a custom wrapper.
 
 ## Why bridge mode exists
@@ -100,6 +107,10 @@ Bridge mode sits on top of the same engine, but it gives installed host wrappers
 
 This is what makes reconnect-safe polling possible. A host can drop and reconnect without losing the run state.
 
+Plain-text bridge output is also richer now. Instead of raw progress lines, it
+renders stage-aware status blocks, multi-line question blocks with exact answer
+commands, and completion summaries with the best inspection command.
+
 ## Why runs are resumable
 
 Lineup persists state and artifacts under `.lineup`, including:
@@ -112,6 +123,7 @@ Lineup persists state and artifacts under `.lineup`, including:
 That persistence is what powers:
 
 - `lineup show`
+- `lineup show --watch`
 - `lineup logs`
 - `lineup replay`
 - `lineup resume`

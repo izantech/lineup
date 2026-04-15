@@ -296,8 +296,34 @@ describe("bridge commands", () => {
     await runBridgeEventsCommand({ runId: "next01" });
 
     const output = stdout.join("");
+    expect(output).toContain("Triage stage-start");
+    expect(output).toContain("Starting triage.");
     expect(output).toContain("next_cursor: 1");
     expect(output).toContain("continue_with: lineup bridge events next01 --after 1");
+  });
+
+  it("renders pending bridge questions with exact answer guidance in text mode", async () => {
+    saveBridgeSession(defaultBridgeSession({ runId: "ques01", executorHost: "claude", gateTimeoutSeconds: 30 }), tempDir);
+    appendBridgeQuestionEvent(
+      "ques01",
+      {
+        requestId: 3,
+        stageId: "clarify",
+        gateType: "clarify",
+        question: "What should this optimize for?",
+        choices: ["speed", "quality"],
+        defaultChoice: "quality",
+        createdAt: "2026-04-13T10:00:00.000Z"
+      },
+      tempDir
+    );
+
+    stdout.length = 0;
+    await runBridgeEventsCommand({ runId: "ques01" });
+
+    const output = stdout.join("");
+    expect(output).toContain("Question | Clarify");
+    expect(output).toContain("answer_with: lineup bridge answer ques01 3 --choice \"quality\"");
   });
 
   it("selects artifact-aware completion guidance for explain, plan, and review runs", async () => {

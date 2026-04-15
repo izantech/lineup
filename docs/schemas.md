@@ -32,6 +32,26 @@ Pipeline state (`pipeline-state.schema.json`) tracks:
 
 - `started_at` / `finished_at` / `duration_ms` — run timing
 - `retry_state` — per-stage retry attempts, max attempts, last error, and timestamps
+- `stage_state` — optional per-stage live status used by the terminal renderer and watch dashboard
+- `pending_gate` — optional unresolved gate metadata used for bridge recovery and watch output
+
+`stage_state` records:
+
+- `status` — `pending`, `running`, `succeeded`, `failed`, or `blocked`
+- `started_at` / `updated_at` / `finished_at`
+- `last_message`
+- `attempt` / `max_attempts`
+
+`pending_gate` records:
+
+- `request_id`
+- `stage_id`
+- `gate_type`
+- `question`
+- `choices`
+- `default_choice`
+- `created_at`
+- `expires_at`
 
 Status values:
 

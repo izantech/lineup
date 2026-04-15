@@ -83,10 +83,19 @@ Practical split:
 
 `lineup run` supports two runtime modes:
 
-- `human` — interactive prompts and human-readable progress
+- `human` — interactive prompts plus a stage-aware terminal UI on `stderr`
 - `host` — NDJSON protocol output for skills, automation, and CI
 
 If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
+
+Human mode now uses a capability-aware terminal renderer instead of raw
+`[stage]` log lines:
+
+- transient progress goes to `stderr`
+- stage starts render as `Stage <n>/<total> | <label> | <purpose>`
+- TTY runs redraw a live stage table in place
+- non-TTY runs append plain ASCII-safe lines with no ANSI cursor movement
+- completion renders one final block with status, changed artifacts, and next commands
 
 Generated skills should prefer the detached bridge API:
 
@@ -127,6 +136,13 @@ The human-readable `lineup bridge events` output also prints:
 - `next_cursor`
 - `continue_with` — the exact next poll command using `--after <next_cursor>`
 - `recovery` — the next concrete step for the current session, which may point to a specific artifact inspection command when the run has produced a relevant artifact
+
+Text-mode bridge output is now structured for operators rather than raw progress
+lines:
+
+- `status` events render under normalized stage labels and explicit kinds such as `stage-start`, `progress`, `warning`, and `stage-end`
+- `question` events render as multi-line blocks with choices, default choice, expiry, and the exact `lineup bridge answer` command
+- `complete` events render a terminal summary plus the best follow-up inspection command when one exists
 
 Keep `lineup run --mode host` for advanced integrations and CI that need the low-level
 NDJSON protocol directly.
@@ -178,5 +194,6 @@ For native recovery:
 Inspection polish:
 
 - `lineup show` now prints a compact inspection summary in text mode: timings, task-wave summary when a `tasks` artifact exists, a `what changed in this run?` section, concrete `next:` commands, and artifact-specific inspection commands
-- `lineup show --watch` exits as soon as a run becomes blocked and prints the next concrete action instead of looping forever
+- `lineup show --watch` now renders a live dashboard with a run header, stage table, pending-question block, change summary, and next actions
+- `lineup show --watch` redraws in place on a TTY, falls back to append-only snapshots on non-TTY output, and exits once the run is blocked or terminal with the next concrete step
 - `lineup artifacts diff` now prints a short diff header with run ids and artifact hashes in text mode, and JSON output now includes the compared hashes and paths as additive metadata

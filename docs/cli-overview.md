@@ -50,6 +50,13 @@ flowchart LR
 
 In `human` mode, progress and questions are shown for a person in the terminal. In `host` mode, the CLI emits protocol messages and waits for gate responses through CLI commands.
 
+Human mode now uses a shared terminal UI layer:
+
+- active run UI is written to `stderr`
+- TTY runs redraw a live stage table in place
+- non-TTY runs degrade to append-only plain text with ASCII-safe symbols
+- the same formatting vocabulary is reused for live runs, `show --watch`, bridge text mode, and interactive gate prompts
+
 `lineup bridge` exists so installed host skills do not need to supervise raw protocol streams directly. The bridge starts a detached worker, persists a session, converts low-level protocol messages into compact events, and supports reconnect-safe polling.
 
 ## Pipeline execution
@@ -132,9 +139,9 @@ sequenceDiagram
   P-->>C: status updates
 
   alt human mode
-    C-->>U: print progress to stderr
+    C-->>U: render live stage UI on stderr
     P-->>C: gate request
-    C-->>U: interactive question
+    C-->>U: framed interactive question
     U-->>C: answer in terminal
     C->>P: continue
   else host mode
@@ -189,6 +196,7 @@ The important design point is that bridge sessions persist more than a cursor. T
 Each run gets a persistent state bundle under `.lineup`. In practice, the CLI stores:
 
 - pipeline state for resume and inspection
+- optional `stage_state` and `pending_gate` snapshots for live UI and recovery
 - artifacts such as plan, tasks, review, and protocol
 - bridge session and bridge event files for detached runs
 - pending gate requests and responses

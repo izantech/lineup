@@ -7,6 +7,8 @@ import {
 } from "../lib/inspection.js";
 import { printJson, printTableLine } from "../lib/output.js";
 import { loadPipelineState } from "../lib/state.js";
+import { renderWatchDashboard } from "../lib/ui/runtime.js";
+import { LiveRegion, detectTerminalCapabilities } from "../lib/ui/terminal.js";
 
 export type ShowCommandOptions = {
   runId: string;
@@ -18,40 +20,16 @@ export type ShowCommandOptions = {
 const TERMINAL_STATUSES = new Set(["blocked", "succeeded", "failed", "canceled"]);
 
 async function runShowWatch(options: ShowCommandOptions): Promise<void> {
+  const region = new LiveRegion(process.stdout, detectTerminalCapabilities(process.stdout));
+
   while (true) {
     const state = loadPipelineState(options.runId, options.cwd);
 
-    process.stdout.write("\x1b[2J\x1b[H");
-
     if (!state) {
-      process.stdout.write(`Run not found: ${options.runId}\n`);
+      region.finish([`Run not found: ${options.runId}`]);
       return;
     }
-
-    const summary = summarizePipelineState(state);
-    const startTime = state.started_at ? new Date(state.started_at) : state.updated_at ? new Date(state.updated_at) : new Date();
-    const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
-
-    process.stdout.write(`run_id: ${state.run_id}\n`);
-    process.stdout.write(`${summary.statusLine}\n`);
-    process.stdout.write(`elapsed: ${elapsed}s\n`);
-    process.stdout.write(`${summary.workflowLine}\n`);
-    process.stdout.write(`${summary.stageLine}\n`);
-    process.stdout.write(`${summary.completedLine}\n`);
-
-    if (summary.changeLines.length > 0) {
-      process.stdout.write(`what changed in this run?\n`);
-      for (const line of summary.changeLines) {
-        process.stdout.write(`  - ${line}\n`);
-      }
-    }
-
-    if (summary.nextLines.length > 0) {
-      process.stdout.write("next:\n");
-      for (const line of summary.nextLines) {
-        process.stdout.write(`  - ${line}\n`);
-      }
-    }
+    region.render(renderWatchDashboard(state, options.cwd));
 
     if (TERMINAL_STATUSES.has(state.status)) {
       if (state.status === "blocked") {

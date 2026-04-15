@@ -236,6 +236,25 @@ providers:
       run_id: "run-123",
       status: "running",
       git_tree_sha: "def456",
+      stage_state: {
+        plan: {
+          status: "running",
+          updated_at: "2026-04-12T00:00:00.000Z",
+          last_message: "Drafting the plan",
+          attempt: 1,
+          max_attempts: 2
+        }
+      },
+      pending_gate: {
+        request_id: "7",
+        stage_id: "plan-approval",
+        gate_type: "approval",
+        question: "Approve the generated plan?",
+        choices: ["approve", "reject"],
+        default_choice: "approve",
+        created_at: "2026-04-12T00:00:00.000Z",
+        expires_at: "2026-04-12T00:05:00.000Z"
+      },
       artifact_hashes: {
         constitution: "hash-1",
         spec: "hash-2"

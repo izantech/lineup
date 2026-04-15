@@ -1,32 +1,31 @@
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stderr as output } from "node:process";
 import type { PendingGate, GateResponse } from "./gate-store.js";
+import { writeGatePromptFrame } from "./ui/runtime.js";
 
 export async function handleInteractiveGate(gate: PendingGate): Promise<GateResponse> {
   const rl = createInterface({ input, output });
 
   try {
     let choice: string;
-    const promptWithContext = (prompt: string): string => (
-      gate.context && gate.context.trim().length > 0
-        ? `${gate.context.trim()}\n\n${prompt}`
-        : prompt
-    );
+    writeGatePromptFrame(gate, output);
 
     if (gate.gateType === "approval") {
-      const answer = await rl.question(promptWithContext(`${gate.question} [Y/n]: `));
+      output.write("Press Enter to accept the default choice.\n");
+      const answer = await rl.question("Approve? [Y/n]: ");
       const trimmed = answer.trim().toLowerCase();
       choice = trimmed === "" || trimmed === "y" || trimmed === "yes" ? "approve" : "reject";
 
     } else if (gate.gateType === "clarify" || gate.gateType === "clarification") {
-      const answer = await rl.question(promptWithContext(`${gate.question}\n> `));
+      output.write("Press Enter to submit an empty response.\n");
+      const answer = await rl.question("> ");
       choice = answer.trim();
 
     } else if (gate.gateType === "verify-decision") {
-      output.write(`${gate.question}\n`);
       output.write("  1) Retry\n");
       output.write("  2) Accept with warnings\n");
       output.write("  3) Abort\n");
+      output.write("Press Enter to choose the default action.\n");
       const answer = await rl.question("Choice [1/2/3]: ");
       const trimmed = answer.trim();
       if (trimmed === "2") {
@@ -38,21 +37,21 @@ export async function handleInteractiveGate(gate: PendingGate): Promise<GateResp
       }
 
     } else if (gate.gateType === "custom") {
-      output.write(`${gate.question}\n`);
       gate.choices.forEach((c, i) => {
         output.write(`  ${i + 1}) ${c}\n`);
       });
+      output.write("Press Enter to choose the first option.\n");
       const answer = await rl.question(`Choice [1-${gate.choices.length}]: `);
       const idx = parseInt(answer.trim(), 10) - 1;
       choice = idx >= 0 && idx < gate.choices.length ? gate.choices[idx] : gate.choices[0];
 
     } else {
       if (gate.choices.length > 0) {
-        output.write(`${gate.question}\n`);
         gate.choices.forEach((c, i) => {
           const defaultMarker = gate.defaultChoice === c ? " (default)" : "";
           output.write(`  ${i + 1}) ${c}${defaultMarker}\n`);
         });
+        output.write("Press Enter to use the default choice.\n");
         const answer = await rl.question(`Choice [1-${gate.choices.length}]: `);
         const trimmed = answer.trim();
         const idx = parseInt(trimmed, 10) - 1;
@@ -63,7 +62,8 @@ export async function handleInteractiveGate(gate: PendingGate): Promise<GateResp
           choice = matched ?? gate.defaultChoice ?? gate.choices[0];
         }
       } else {
-        const answer = await rl.question(promptWithContext(`${gate.question}\n> `));
+        output.write("Press Enter to submit the default response.\n");
+        const answer = await rl.question("> ");
         choice = answer.trim() || (gate.defaultChoice ?? "");
       }
     }

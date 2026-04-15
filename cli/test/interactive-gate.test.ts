@@ -70,9 +70,7 @@ describe("handleInteractiveGate", () => {
     });
     await handleInteractiveGate(gate);
 
-    expect(mockRl.question).toHaveBeenCalledWith(
-      "Plan artifact: /tmp/plan.yaml\n\nsummary: Improve the TUI\n\nApprove the plan? [Y/n]: "
-    );
+    expect(mockRl.question).toHaveBeenCalledWith("Approve? [Y/n]: ");
   });
 
   it("clarify gate: captures free-text input", async () => {

@@ -23,6 +23,29 @@ export type StageRetryRecord = {
   last_attempt_at: string;
 };
 
+export type PipelineStageExecutionStatus = "pending" | "running" | "succeeded" | "failed" | "blocked";
+
+export type PipelineStageStateRecord = {
+  status: PipelineStageExecutionStatus;
+  started_at?: string;
+  updated_at: string;
+  finished_at?: string;
+  last_message?: string;
+  attempt?: number;
+  max_attempts?: number;
+};
+
+export type PipelinePendingGateRecord = {
+  request_id: string;
+  stage_id: string;
+  gate_type: string;
+  question: string;
+  choices: string[];
+  default_choice?: string;
+  created_at: string;
+  expires_at?: string;
+};
+
 export type PipelineStateRecord = {
   apiVersion: typeof PIPELINE_STATE_SCHEMA_VERSION;
   kind: "PipelineState";
@@ -47,6 +70,8 @@ export type PipelineStateRecord = {
     approved_at: string;
     approved_by: string;
   };
+  stage_state?: Record<string, PipelineStageStateRecord>;
+  pending_gate?: PipelinePendingGateRecord;
   retry_state?: Record<string, StageRetryRecord>;
   errors?: Array<{
     code: string;
@@ -252,6 +277,69 @@ export function appendPipelineCompletedStage(state: PipelineStateRecord, stage: 
   return {
     ...state,
     completed_stages: [...completed],
+    updated_at: nowIso()
+  };
+}
+
+export function updatePipelineStageState(
+  state: PipelineStateRecord,
+  stageId: string,
+  patch: {
+    status: PipelineStageExecutionStatus;
+    last_message?: string;
+    attempt?: number;
+    max_attempts?: number;
+    started_at?: string;
+    finished_at?: string;
+  }
+): PipelineStateRecord {
+  const timestamp = nowIso();
+  const current = state.stage_state?.[stageId];
+  const startedAt =
+    patch.started_at ??
+    current?.started_at ??
+    (patch.status === "running" ? timestamp : undefined);
+  const finishedAt =
+    patch.finished_at ??
+    (patch.status === "succeeded" || patch.status === "failed" || patch.status === "blocked" ? timestamp : undefined);
+
+  return {
+    ...state,
+    stage_state: {
+      ...(state.stage_state ?? {}),
+      [stageId]: {
+        status: patch.status,
+        ...(startedAt ? { started_at: startedAt } : {}),
+        updated_at: timestamp,
+        ...(finishedAt ? { finished_at: finishedAt } : {}),
+        ...(patch.last_message ?? current?.last_message ? { last_message: patch.last_message ?? current?.last_message } : {}),
+        ...(patch.attempt ?? current?.attempt ? { attempt: patch.attempt ?? current?.attempt } : {}),
+        ...(patch.max_attempts ?? current?.max_attempts ? { max_attempts: patch.max_attempts ?? current?.max_attempts } : {})
+      }
+    },
+    updated_at: timestamp
+  };
+}
+
+export function setPipelinePendingGate(
+  state: PipelineStateRecord,
+  gate: PipelinePendingGateRecord
+): PipelineStateRecord {
+  return {
+    ...state,
+    pending_gate: {
+      ...gate,
+      choices: [...gate.choices]
+    },
+    updated_at: nowIso()
+  };
+}
+
+export function clearPipelinePendingGate(state: PipelineStateRecord): PipelineStateRecord {
+  const { pending_gate: _pendingGate, ...rest } = state;
+
+  return {
+    ...rest,
     updated_at: nowIso()
   };
 }

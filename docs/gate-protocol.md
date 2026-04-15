@@ -68,6 +68,13 @@ that are shelling out manually can reuse the exact next `--after` cursor value.
 When a bridge run is `blocked`, the text output also includes the matching
 `recovery` command for the current session state.
 
+That text output is now stage-aware and recovery-oriented:
+
+- status events render under normalized stage labels with explicit kinds
+- question events include numbered choices, default choice, expiry, and the exact `lineup bridge answer` command
+- pending timed-out questions switch guidance from `answer` to `lineup resume <run-id>`
+- completion events surface the terminal summary plus one best inspection command when an artifact is available
+
 ## Triage Gate
 
 The triage stage still classifies task complexity before any work is spawned. The
@@ -88,6 +95,10 @@ When the bridge receives a `classify` question, the skill should:
 When verification fails (`FAIL` or `PASS_WITH_WARNINGS`), the bridge can surface a
 `verify-decision` question with retry, accept-with-warnings, or abort choices.
 Skills should present those choices directly and answer with `lineup bridge answer`.
+
+Interactive native gates use the same vocabulary in `human` mode: framed prompt
+blocks, numbered choices where applicable, and a compact default-choice hint on
+empty input.
 
 ## Low-Level Host Mode
 

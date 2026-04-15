@@ -37,6 +37,10 @@ lineup start "Review the auth middleware in src/auth.ts and identify security ga
 
 After the first run, you can use `lineup run "<task>"` directly whenever you want.
 
+When you run in a terminal, human mode now shows a structured live view instead
+of raw stage logs. Active progress stays on `stderr`, while JSON and host-mode
+output remain on `stdout`.
+
 ## Start from Claude, Codex, or OpenCode
 
 If you prefer to stay inside your host UI, use the installed host command instead:
@@ -59,6 +63,15 @@ lineup waves --run <run-id>
 ```
 
 Use `lineup show` for a quick run summary, `lineup waves` to inspect task parallelism, and `lineup resume` when a run fails or blocks.
+
+If you want to keep an active run on screen, use:
+
+```bash
+lineup show <run-id> --watch
+```
+
+That view shows the run header, stage-by-stage status, any pending question,
+what changed, and the exact next commands to use.
 
 ## When you want more detail
 
