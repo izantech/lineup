@@ -258,6 +258,35 @@ describe("launch planner", () => {
     expect(plan.args).not.toContain("--json-schema")
   })
 
+  it("prefers Claude Anthropic-compatible env transport when strategy is auto", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    const binDir = join(root, "bin")
+    mkdirSync(binDir, { recursive: true })
+    const fakeOllama = join(binDir, "ollama")
+    writeFileSync(fakeOllama, "#!/bin/sh\nexit 0\n", "utf8")
+    chmodSync(fakeOllama, 0o755)
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3-coder:30b\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: auto\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "claude",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "researcher",
+      prompt: "inspect"
+    })
+
+    expect(plan.command).toBe("claude")
+    expect(plan.integration).toBe("ollama-env")
+    expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBe("ollama")
+    expect(plan.env.ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:11434")
+  })
+
   it("falls back to Claude Anthropic-compatible env launch when ollama is unavailable", () => {
     root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
     home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
@@ -318,6 +347,39 @@ describe("launch planner", () => {
     expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBe("ollama")
     expect(plan.env.ANTHROPIC_API_KEY).toBe("")
     expect(plan.env.ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:11434")
+  })
+
+  it("forces Claude onto the Anthropic-compatible env path via LINEUP_FORCE_CLAUDE_OLLAMA_ENV", () => {
+    root = mkdtempSync(join(tmpdir(), "launch-planner-root-"))
+    home = mkdtempSync(join(tmpdir(), "launch-planner-home-"))
+    const binDir = join(root, "bin")
+    mkdirSync(binDir, { recursive: true })
+    const fakeOllama = join(binDir, "ollama")
+    writeFileSync(fakeOllama, "#!/bin/sh\nexit 0\n", "utf8")
+    chmodSync(fakeOllama, 0o755)
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`
+    writeProjectConfig(
+      root,
+      `ollama:\n  enabled: true\n  model: qwen3-coder:30b\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: launch\n`
+    )
+
+    const plan = planHostLaunch({
+      host: "claude",
+      projectRoot: root,
+      homeDir: home,
+      workingDirectory: root,
+      agent: "researcher",
+      prompt: "inspect",
+      env: {
+        ...process.env,
+        LINEUP_FORCE_CLAUDE_OLLAMA_ENV: "1"
+      }
+    })
+
+    expect(plan.command).toBe("claude")
+    expect(plan.integration).toBe("ollama-env")
+    expect(plan.args).toContain("--model")
+    expect(plan.args).toContain("qwen3-coder:30b")
   })
 
   it("gives host integration precedence over legacy full routing", () => {

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createArtifactStore } from "../src/lib/artifact-store.js";
-import { applyWorkspacePatch, executeNativeExecutor, normalizeReviewArtifact, type NativeExecutionDriver } from "../src/lib/executor.js";
+import { applyWorkspacePatch, executeNativeExecutor, normalizeReviewArtifact, normalizeTaskExecutionResult, type NativeExecutionDriver } from "../src/lib/executor.js";
 import { CliError } from "../src/lib/errors.js";
 
 const APPROVED_PLAN = `apiVersion: lineup/v3
@@ -112,6 +112,22 @@ timeout: 5m
 ---
 
 Review the implementation.
+`,
+    "utf8"
+  );
+}
+
+function writeOllamaHostConfig(projectRoot: string): void {
+  mkdirSync(join(projectRoot, ".lineup"), { recursive: true });
+  writeFileSync(
+    join(projectRoot, ".lineup", "config.yaml"),
+    `ollama:
+  enabled: true
+  model: qwen3-coder:30b
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
 `,
     "utf8"
   );
@@ -335,6 +351,161 @@ test_results: No specific tests were run as this was a simple text replacement o
     expect(result.implementResult.outputs.task_results).toHaveLength(2);
     expect(result.verifyResult.outputs.status).toBe("PASS");
     expect(readFileSync(result.reviewRecord.path, "utf8")).toContain("kind: Review");
+  });
+
+  it("normalizes string-only implementation change entries onto the task write scope", () => {
+    const result = normalizeTaskExecutionResult(
+      JSON.stringify({
+        status: "completed",
+        summary: "updated README",
+        changes_made: [
+          "Replaced the placeholder text with the validation sentence."
+        ],
+        issues_encountered: []
+      }),
+      {
+        id: "CHANGE-001",
+        title: "Update README",
+        wave: 1,
+        status: "todo",
+        write_scope: ["README.md"],
+        deliverables: ["README.md"]
+      },
+      "inline"
+    );
+
+    expect(result.changes_made).toEqual([
+      {
+        file: "README.md",
+        description: "Replaced the placeholder text with the validation sentence.",
+        task_id: "CHANGE-001"
+      }
+    ]);
+  });
+
+  it("builds compact native developer and reviewer prompts for Ollama host integration", async () => {
+    writeOllamaHostConfig(projectRoot);
+    const capturedPrompts: string[] = [];
+
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        capturedPrompts.push(input.prompt);
+        return {
+          status: "complete",
+          summary: `completed ${input.task.id}`,
+          changes_made: [
+            {
+              file: input.task.write_scope?.[0] ?? "README.md",
+              description: "updated file",
+              task_id: input.task.id
+            }
+          ],
+          issues_encountered: []
+        };
+      },
+      async executeReview(input) {
+        capturedPrompts.push(input.prompt);
+        return { reviewYaml: PASS_REVIEW };
+      }
+    };
+
+    await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      host: "claude",
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts"),
+      planPath: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      },
+      driver
+    });
+
+    const developerPrompt = capturedPrompts.find((prompt) => prompt.includes("Native Lineup task:"));
+    const reviewerPrompt = capturedPrompts.find((prompt) => prompt.includes("Native Lineup review:"));
+
+    expect(developerPrompt).toBeDefined();
+    expect(developerPrompt).toContain("Apply only the approved task in the provided worktree, then stop.");
+    expect(developerPrompt).not.toContain("## Tool Usage Priorities");
+    expect(developerPrompt).not.toContain("Task payload:");
+
+    expect(reviewerPrompt).toBeDefined();
+    expect(reviewerPrompt).toContain("Verify the implemented change against the approved plan, then stop.");
+    expect(reviewerPrompt).toContain("Native Lineup review:");
+    expect(reviewerPrompt).not.toContain("Compiled tasks:");
+  });
+
+  it("infers task changes from the workspace diff when the model reports no changes", async () => {
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        mkdirSync(join(input.workspaceRoot, "cli", "src", "lib"), { recursive: true });
+        writeFileSync(
+          join(input.workspaceRoot, "cli", "src", "lib", "executor.ts"),
+          "export const inferred = true;\n",
+          "utf8"
+        );
+
+        return {
+          status: "complete",
+          summary: "updated README",
+          changes_made: [],
+          issues_encountered: []
+        };
+      },
+      async executeReview() {
+        return { reviewYaml: PASS_REVIEW };
+      }
+    };
+
+    const result = await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      host: "claude",
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts"),
+      planPath: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      },
+      driver
+    });
+
+    expect(result.implementResult.outputs.changes_made).toContainEqual({
+      file: "cli/src/lib/executor.ts",
+      description: "Updated cli/src/lib/executor.ts",
+      task_id: "CHANGE-001"
+    });
   });
 
   it("normalizes near-schema plan drafts produced by local hosts", async () => {

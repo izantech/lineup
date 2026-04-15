@@ -209,6 +209,60 @@ You are the architect body.
     expect(built.prompt).not.toContain("Your explanation must include:");
   });
 
+  it("uses the compact developer body for Ollama host integration runs", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:
+  enabled: true
+  model: local-qwen
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "developer.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "claude"
+      }
+    });
+
+    expect(built.prompt).toContain("Apply only the approved task in the provided worktree, then stop.");
+    expect(built.prompt).toContain("Stay inside the declared write scope and deliverables.");
+    expect(built.prompt).not.toContain("## Tool Usage Priorities");
+  });
+
+  it("uses the compact reviewer body for Ollama host integration runs", () => {
+    writeProjectConfig(
+      tempDir,
+      `ollama:
+  enabled: true
+  model: local-qwen
+  scope: full
+  host_integration:
+    enabled: true
+    strategy: auto
+`
+    );
+
+    const built = buildAgentSystemPrompt({
+      agentFilePath: join(tempDir, "agents", "reviewer.md"),
+      promptTemplate: "{{AGENT_BODY}}",
+      configOptions: {
+        projectRoot: tempDir,
+        host: "claude"
+      }
+    });
+
+    expect(built.prompt).toContain("Verify the implemented change against the approved plan, then stop.");
+    expect(built.prompt).toContain("Prefer one targeted diff check or verification command over broad repo review.");
+    expect(built.prompt).not.toContain("## Tool Usage Priorities");
+  });
+
   it("adds full-pipeline Ollama runtime guidance for agents without appendices", () => {
     writeProjectConfig(
       tempDir,

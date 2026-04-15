@@ -93,6 +93,23 @@ function resolveConfiguredStrategy(host: HostName, configured: OllamaHostIntegra
   return "launch"
 }
 
+function shouldForceClaudeEnvFallback(env: NodeJS.ProcessEnv, explicitFallback = false): boolean {
+  if (explicitFallback) {
+    return true
+  }
+
+  const raw = env.LINEUP_FORCE_CLAUDE_OLLAMA_ENV
+  if (!raw) {
+    return false
+  }
+
+  return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase())
+}
+
+function shouldPreferClaudeEnvByDefault(configured: OllamaHostIntegrationStrategy): boolean {
+  return configured === "auto"
+}
+
 export function resolveHostLaunchStrategy(host: HostName, ollama: OllamaConfig | null): HostLaunchStrategy {
   const configuredStrategy = ollama?.hostIntegration?.enabled ? ollama.hostIntegration.strategy : undefined
 
@@ -235,12 +252,15 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
     return planDirectLaunch({ ...input, ollama }, effectiveModel, env)
   }
 
-  const strategy = resolveConfiguredStrategy(input.host, ollama.hostIntegration.strategy)
+  const configuredStrategy = ollama.hostIntegration.strategy
+  const strategy = resolveConfiguredStrategy(input.host, configuredStrategy)
 
   if (input.host === "claude") {
     const directArgs = buildClaudeDirectArgs(input, "")
+    const forceEnvFallback = shouldForceClaudeEnvFallback(env, input.claudeForceEnvFallback)
+    const preferEnvByDefault = shouldPreferClaudeEnvByDefault(configuredStrategy)
 
-    if (!input.claudeForceEnvFallback && strategy === "launch" && commandExists("ollama", env)) {
+    if (!forceEnvFallback && !preferEnvByDefault && strategy === "launch" && commandExists("ollama", env)) {
       return {
         host: input.host,
         strategy,

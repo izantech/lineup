@@ -111,7 +111,18 @@ function stripApiSuffix(baseUrl: string): string {
   return baseUrl.replace(/\/$/, "").replace(/\/v1$/, "");
 }
 
-function resolveOllamaIntegrationDetail(host: HostName, strategy: "launch" | "managed", homeDir: string): DoctorCheck {
+function resolveOllamaIntegrationDetail(host: HostName, strategy: "auto" | "launch" | "managed", homeDir: string): DoctorCheck {
+  if (strategy === "auto") {
+    return {
+      ok: true,
+      detail: host === "claude"
+        ? "Anthropic-compatible env transport by default; explicit launch uses wrapper"
+        : host === "codex"
+          ? "local OSS provider via codex --oss --local-provider ollama"
+          : "launch wrapper"
+    };
+  }
+
   if (strategy === "launch") {
     return {
       ok: true,
@@ -152,9 +163,7 @@ function checkOllamaHost(host: HostName, cwd = process.cwd(), homeDir = os.homed
     };
   }
 
-  const strategy = config.hostIntegration.strategy === "auto"
-    ? "launch"
-    : config.hostIntegration.strategy;
+  const strategy = config.hostIntegration.strategy;
   const binary = checkCommand("ollama");
 
   if (!binary.ok) {

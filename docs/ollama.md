@@ -73,9 +73,9 @@ Supported values:
 
 `auto` resolves per host:
 
-- Claude -> `launch`
-- Codex -> `launch`
-- OpenCode -> `launch`
+- Claude -> Anthropic-compatible env transport by default; explicit `launch` keeps the wrapper lane
+- Codex -> local OSS provider launch
+- OpenCode -> wrapper launch
 
 ## Host behavior
 
@@ -83,8 +83,9 @@ Supported values:
 
 True host integration uses:
 
-- `ollama launch claude --model <model> --yes -- ...` when available
-- Anthropic-compatible env fallback when the wrapper is unavailable
+- Anthropic-compatible env transport by default when `strategy: auto`
+- `ollama launch claude --model <model> --yes -- ...` when `strategy: launch`
+- the same Anthropic-compatible env transport when smoke/debug retries explicitly force the env lane
 
 Fallback env shape:
 
@@ -221,6 +222,8 @@ agent bodies such as:
 - `cli/agents/researcher-ollama-compact.md`
 - `cli/agents/architect-ollama-compact.md`
 - `cli/agents/teacher-ollama-compact.md`
+- `cli/agents/developer-ollama-compact.md`
+- `cli/agents/reviewer-ollama-compact.md`
 
 Lineup also switches the stage-level instructions onto a compact contract:
 
@@ -265,6 +268,9 @@ are now part of the local Ollama checkpoint:
 - native implement and review local-runner invocations now carry explicit
   output schemas again, using `ImplementationState` JSON for implement and the
   `Review` YAML schema for verify/review
+- native execution now infers `changes_made` from `git status --short` inside
+  the isolated worktree when a local host edits files but returns an empty
+  `changes_made` array
 - the smoke lane copies the canonical full-pipeline workflow into the temp repo
   so plan prompts receive the same triage and research inputs as a real run
 
@@ -282,21 +288,23 @@ The hosts are still failing in different ways on the current branch state:
 - native implement/review stages now request JSON draft output with explicit
   schema validation, so Claude developer/reviewer lanes no longer fall back to
   unconstrained text during local native execution
-- headless `ollama launch claude` can return immediately with no output, so the
-  runner now retries automatically through the Anthropic-compatible env path
-- the wrapper path still looks weaker than the env transport in full smoke
-  runs, so the remaining failures are now about stage-by-stage live behavior
-  rather than the original strict-schema contract
+- Claude `strategy: auto` now prefers the Anthropic-compatible env transport by
+  default, while explicit `strategy: launch` keeps the wrapper lane available
+  for direct live comparison and future recovery work
+- headless `ollama launch claude` can still return immediately with no output,
+  so smoke/debug retries now use an internal force-env switch instead of PATH
+  mutation when the wrapper lane needs to be bypassed
+- the remaining failures are now about stage-by-stage live behavior rather than
+  the original strict-schema contract
 - the next active Claude work is stage-by-stage live stabilization of the full
-  pipeline on `qwen3-coder:30b`, plus deciding whether `auto` should continue
-  to prefer wrapper-first launch behavior
+  pipeline on `qwen3-coder:30b`, not another transport-selection redesign
 
 Implication:
 
 - the remaining Claude blocker is no longer the old strict-schema launch shape
 - the right next work is concrete live-pipeline debugging on
-  `qwen3-coder:30b`, plus a transport-default decision based on the env-only
-  smoke lane rather than another broad transport redesign
+  `qwen3-coder:30b`, especially implement/review completion quality under the
+  env-first transport
 
 ### OpenCode
 

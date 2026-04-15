@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -5,6 +6,7 @@ import { stringify as stringifyYaml } from "yaml";
 
 import type { ArtifactStore, StoredArtifactRecord } from "./artifact-store.js";
 import type { VerificationResult } from "./verification.js";
+import { readOllamaConfig } from "./config.js";
 import { CliError } from "./errors.js";
 import { createNativeIsolationWorkspace, type NativeIsolationMode } from "./isolation.js";
 import {
@@ -1052,13 +1054,27 @@ function normalizeImplementationChanges(value: unknown, task: CompiledTask): Imp
     return [];
   }
 
+  const defaultFile = task.write_scope?.[0] ?? task.deliverables?.[0] ?? task.id;
   return value.flatMap((entry) => {
+    if (typeof entry === "string") {
+      const description = entry.trim();
+      if (!description) {
+        return [];
+      }
+
+      return [{
+        file: defaultFile,
+        description,
+        task_id: task.id
+      }];
+    }
+
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       return [];
     }
 
     const item = entry as Record<string, unknown>;
-    const file = firstNonEmptyString(item.file);
+    const file = firstNonEmptyString(item.file, defaultFile);
     const description = firstNonEmptyString(item.description, item.change, item.summary);
     if (!file || !description) {
       return [];
@@ -1195,25 +1211,7 @@ function buildDeveloperPrompt(input: {
   implementMethod?: ImplementMethod;
   priorTaskSummaries?: Array<{ task_id: string; summary: string }>;
 }): string {
-  const extraInstructions = [
-    "Native Lineup v3 task contract:",
-    "- You are executing one compiled task from an approved lineup/v3 Plan.",
-    "- Apply edits directly in the provided worktree.",
-    "- Keep changes scoped to the declared write_scope.",
-    "- Return a JSON object with status, summary, changes_made[], and issues_encountered[].",
-    "",
-    `Task ID: ${input.task.id}`,
-    `Wave: ${input.task.wave}`,
-    `Title: ${input.task.title}`,
-    `Write scope: ${(input.task.write_scope ?? []).join(", ") || "(none declared)"}`,
-    `Read scope: ${(input.task.read_scope ?? []).join(", ") || "(none declared)"}`,
-    "",
-    "Approved plan summary:",
-    input.approvedPlan.summary,
-    "",
-    "Task payload:",
-    JSON.stringify(input.task, null, 2)
-  ];
+  const extraInstructions = buildDeveloperExtraInstructions(input);
 
   if (input.attempt > 1) {
     extraInstructions.push("", `Retry attempt: ${input.attempt}`);
@@ -1244,6 +1242,80 @@ function buildDeveloperPrompt(input: {
   }).prompt;
 }
 
+function shouldUseCompactNativeOllamaPrompt(projectRoot: string, host?: HostName): boolean {
+  if (!host) {
+    return false;
+  }
+
+  return Boolean(readOllamaConfig({ projectRoot, host })?.hostIntegration?.enabled);
+}
+
+function buildDeveloperExtraInstructions(input: {
+  projectRoot: string;
+  host?: HostName;
+  approvedPlan: ApprovedPlan;
+  task: CompiledTask;
+  attempt: number;
+  previousErrors: Array<{ code: string; message: string }>;
+  implementMethod?: ImplementMethod;
+  priorTaskSummaries?: Array<{ task_id: string; summary: string }>;
+}): string[] {
+  const compact = shouldUseCompactNativeOllamaPrompt(input.projectRoot, input.host);
+  const lines = compact
+    ? [
+        "Native Lineup task:",
+        "- Apply edits directly in the provided worktree.",
+        "- Keep the change strictly inside the declared write scope.",
+        "- Return JSON only with status, summary, changes_made[], and issues_encountered[].",
+        `- Task ID: ${input.task.id}`,
+        `- Wave: ${input.task.wave}`,
+        `- Title: ${input.task.title}`,
+        `- Write scope: ${(input.task.write_scope ?? []).join(", ") || "(none declared)"}`,
+        `- Read scope: ${(input.task.read_scope ?? []).join(", ") || "(none declared)"}`,
+        `- Deliverables: ${(input.task.deliverables ?? []).join(", ") || "(none declared)"}`,
+        `- Approved plan summary: ${input.approvedPlan.summary}`
+      ]
+    : [
+        "Native Lineup v3 task contract:",
+        "- You are executing one compiled task from an approved lineup/v3 Plan.",
+        "- Apply edits directly in the provided worktree.",
+        "- Keep changes scoped to the declared write_scope.",
+        "- Return a JSON object with status, summary, changes_made[], and issues_encountered[].",
+        "",
+        `Task ID: ${input.task.id}`,
+        `Wave: ${input.task.wave}`,
+        `Title: ${input.task.title}`,
+        `Write scope: ${(input.task.write_scope ?? []).join(", ") || "(none declared)"}`,
+        `Read scope: ${(input.task.read_scope ?? []).join(", ") || "(none declared)"}`,
+        "",
+        "Approved plan summary:",
+        input.approvedPlan.summary,
+        "",
+        "Task payload:",
+        JSON.stringify(input.task, null, 2)
+      ];
+
+  if (input.attempt > 1) {
+    lines.push("", `Retry attempt: ${input.attempt}`);
+    if (input.previousErrors.length > 0) {
+      lines.push(
+        compact ? `Previous errors: ${JSON.stringify(input.previousErrors)}` : "Previous errors:",
+        compact ? "" : JSON.stringify(input.previousErrors, null, 2)
+      );
+    }
+  }
+
+  if (input.implementMethod === "single-session" && input.priorTaskSummaries?.length) {
+    lines.push(
+      "",
+      "Prior completed tasks in this session:",
+      ...input.priorTaskSummaries.map((t) => `- ${t.task_id}: ${t.summary}`)
+    );
+  }
+
+  return compact ? lines.filter((line) => line.length > 0) : lines;
+}
+
 function buildReviewerPrompt(input: {
   projectRoot: string;
   host?: HostName;
@@ -1255,24 +1327,46 @@ function buildReviewerPrompt(input: {
 }): string {
   const templatePath = path.join(packageRoot(), "templates", "reviewer.yaml");
   const outputTemplate = existsSync(templatePath) ? readFileSync(templatePath, "utf8").trim() : null;
-  const extraInstructions = [
-    "Native Lineup v3 review contract:",
-    "- Review the completed implementation against the approved plan.",
-    "- Validate acceptance criteria and note concrete issues only.",
-    "- Return a lineup/v3 Review YAML document.",
-    ...(input.outputPath
-      ? [`- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`]
-      : []),
-    "",
-    "Approved plan summary:",
-    input.approvedPlan.summary,
-    "",
-    "Compiled tasks:",
-    JSON.stringify(input.tasksArtifact.tasks, null, 2),
-    "",
-    "Implementation state:",
-    JSON.stringify(input.implementationState, null, 2)
-  ];
+  const compact = shouldUseCompactNativeOllamaPrompt(input.projectRoot, input.host);
+  const extraInstructions = compact
+    ? [
+        "Native Lineup review:",
+        "- Review the completed implementation against the approved plan.",
+        "- Return only the final structured Review payload.",
+        ...(input.outputPath
+          ? [`- Write or emit the payload for ${input.outputPath}.`]
+          : []),
+        `- Approved plan summary: ${input.approvedPlan.summary}`,
+        `- Task IDs: ${input.tasksArtifact.tasks.map((task) => task.id).join(", ") || "(none)"}`,
+        "Implementation state summary:",
+        JSON.stringify(
+          {
+            task_results: input.implementationState.task_results,
+            changes_made: input.implementationState.changes_made,
+            issues_encountered: input.implementationState.issues_encountered
+          },
+          null,
+          2
+        )
+      ]
+    : [
+        "Native Lineup v3 review contract:",
+        "- Review the completed implementation against the approved plan.",
+        "- Validate acceptance criteria and note concrete issues only.",
+        "- Return a lineup/v3 Review YAML document.",
+        ...(input.outputPath
+          ? [`- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`]
+          : []),
+        "",
+        "Approved plan summary:",
+        input.approvedPlan.summary,
+        "",
+        "Compiled tasks:",
+        JSON.stringify(input.tasksArtifact.tasks, null, 2),
+        "",
+        "Implementation state:",
+        JSON.stringify(input.implementationState, null, 2)
+      ];
 
   if (outputTemplate) {
     extraInstructions.push(
@@ -1366,6 +1460,54 @@ function mergeImplementationResult(
 
   for (const issue of result.issues_encountered ?? []) {
     accumulated.issues_encountered.push(issue);
+  }
+}
+
+function inferTaskChangesFromWorkspace(
+  workspaceRoot: string,
+  task: CompiledTask,
+  result: NativeTaskExecutionResult
+): NativeTaskExecutionResult {
+  if ((result.changes_made?.length ?? 0) > 0) {
+    return result
+  }
+
+  const scope = task.write_scope?.length ? task.write_scope : task.deliverables ?? []
+  if (scope.length === 0) {
+    return result
+  }
+
+  const status = spawnSync("git", ["status", "--short", "--untracked-files=all", "--", ...scope], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: process.env
+  })
+
+  if (status.status !== 0) {
+    return result
+  }
+
+  const changedFiles = status.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const rawPath = line.slice(3).trim()
+      const renameParts = rawPath.split(" -> ")
+      return renameParts.at(-1)?.trim() ?? rawPath
+    })
+
+  if (changedFiles.length === 0) {
+    return result
+  }
+
+  return {
+    ...result,
+    changes_made: changedFiles.map((file) => ({
+      file,
+      description: `Updated ${file}`,
+      task_id: task.id
+    }))
   }
 }
 
@@ -1472,7 +1614,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
                 })
               );
 
-              const result = await driver.executeTask({
+              const rawResult = await driver.executeTask({
                 runId: options.runId,
                 projectRoot: options.projectRoot,
                 runRoot: options.runRoot,
@@ -1485,6 +1627,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
                 timeoutMs: 600_000,
                 previousErrors: retryContext.previousErrors
               });
+              const result = inferTaskChangesFromWorkspace(workspace.worktreeRoot, task, rawResult)
 
               options.emitProtocol(
                 createLineupNotification({

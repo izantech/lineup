@@ -298,6 +298,10 @@ function initGitRepo(repoDir: string): void {
     "git config user.name",
     runHostCommand(repoDir, ["git", "config", "user.name", "Lineup Smoke"])
   );
+  assertExitZero(
+    "git config commit.gpgsign",
+    runHostCommand(repoDir, ["git", "config", "commit.gpgsign", "false"])
+  );
   writeFileSync(
     path.join(repoDir, "README.md"),
     "# Lineup Ollama smoke\n\nREPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION\n",
@@ -507,15 +511,6 @@ function classifyFailure(error: unknown): HostSmokeSummary["failureClass"] {
   }
 
   return "host_error";
-}
-
-function filterPathWithoutBinary(binaryName: string): string {
-  const currentPath = process.env.PATH ?? "";
-  const filteredSegments = currentPath
-    .split(path.delimiter)
-    .filter((segment) => segment.trim().length > 0 && !existsSync(path.join(segment, binaryName)));
-
-  return filteredSegments.join(path.delimiter);
 }
 
 function answerBridgeQuestion(repoDir: string, homeDir: string, runId: string, question: { requestId: number; choices?: string[]; defaultChoice?: string }): void {
@@ -810,9 +805,8 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
           summary.primaryBridgeTraceFiles = listHostTraceFiles(primaryDebugPaths.hostTraceRoot);
           cancelRun(repoDir, homeDir, stalledRunId);
         }
-        const filteredPath = filterPathWithoutBinary("ollama");
         const envOverrides = {
-          PATH: filteredPath
+          LINEUP_FORCE_CLAUDE_OLLAMA_ENV: "1"
         };
         const envPreview = resolvePlannedCommand(host, repoDir, homeDir, envOverrides);
         summary.integrationMode = envPreview.integrationMode;

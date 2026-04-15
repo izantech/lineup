@@ -252,10 +252,16 @@ Current instrumentation:
 - native developer/reviewer local-runner invocations now carry explicit output
   schemas again (`ImplementationState` JSON and `Review` YAML), and Claude
   developer/reviewer lanes use JSON draft mode under Ollama-backed execution
+- Claude `strategy: auto` now prefers the Anthropic-compatible env transport by
+  default; explicit `strategy: launch` keeps the wrapper lane available for
+  direct comparison
 - Ollama-backed researcher, architect, and teacher stages can use compact
   host-specific prompt bodies, and the stage contract itself is now shorter so
   local models receive compact JSON context plus a minimal required-fields
   summary instead of the older verbose prompt scaffold
+- native developer/reviewer stages now also have compact Ollama-specific prompt
+  bodies so local hosts do not receive the older verbose native task/review
+  scaffolding
 - the local smoke lane now uses a deterministic tiny-repo task instead of a
   generic freeform smoke request
 - the native plan normalizer now repairs absolute temp-checkout paths back into
@@ -285,6 +291,11 @@ Current instrumentation:
   bridge API instead of interactive human mode, and it chooses `abort` over
   `retry` for verify gates so smoke failures stop at the first bad local-model
   result instead of compounding
+- smoke/debug retries now use the internal Claude force-env switch instead of
+  PATH mutation when the wrapper lane needs to be bypassed
+- native execution now infers `changes_made` from `git status --short` inside
+  the isolated worktree when a local host edits files but reports an empty
+  `changes_made` array
 
 Comprehensive fix plan:
 
@@ -309,10 +320,8 @@ Comprehensive fix plan:
      - restore explicit implement/review schemas for native local Claude
        execution and keep those lanes on JSON draft output
    - remaining:
-     - decide whether `strategy: auto` should keep wrapper-first behavior or
-       prefer the env transport by default for Claude on `qwen3-coder:30b`
-     - finish the env-only smoke lane and compare it directly against the
-       wrapper lane on the bounded README-only smoke task
+     - finish the env-first smoke lane on the bounded README-only task and
+       compare it directly against explicit wrapper runs
      - trim or normalize any unsupported Anthropic-compatible request fields
        that Ollama still ignores so Claude headless runs do not block waiting on
        a feature the compatibility layer does not implement

@@ -202,7 +202,7 @@ exit 1
     const report = createDoctorReport(tempDir, homeDir);
 
     expect(report.healthy).toBe(false);
-    expect(report.checks.ollama.codex.mode.detail).toContain("launch");
+    expect(report.checks.ollama.codex.mode.detail).toContain("auto");
     expect(report.checks.ollama.codex.binary.ok).toBe(true);
     expect(report.checks.ollama.codex.readiness.ok).toBe(false);
     expect(report.checks.ollama.codex.readiness.detail).toContain("local-qwen");
