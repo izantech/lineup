@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "npm run diagrams:build && astro build",
+    "diagrams:build": "node ./scripts/build-mermaid-diagrams.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
@@ -13,5 +14,8 @@
     "@astrojs/starlight": "^0.38.3",
     "astro": "^6.0.1",
     "sharp": "^0.34.2"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0"
   }
 }

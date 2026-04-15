@@ -1,0 +1,16 @@
+flowchart TD
+  P["Approved plan"] --> T["Compile into task DAG and waves"]
+  T --> M{"Implement method"}
+  M -- "phase" --> W1["One agent session per wave"]
+  M -- "task" --> W2["One agent session per task"]
+  M -- "single-session" --> W3["One cumulative session"]
+
+  W1 --> X["Apply implementation patch"]
+  W2 --> X
+  W3 --> X
+
+  X --> V["Run verification hooks"]
+  V --> R["Reviewer produces review artifact"]
+  R --> S{"Needs decision?"}
+  S -- "no" --> C["Complete run"]
+  S -- "yes" --> G["Retry / Accept / Abort"]

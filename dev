@@ -239,6 +239,9 @@ run_clean() {
 run_web() {
     local subcmd="${1:-dev}"
     ensure_site_deps
+    if [[ "$subcmd" != "build" ]]; then
+        npm --prefix "$ROOT_DIR/site" run diagrams:build
+    fi
     case "$subcmd" in
         dev)     npm --prefix "$ROOT_DIR/site" run dev ;;
         build)   npm --prefix "$ROOT_DIR/site" run build ;;

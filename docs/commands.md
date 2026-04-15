@@ -7,11 +7,16 @@
 - `./dev install local` — clean-replace the global CLI and managed host skills from the current source tree; auto-installs missing CLI deps first
 - `./dev install remote` — install latest from npm
 - `./dev install clean [--purge]` — remove CLI and host skills
-- `./dev web` — start website dev server (Astro + Starlight); auto-installs missing site deps first
+- `./dev web` — generate Mermaid SVGs, then start website dev server (Astro + Starlight); auto-installs missing site deps first
+- `./dev web build` — generate Mermaid SVGs, then build the website for production
+- `./dev web preview` — generate Mermaid SVGs, then preview the production site build locally
 - `./dev bench [--agent claude|codex|opencode] [--auto-models] [...]` — run Ollama benchmark
 - `./dev bench clean` — remove benchmark results
 - `./dev clean [--dry-run]` — remove all generated artifacts (build, benchmark, cache)
 - `./dev setup` — install dependencies
+
+The docs site keeps Mermaid diagram sources in `site/diagrams/*.mmd` and pre-renders
+them to `site/public/diagrams/*.svg` before serving or building the site.
 
 ## CLI Runtime
 
@@ -59,6 +64,8 @@ Lineup users interact with the engine in two ways:
 - indirectly through generated host skills
 
 The CLI is always the source of truth. Skills are wrappers that call the CLI.
+
+For the control-flow view with diagrams, see [CLI Overview](./cli-overview.md).
 
 Practical split:
 

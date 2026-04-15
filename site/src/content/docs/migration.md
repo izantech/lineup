@@ -36,11 +36,7 @@ If you install from source instead of npm:
 
 ## When you need deeper migration detail
 
-If you maintain custom skills, care about bridge behavior, or want the architectural changes in detail, use the repository docs instead of the public site:
-
-- [Skills](https://github.com/izantech/lineup/blob/main/docs/skills.md)
-- [Gate protocol](https://github.com/izantech/lineup/blob/main/docs/gate-protocol.md)
-- [Architecture](https://github.com/izantech/lineup/blob/main/docs/architecture.md)
+If you want the current runtime model after upgrading, read [How It Works](/how-it-works/) and then [Getting Started](/getting-started/) for the new recommended flow.
 
 ## Suggested next step
 

@@ -1,28 +1,58 @@
 ---
 title: How It Works
-description: The simple mental model for using Lineup day to day.
+description: How Lineup runs work from first entrypoint through planning, execution, and resume.
 ---
 
-## One engine, two entrypoints
+## One engine, three entrypoints
 
-You can start Lineup in two normal ways:
+Lineup has three practical entrypoints:
 
-- **CLI** with `lineup start` or `lineup run`
-- **Host commands** from Claude Code, Codex CLI, or OpenCode
+- `lineup start` for first-run and onboarding flows
+- `lineup run` for direct terminal execution
+- `lineup bridge start|events|answer` for installed host wrappers
 
-Both paths use the same underlying engine. The host commands are just thin entrypoints into the CLI runtime.
+All three lead to the same runtime engine. The CLI is the source of truth, and host integrations are wrappers around it rather than separate orchestrators.
 
-## The basic flow
+![Entry points and engine flow](/diagrams/how-it-works-entrypoints.svg)
 
-Lineup moves work through a consistent sequence:
+## What each entrypoint is for
 
-**Triage → Clarify → Research → Plan → Implement → Verify**
+### `lineup start`
 
-Not every task needs every step. Small, obvious changes stay lighter. Larger or less certain work gets more research and planning.
+This is the safest first entrypoint in a repo. It prepares the project, checks whether native execution can run yet, and only starts the pipeline once the repo is ready.
+
+That means it can:
+
+- initialize Lineup project files
+- tell you if the repo still needs its first commit
+- stop with exact next commands instead of failing mid-run
+
+### `lineup run`
+
+This is the normal direct executor. It chooses the runtime mode automatically:
+
+- `human` on an interactive terminal
+- `host` when running non-interactively
+
+In both modes, it hands off to the same orchestration engine.
+
+### `lineup bridge`
+
+This is the preferred wrapper contract for Claude Code, Codex CLI, and OpenCode integrations. Instead of making each host supervise raw protocol output directly, the CLI owns a detached worker and exposes a compact event stream.
+
+## The pipeline shape
+
+The default full pipeline is:
+
+**Triage → Clarify → Research → Clarification Gate → Plan → Implement → Verify → Document?**
+
+Not every task runs every step. Triage can reduce the run for simpler work.
+
+![Pipeline stages from workflow load to optional document stage](/diagrams/how-it-works-pipeline.svg)
 
 ## What Lineup decides for you
 
-Lineup handles the operational parts that are easy to get wrong by hand:
+Lineup handles the parts that are easy to get wrong by hand:
 
 - it scopes the work before implementation starts
 - it keeps plan and implementation stages inspectable
@@ -30,6 +60,14 @@ Lineup handles the operational parts that are easy to get wrong by hand:
 - it preserves state so blocked or failed runs can resume later
 
 The goal is simple: spend less time orchestrating and more time reviewing useful output.
+
+## Where planning turns into execution
+
+The early stages produce structured artifacts. The key handoff is from `plan` into `implement`.
+
+Once the plan is approved, Lineup compiles it into executable tasks and task waves. That is what makes `lineup waves` possible and what allows retries to focus only on failed tasks instead of restarting everything.
+
+![Implementation flow from approved plan through retries or completion](/diagrams/how-it-works-implementation.svg)
 
 ## What you do during a run
 
@@ -42,28 +80,57 @@ Most runs look like this:
 
 For implementation-heavy work, `lineup waves --run <run-id>` shows how the plan was split into parallel task waves.
 
-## Host usage stays simple
+## Human mode vs host mode
 
-From the user side, host usage should feel just as direct as CLI usage:
+The engine is the same in both modes. The difference is how progress and questions are surfaced.
 
-- start the task from the installed host command
-- answer questions when they appear
-- inspect the final run if you want more detail
+![Human mode compared with host mode](/diagrams/how-it-works-human-vs-host.svg)
 
-You do not need to think about bridge sessions or protocol events to use Lineup successfully.
+Use `host` mode when you need raw protocol integration, such as CI or a custom wrapper.
+
+## Why bridge mode exists
+
+Bridge mode sits on top of the same engine, but it gives installed host wrappers a safer contract:
+
+- `lineup bridge start` launches a detached worker
+- `lineup bridge events` returns compact `status`, `question`, and `complete` events
+- `lineup bridge answer` responds to a pending question
+
+![Bridge mode flow from start to polling and answers](/diagrams/how-it-works-bridge.svg)
+
+This is what makes reconnect-safe polling possible. A host can drop and reconnect without losing the run state.
+
+## Why runs are resumable
+
+Lineup persists state and artifacts under `.lineup`, including:
+
+- pipeline state
+- plan, tasks, review, and protocol artifacts
+- pending gate requests and responses
+- bridge session and bridge event files for detached runs
+
+That persistence is what powers:
+
+- `lineup show`
+- `lineup logs`
+- `lineup replay`
+- `lineup resume`
+- `lineup bridge events`
 
 ## Tactics are optional
 
 The default workflow is enough for most work. Use a tactic only when you want a more specific path, such as an explanation flow or a security-focused review.
 
-## Need the deeper internals?
+## The design choice behind all this
 
-The public site intentionally stays lightweight. Contributor and integration detail lives in the repository docs:
+Lineup keeps orchestration inside the CLI instead of distributing orchestration logic across hosts.
 
-- [Architecture](https://github.com/izantech/lineup/blob/main/docs/architecture.md)
-- [Pipeline](https://github.com/izantech/lineup/blob/main/docs/pipeline.md)
-- [Gate protocol](https://github.com/izantech/lineup/blob/main/docs/gate-protocol.md)
-- [Skills and host integrations](https://github.com/izantech/lineup/blob/main/docs/skills.md)
+That gives the project:
+
+- one runtime contract
+- one bridge contract
+- one place for output normalization and retries
+- one run model for inspection and resume
 
 ---
 

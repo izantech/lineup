@@ -62,11 +62,10 @@ Use `lineup show` for a quick run summary, `lineup waves` to inspect task parall
 
 ## When you want more detail
 
-The public site stays focused on setup and usage. If you need workflow, bridge, or architecture detail, use the repository docs:
+If you want the runtime-level view after setup, continue with:
 
-- [CLI commands](https://github.com/izantech/lineup/blob/main/docs/commands.md)
-- [Pipeline overview](https://github.com/izantech/lineup/blob/main/docs/pipeline.md)
-- [Skills and host integrations](https://github.com/izantech/lineup/blob/main/docs/skills.md)
+- [How It Works](/how-it-works/) for the pipeline, bridge flow, and resume model
+- [Examples](/examples/) for common task patterns and prompts
 
 ## Next steps
 

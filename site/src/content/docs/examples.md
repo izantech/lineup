@@ -3,6 +3,8 @@ title: Examples
 description: Common ways to use Lineup without learning the internals first.
 ---
 
+If this is your first run in a repo, prefer `lineup start "<task>"`. The examples below use `lineup run` because they assume the repo is already ready.
+
 ## Feature work
 
 ```bash
@@ -68,11 +70,7 @@ The run and inspection flow stays the same after kickoff.
 
 ## Want advanced usage?
 
-The repository docs cover the deeper pieces that are intentionally out of scope for the public site:
-
-- [Commands](https://github.com/izantech/lineup/blob/main/docs/commands.md)
-- [Tactics](https://github.com/izantech/lineup/blob/main/docs/tactics.md)
-- [Pipeline internals](https://github.com/izantech/lineup/blob/main/docs/pipeline.md)
+If you want the execution model behind these examples, read [How It Works](/how-it-works/).
 
 ---
 

@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant H as Host wrapper
+  participant B as Bridge start
+  participant W as Detached worker
+  participant P as Pipeline
+  participant S as Bridge session and event store
+
+  H->>B: lineup bridge start "<task>"
+  B->>S: create bridge session
+  B->>W: spawn detached worker
+  W->>P: runPipeline()
+  P-->>S: status / question / complete events
+
+  loop poll
+    H->>S: lineup bridge events <run-id>
+    S-->>H: events + pending question + recovery
+  end
+
+  alt question is pending
+    H->>S: lineup bridge answer <run-id> <request-id>
+    S-->>W: response available
+    W->>P: continue
+  end

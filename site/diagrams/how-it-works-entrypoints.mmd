@@ -1,0 +1,14 @@
+flowchart LR
+  U["User or host wrapper"] --> S["lineup start"]
+  U --> R["lineup run"]
+  U --> B["lineup bridge start / events / answer"]
+
+  S --> P["Prepare repo"]
+  P --> I["Scaffold Lineup files if needed"]
+  P --> D["Check git and runtime readiness"]
+  D --> G{"Ready to run?"}
+  G -- "yes" --> R
+  G -- "no" --> N["Print exact next steps and stop"]
+
+  R --> E["runPipeline()"]
+  B --> E

@@ -1,0 +1,14 @@
+flowchart TD
+  A["runPipeline()"] --> B["Load workflow or tactic"]
+  B --> C["Validate workflow and project prerequisites"]
+  C --> D["Create run state and artifact directories"]
+  D --> E["Acquire runtime lock"]
+  E --> F["Resolve stage execution order"]
+  F --> G["Execute stages"]
+
+  G --> H["Triage / Clarify / Research / Gate"]
+  G --> I["Plan"]
+  I --> J["Plan approval"]
+  J --> K["Implement"]
+  K --> L["Verify"]
+  L --> M["Optional document"]

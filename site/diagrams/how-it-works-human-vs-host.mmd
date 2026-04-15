@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant U as User
+  participant C as CLI
+  participant P as Pipeline
+
+  U->>C: lineup run "<task>"
+  C->>P: runPipeline()
+  P-->>C: status updates
+
+  alt human mode
+    C-->>U: print progress to stderr
+    P-->>C: gate request
+    C-->>U: interactive question
+    U-->>C: answer in terminal
+    C->>P: continue
+  else host mode
+    C-->>U: emit protocol output
+    P-->>C: gate request
+    U->>C: lineup gate respond ...
+    C->>P: continue
+  end
