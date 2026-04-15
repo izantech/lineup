@@ -485,8 +485,46 @@ export function buildProgram(handlers?: Partial<CliHandlers>): Command {
   return program;
 }
 
-export function printCliError(error: unknown): void {
+function buildRepeatedRunHint(argv: string[]): string | null {
+  const args = argv.slice(2);
+  if (args[0] !== "run") {
+    return null;
+  }
+
+  const secondRunIndex = args.indexOf("run", 1);
+  if (secondRunIndex === -1) {
+    return null;
+  }
+
+  const correctedArgs = args.filter((value, index) => !(index === secondRunIndex && value === "run"));
+  const task = correctedArgs[correctedArgs.length - 1];
+  if (!task || task.startsWith("-")) {
+    return null;
+  }
+
+  const rendered = correctedArgs
+    .map((value) => (/\s/.test(value) ? JSON.stringify(value) : value))
+    .join(" ");
+  return `Hint: did you mean \`lineup ${rendered}\`?`;
+}
+
+export function formatCliErrorMessage(error: unknown, argv: string[] = process.argv): string {
   const message = asErrorMessage(error);
+  if (
+    message.includes("too many arguments for 'run'") &&
+    argv.slice(2).includes("run")
+  ) {
+    const hint = buildRepeatedRunHint(argv);
+    if (hint) {
+      return `${message}\n${hint}`;
+    }
+  }
+
+  return message;
+}
+
+export function printCliError(error: unknown): void {
+  const message = formatCliErrorMessage(error);
   process.stderr.write(`${message}\n`);
 }
 
