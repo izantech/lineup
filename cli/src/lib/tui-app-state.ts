@@ -559,7 +559,7 @@ function mapInspectionViewWithState(model: StateInspectionViewModel | null, sess
 export async function buildTuiAppViewModel(input: TuiAppStateInput): Promise<TuiAppViewModel> {
   const preferences = loadTuiPreferences();
   const home = await buildHomeViewModel(input.cwd);
-  const selectedRunId = input.session.selectedRunId ?? home.latestRun?.runId;
+  const selectedRunId = input.session.selectedRunId;
   const inspection = selectedRunId ? await buildInspectionViewModel(selectedRunId, input.cwd) : null;
   const liveEvents = selectedRunId ? input.liveEventsByRunId[selectedRunId] ?? [] : [];
   const liveRun = selectedRunId ? buildLiveRunViewModel(selectedRunId, liveEvents, input.cwd) : null;

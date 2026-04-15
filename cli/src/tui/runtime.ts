@@ -7,7 +7,6 @@ import { createLocalAgentRunner } from '../lib/agent-runner.js'
 import { SUPPORTED_HOSTS } from '../lib/constants.js'
 import type { GateResponse } from '../lib/gate-store.js'
 import { readBridgeEvents } from '../lib/bridge.js'
-import { observePipelineRuns } from '../lib/observer.js'
 import { readStatus } from '../lib/operations.js'
 import { loadPipelineState } from '../lib/state.js'
 import { detectTuiTerminalCapabilities } from '../lib/tui-terminal.js'
@@ -258,23 +257,6 @@ function bridgeEventToTuiEvent(event: { type: string; seq?: number; stageId?: st
   }
 }
 
-function preferredInitialRun(cwd: string): { runId: string; screen: 'live' | 'inspect' } | null {
-  const latest = observePipelineRuns(cwd)[0]
-  if (!latest) {
-    return null
-  }
-
-  if (latest.status === 'running' || latest.status === 'blocked') {
-    return { runId: latest.run_id, screen: 'live' }
-  }
-
-  if (latest.status === 'failed' || latest.status === 'canceled') {
-    return { runId: latest.run_id, screen: 'inspect' }
-  }
-
-  return null
-}
-
 type InteractiveTuiAppProps = {
   cwd: string
 }
@@ -318,18 +300,6 @@ function InteractiveTuiApp(props: InteractiveTuiAppProps) {
   useEffect(() => {
     void refreshViewModel()
   }, [refreshViewModel])
-
-  useEffect(() => {
-    const preferred = preferredInitialRun(cwd)
-    if (!preferred) {
-      return
-    }
-
-    dispatch({ type: 'hydrate', selectedRunId: preferred.runId })
-    dispatch({ type: 'select-run', runId: preferred.runId, attach: true })
-    dispatch({ type: 'open-screen', screen: preferred.screen })
-    void loadRunHistory(preferred.runId)
-  }, [cwd, loadRunHistory])
 
   const humanHooks = useCallback(() => ({
     emitHumanTextToStderr: false,
