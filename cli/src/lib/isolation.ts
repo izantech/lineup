@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import { CliError } from "./errors";
 import { lineupRunsDir } from "./paths";
+import { assertSuccess, runCommand } from "./process.js";
 import { loadPipelineState } from "./state";
 import type { IsolationMode } from "./types.js";
 import {
@@ -33,6 +34,7 @@ export type NativeIsolationWorkspace = {
   sourceRoot: string;
   runRoot: string;
   worktreeRoot: string;
+  baselineHead: string;
   mode: NativeIsolationMode;
   cleanup: () => Promise<void>;
 };
@@ -76,11 +78,16 @@ export async function createNativeIsolationWorkspace(options: NativeIsolationOpt
     await enableSparseCheckout(worktreeRoot, options.sparsePaths);
   }
 
+  const baselineHeadResult = await runCommand("git", ["-C", worktreeRoot, "rev-parse", "HEAD"]);
+  assertSuccess(baselineHeadResult, `git rev-parse HEAD for ${worktreeRoot}`);
+  const baselineHead = baselineHeadResult.stdout.trim();
+
   return {
     repoRoot,
     sourceRoot,
     runRoot,
     worktreeRoot,
+    baselineHead,
     mode: options.mode,
     cleanup: async () => {
       await removeDetachedWorktree(repoRoot, worktreeRoot);

@@ -287,6 +287,13 @@ function shouldUseClaudeJsonDraftOutput(agent: AgentRole): boolean {
   return agent === "researcher" || agent === "developer" || agent === "reviewer";
 }
 
+function shouldUseCodexNativeOutputSchema(
+  agent: AgentRole,
+  integration: "direct" | "ollama-launch" | "ollama-managed" | "ollama-env"
+): boolean {
+  return !(agent === "developer" && integration !== "direct");
+}
+
 function extractStructuredPayload(raw: string): unknown {
   let parsed: { structured_output?: unknown; result?: unknown } | unknown;
   try {
@@ -619,11 +626,7 @@ async function formatStructuredOutputWithClaude(input: {
 async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): Promise<LocalAgentInvocationResult> {
   const outputDir = mkdtempSync(path.join(os.tmpdir(), "lineup-codex-output-"));
   const outputPath = path.join(outputDir, `${input.agent}.txt`);
-  const normalizedSchema = input.outputSchemaPath
-    ? normalizeCodexOutputSchema(readFileSync(input.outputSchemaPath, "utf8"))
-    : null;
-  const normalizedSchemaPath = normalizedSchema ? path.join(outputDir, `${input.agent}.schema.json`) : null;
-  const launchPlan = planHostLaunch({
+  const initialLaunchPlan = planHostLaunch({
     host,
     projectRoot: input.projectRoot,
     workingDirectory: input.workingDirectory,
@@ -631,9 +634,26 @@ async function runCodexAgent(host: HostName, input: LocalAgentInvocationInput): 
     prompt: input.prompt,
     timeoutMs: input.timeoutMs,
     addDirs: input.addDirs,
-    outputPath,
-    schemaPath: normalizedSchemaPath
+    outputPath
   });
+  const nativeSchemaEnabled = shouldUseCodexNativeOutputSchema(input.agent, initialLaunchPlan.integration);
+  const normalizedSchema = nativeSchemaEnabled && input.outputSchemaPath
+    ? normalizeCodexOutputSchema(readFileSync(input.outputSchemaPath, "utf8"))
+    : null;
+  const normalizedSchemaPath = normalizedSchema ? path.join(outputDir, `${input.agent}.schema.json`) : null;
+  const launchPlan = normalizedSchemaPath
+    ? planHostLaunch({
+        host,
+        projectRoot: input.projectRoot,
+        workingDirectory: input.workingDirectory,
+        agent: input.agent,
+        prompt: input.prompt,
+        timeoutMs: input.timeoutMs,
+        addDirs: input.addDirs,
+        outputPath,
+        schemaPath: normalizedSchemaPath
+      })
+    : initialLaunchPlan;
 
   try {
     if (normalizedSchemaPath && normalizedSchema) {

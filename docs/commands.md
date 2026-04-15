@@ -65,7 +65,7 @@ Practical split:
 - `lineup run "<task>"` is the normal direct-entry command for humans in a terminal
 - `lineup bridge start|events|answer` is the normal skill-facing contract for Claude/Codex/OpenCode wrappers
 - `lineup run --mode host` remains the low-level raw protocol path for advanced integrations and CI
-- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task with `README.md` as the first research target, routes the bundled `explain` tactic through the bridge API, can force Claude onto the env transport internally when the wrapper lane needs to be bypassed, and until all hosts are green, run it per host instead of `--host all`
+- `npm --prefix cli run smoke:ollama-hosts -- ...` is the local-only packaged CLI smoke runner for validating Ollama host integration across full pipeline, bridge, human/local, and explain coverage; it copies the canonical full-pipeline workflow into its temp repo, uses a bounded deterministic placeholder-replacement task with `README.md` as the first research target, routes the bundled `explain` tactic through the bridge API, can force Claude onto the env transport internally when the wrapper lane needs to be bypassed, and now supports both per-host validation and the combined `--host all` matrix on the current `qwen3-coder:30b` baseline
 
 ## Run Modes
 
@@ -126,7 +126,7 @@ For first-run onboarding:
 - `lineup doctor --json` reports the same readiness checks explicitly and includes `next_commands` for common fixes such as `lineup init`, `git add -A && git commit -m "Initial commit"`, installing a supported host CLI when no local executor is available, and Ollama readiness when host integration is enabled for Claude, Codex, or OpenCode
 - see [Ollama](./ollama.md) for the exact `host_integration` config shape and host-specific launch behavior
 - the Ollama validation suite is split across deterministic tests, pipeline/bridge tests, and a local-only smoke lane; see [Ollama](./ollama.md) for the suite layout and the `smoke:ollama-hosts` command
-- until all hosts are green, prefer per-host smoke runs over `--host all` so host-specific failures stay isolated
+- per-host smoke runs are still the fastest way to isolate a regression, but `--host all` is now part of the validated local smoke workflow on `qwen3-coder:30b`
 
 Before the first full native run without `lineup start`, make sure:
 

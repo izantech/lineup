@@ -45,8 +45,9 @@ The smoke command is:
 
 - `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]`
 
-It is local-only and should not be added to CI. Until all hosts are green, run
-the smoke lanes per host instead of relying on `--host all`. The smoke task is
+It is local-only and should not be added to CI. Per-host smoke lanes are still
+the fastest way to isolate a regression, but `--host all` is now validated on
+`qwen3-coder:30b`. The smoke task is
 a bounded placeholder replacement in `README.md`, the bundled `explain` tactic
 is exercised through the bridge API rather than interactive human mode, the
 smoke runner copies the canonical full-pipeline workflow into its temp repo

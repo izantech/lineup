@@ -183,56 +183,36 @@ Status:
 
 ### Ollama Host Stabilization
 
-Latest live Ollama validation is split into two layers:
+Validated live Ollama status:
 
-- `qwen3.5:9b` is not a reliable validation model for the compatibility
-  endpoints exercised by Claude/OpenCode in this setup, so it should not be
-  treated as the primary real-host acceptance target right now
-- `qwen3-coder:30b` is the current viable local validation model and is the
-  right baseline for ongoing smoke work
-- OpenCode auto/default host integration now uses the official
-  `ollama launch opencode -- ... run` wrapper path instead of the older managed
-  provider path, while explicit `strategy: managed` still keeps the
-  `lineup-ollama/<model>` selector available
-- the smoke runner now copies the canonical repo workflow into its temp repo,
-  and Lineup now normalizes scalar/list research `constraints` and `gaps` plus
-  Claude-style plan change keys (`file_path`, `what_to_change`,
-  `why_this_change_is_needed`) before validation
+- `qwen3-coder:30b` is the current working local acceptance baseline
+- per-host smoke passes for Claude, Codex, and OpenCode
+- the combined `--host all` matrix also passes on the same built runtime
+- the smoke lane exercises the bounded full pipeline, bridge questions, and the
+  bundled `explain` tactic on every host
 
-Failure classes are now instrumented and no longer conflated:
+`qwen3.5:9b` remains unreliable for the compatibility endpoints used by Claude
+and OpenCode, so it should not be treated as the primary real-host acceptance
+target.
+
+The stabilized host contracts are:
 
 - Claude:
-  - structured runs now go draft-first, then strict formatter
-  - if the headless `ollama launch claude` wrapper exits with empty output, the
-    runner now retries automatically through the Anthropic-compatible env lane
-  - direct minimal prompts now succeed on `qwen3-coder:30b` over both the
-    wrapper and the Anthropic-compatible env transport
-  - native implement/review local-runner invocations now also use JSON draft
-    output under Ollama-backed execution, and the latest per-host Claude smoke
-    completes the bounded tiny-repo full pipeline on `qwen3-coder:30b`
-  - the remaining Claude work is final all-host confirmation and throughput
-    monitoring, not another redesign of the old strict-schema-first launch path
+  - structured runs are draft-first with local validation when the draft is
+    already parseable
+  - `strategy: auto` prefers the Anthropic-compatible env transport
+  - reviewer stabilization now uses a tool-free Claude invocation plus a
+    worktree-only review contract
 - OpenCode:
-  - auto/default execution now uses the wrapper launch path instead of managed
-    provider mode
-  - the wrapper contract is confirmed for minimal prompts when invoked as
-    `ollama launch opencode --model qwen3-coder:30b -- run ...`
-  - any remaining failures should now be debugged against the live wrapper
-    pipeline behavior rather than provider selection or config injection
+  - auto/default execution uses the official wrapper launch path
+  - explicit `strategy: managed` still supports the
+    `lineup-ollama/<model>` selector
 - Codex:
-  - the process starts on `provider: ollama`
-  - stderr shows active reasoning and tool planning
+  - default live execution uses `codex exec --oss --local-provider ollama`
   - the runner watches both the final artifact path and Codex's direct `-o`
     output path
-  - research normalization now repairs the array-shaped `what_found` form that
-    local models can emit, plus colon-heavy `how_it_works` summaries that were
-    previously invalid YAML
-  - reviewer normalization now accepts both `**Status: PASS**` and
-    `**Status**: PASS` markdown output
-  - the smoke task now uses a deterministic placeholder-replacement contract,
-    and Codex main-pipeline smoke is green on `qwen3-coder:30b`
-  - the remaining Codex follow-up is explain-tactic validation and general
-    throughput confirmation, not a known main-pipeline contract bug
+  - research and review normalization cover the local-model artifact shapes
+    that previously broke bounded smoke runs
 
 Current instrumentation:
 
@@ -363,7 +343,7 @@ Comprehensive fix plan:
 5. Final acceptance
    - green deterministic suite
    - green per-host live smoke for `claude`, `opencode`, and `codex`
-   - only after all three are green individually, run `--host all`
+   - green `--host all`
 
 ## 5. Run And Artifact Inspection Polish
 

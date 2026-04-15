@@ -233,6 +233,8 @@ You are the architect body.
 
     expect(built.prompt).toContain("Apply only the approved task in the provided worktree, then stop.");
     expect(built.prompt).toContain("Stay inside the declared write scope and deliverables.");
+    expect(built.prompt).toContain("Do not stage, commit, stash, or otherwise clean the worktree.");
+    expect(built.prompt).toContain("Do not claim `changes_made` unless the corresponding workspace diff exists.");
     expect(built.prompt).not.toContain("## Tool Usage Priorities");
   });
 
@@ -260,6 +262,7 @@ You are the architect body.
 
     expect(built.prompt).toContain("Verify the implemented change against the approved plan, then stop.");
     expect(built.prompt).toContain("Prefer one targeted diff check or verification command over broad repo review.");
+    expect(built.prompt).toContain("Do not modify, stage, commit, or clean files while reviewing.");
     expect(built.prompt).not.toContain("## Tool Usage Priorities");
   });
 

@@ -99,8 +99,9 @@ pipeline workflow into the temp repo before the run starts, and Claude smoke
 lanes can force the Anthropic-compatible env transport internally without PATH
 surgery when the wrapper path needs to be bypassed. The smoke task now inspects `README.md` first instead of broad
 workflow/tactic files, preserves temp workspaces on failure or stall, and is
-not part of CI. Until all hosts are green, run per-host smoke lanes instead of
-`--host all`. For current real-host validation, prefer `qwen3-coder:30b`.
+not part of CI. Per-host smoke lanes are still the fastest way to isolate a
+regression, but `--host all` is now validated on `qwen3-coder:30b`, which
+remains the current real-host baseline.
 
 Configuration is host-specific:
 

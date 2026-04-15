@@ -496,6 +496,133 @@ process.exit(0)
     expect(result.content).toContain("how_it_works: model=local-qwen");
   });
 
+  it("does not pass a native output schema to Ollama-backed Codex developer runs", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-ollama-developer-"));
+    const binDir = join(tempDir, "bin");
+    mkdirSync(binDir, { recursive: true });
+    mkdirSync(join(tempDir, ".lineup"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".lineup", "config.yaml"),
+      `ollama:\n  enabled: true\n  model: local-qwen\n  scope: research\n  host_integration:\n    enabled: true\n    strategy: auto\n`,
+      "utf8"
+    );
+
+    const fakeCodexPath = join(binDir, "codex");
+    writeFileSync(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+
+let output = ''
+let sawSchema = false
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index]
+  if (arg === '--output-schema') {
+    sawSchema = true
+    index += 1
+    continue
+  }
+  if (arg === '-o') {
+    output = process.argv[index + 1] ?? ''
+    index += 1
+  }
+}
+
+if (sawSchema) {
+  process.stderr.write('developer runs should not pass --output-schema under Ollama-backed Codex\\n')
+  process.exit(1)
+}
+
+if (output) {
+  writeFileSync(output, JSON.stringify({
+    status: 'complete',
+    summary: 'implemented change',
+    changes_made: [
+      {
+        file: 'README.md',
+        description: 'updated README',
+        task_id: 'CHANGE-001'
+      }
+    ],
+    issues_encountered: []
+  }))
+}
+
+process.exit(0)
+`,
+      "utf8"
+    );
+    chmodSync(fakeCodexPath, 0o755);
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+    const runner = createLocalAgentRunner("codex");
+    const schemaPath = join(tempDir, "implementation-output.schema.json");
+    writeFileSync(
+      schemaPath,
+      JSON.stringify(
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            status: { type: "string" },
+            summary: { type: "string" },
+            changes_made: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  file: { type: "string" },
+                  description: { type: "string" },
+                  task_id: { type: "string" }
+                },
+                required: ["file", "description", "task_id"]
+              }
+            },
+            issues_encountered: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  issue: { type: "string" },
+                  impact: { type: "string" }
+                },
+                required: ["issue", "impact"]
+              }
+            }
+          },
+          required: ["status", "summary", "changes_made", "issues_encountered"]
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await runner.invoke({
+      projectRoot: tempDir,
+      workingDirectory: tempDir,
+      agent: "developer",
+      prompt: "Apply the approved task and return ImplementationState JSON only.",
+      outputSchemaPath: schemaPath,
+      timeoutMs: 3_000
+    });
+
+    expect(JSON.parse(result.content)).toMatchObject({
+      status: "complete",
+      summary: "implemented change",
+      changes_made: [
+        {
+          file: "README.md",
+          description: "updated README",
+          task_id: "CHANGE-001"
+        }
+      ]
+    });
+  });
+
   it("resolves Codex managed Ollama runs when the artifact appears before process exit", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "agent-runner-codex-ollama-managed-"));
     const homeDir = join(tempDir, "home");

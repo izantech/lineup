@@ -128,6 +128,7 @@ function buildClaudeDirectArgs(input: HostLaunchPlanInput, model: string): strin
     input.schemaContent || input.claudeDraftJsonOutput ? "json" : "text",
     "--permission-mode",
     "bypassPermissions",
+    ...(input.ollama?.hostIntegration?.enabled && input.agent === "reviewer" ? ["--tools", ""] : []),
     ...uniqueDirs([input.projectRoot, input.workingDirectory, ...(input.addDirs ?? [])]).flatMap((dir) => ["--add-dir", dir]),
     ...(input.schemaContent ? ["--json-schema", input.schemaContent] : []),
     input.prompt
@@ -256,7 +257,7 @@ export function planHostLaunch(input: HostLaunchPlanInput): HostLaunchPlan {
   const strategy = resolveConfiguredStrategy(input.host, configuredStrategy)
 
   if (input.host === "claude") {
-    const directArgs = buildClaudeDirectArgs(input, "")
+    const directArgs = buildClaudeDirectArgs({ ...input, ollama }, "")
     const forceEnvFallback = shouldForceClaudeEnvFallback(env, input.claudeForceEnvFallback)
     const preferEnvByDefault = shouldPreferClaudeEnvByDefault(configuredStrategy)
 

@@ -194,11 +194,15 @@ This command:
 
 It is local-only by design and is not wired into CI.
 
-Until all hosts are green, prefer per-host smoke runs instead of `--host all`:
+The smoke lane is now validated both per-host and through the combined matrix:
 
 - `npm --prefix cli run smoke:ollama-hosts -- --host claude --model <model>`
 - `npm --prefix cli run smoke:ollama-hosts -- --host codex --model <model>`
 - `npm --prefix cli run smoke:ollama-hosts -- --host opencode --model <model>`
+- `npm --prefix cli run smoke:ollama-hosts -- --host all --model <model>`
+
+Per-host runs are still the fastest way to isolate a regression, but `--host all`
+is now a supported validation pass for the current local model baseline.
 
 ## Trace Artifacts
 
@@ -247,118 +251,61 @@ The local smoke lane also uses a deterministic tiny-repo task:
 
 ## Current Live Findings
 
-Current live validation status is split by model family:
+Current live Ollama validation is green on `qwen3-coder:30b`:
 
-- `qwen3.5:9b` is not a reliable host-validation target for Claude/OpenCode in
-  this setup because it does not consistently answer the Anthropic-compatible
-  or OpenAI-compatible compatibility endpoints that those hosts rely on.
-- `qwen3-coder:30b` is the current viable local validation target and should be
-  used for real host smoke until a smaller model proves stable on the same
-  endpoints.
+- per-host smoke passes for Claude, Codex, and OpenCode
+- the combined `--host all` matrix also passes on the same built runtime
+- each host passes both the bounded full-pipeline smoke task and the bundled
+  `explain` tactic through the bridge contract
 
-The current branch state also includes a few Lineup-side normalizations that
-are now part of the local Ollama checkpoint:
+`qwen3.5:9b` remains a poor validation target for this setup because it does
+not reliably satisfy the compatibility endpoints exercised by Claude and
+OpenCode. Use `qwen3-coder:30b` as the current local acceptance baseline unless
+another smaller model is re-proven.
 
-- research `constraints` and `gaps` tolerate scalar and list outputs and are
-  normalized into schema-valid objects before validation
-- the native plan normalizer accepts Claude-style change keys such as
-  `file_path`, `what_to_change`, and `why_this_change_is_needed`
-- the native plan normalizer now also recovers Claude-style absolute temp
+The final validated Lineup-side behavior includes:
+
+- research `constraints` and `gaps` normalize scalar and list outputs into
+  schema-valid objects before validation
+- plan normalization accepts Claude-style change keys such as `file_path`,
+  `what_to_change`, and `why_this_change_is_needed`, and recovers absolute temp
   checkout paths back into repo-relative `changes[].file` values
-- native implement and review local-runner invocations now carry explicit
-  output schemas again, using `ImplementationState` JSON for implement and the
-  `Review` YAML schema for verify/review
-- native execution now infers `changes_made` from `git status --short` inside
-  the isolated worktree when a local host edits files but returns an empty
-  `changes_made` array
+- native implement and review local-runner invocations carry explicit output
+  schemas again, using `ImplementationState` JSON for implement and `Review`
+  YAML for verify/review
+- isolated-worktree diff detection and patch capture compare against the
+  baseline worktree `HEAD`, so edits are preserved even if a local host stages
+  or commits inside the detached worktree
 - the smoke lane copies the canonical full-pipeline workflow into the temp repo
-  so plan prompts receive the same triage and research inputs as a real run
+  so plan prompts see the same triage and research inputs as a real run
 
-Host status is now mixed on the current branch state:
+Validated host contracts:
 
 ### Claude
 
-- the old strict-schema-first hang is no longer the current failure mode
-- Ollama-backed Claude structured runs now go draft-first, and if the draft
-  artifact is already parseable Lineup validates it locally instead of asking
-  Claude for a second formatter pass
-- Ollama-backed Claude invocations now run from the real working directory
-  instead of a neutral temporary cwd, which removed the earlier false
-  conclusions that `README.md` or other repo files were missing
-- native implement/review stages now request JSON draft output with explicit
-  schema validation, so Claude developer/reviewer lanes no longer fall back to
-  unconstrained text during local native execution
-- Claude `strategy: auto` now prefers the Anthropic-compatible env transport by
-  default, while explicit `strategy: launch` keeps the wrapper lane available
-  for direct live comparison and future recovery work
-- headless `ollama launch claude` can still return immediately with no output,
-  so smoke/debug retries now use an internal force-env switch instead of PATH
-  mutation when the wrapper lane needs to be bypassed
-- native implement/review stages now also use JSON draft output under
-  Ollama-backed execution, which removed the last live stall seen in the
-  Claude developer/reviewer lanes
-- the latest per-host smoke on `qwen3-coder:30b` completes the tiny-repo full
-  pipeline successfully under the default env-first transport
-- the remaining Claude work is all-host confirmation and general throughput
-  monitoring, not a known per-host pipeline contract bug
-
-Implication:
-
-- Claude is no longer blocked on the old strict-schema launch shape or on the
-  developer/reviewer local-runner contract for the current smoke task
-- the right next work is confirming Claude stays green when run alongside the
-  remaining hosts in the final `--host all` matrix
+- structured runs are draft-first, with local validation when the draft is
+  already parseable
+- `strategy: auto` prefers the Anthropic-compatible env transport, while
+  explicit `strategy: launch` keeps the wrapper lane available for comparison
+- native implement runs keep changes inside the isolated worktree, and the
+  reviewer lane is stabilized by a tool-free Claude invocation plus a
+  worktree-only review contract
 
 ### OpenCode
 
-- OpenCode auto/default host integration now uses the official wrapper launch
-  path instead of the managed provider path
-- the wrapper contract is known-good for minimal prompts when invoked as
-  `ollama launch opencode --model <model> -- run ...`
-- managed provider support remains available for explicit `strategy: managed`,
-  using `lineup-ollama/<model>` as the qualified selector
-- the remaining OpenCode work is full-pipeline stabilization on the wrapper
-  launch path, not provider lookup or config injection
-
-Implication:
-
-- OpenCode is no longer blocked on provider selection or on the default host
-  launch contract
-- any remaining failures should now be debugged against the wrapper path's live
-  pipeline behavior rather than the older managed-mode contract
+- auto/default execution uses the official wrapper launch path
+- explicit `strategy: managed` still keeps the `lineup-ollama/<model>` selector
+  available
+- the wrapper path is stable for the bounded pipeline smoke task and bundled
+  `explain`
 
 ### Codex
 
-- the process starts on `provider: ollama`
-- the stderr log shows active reasoning/progress, so the host is not dead
-- the runner already watches both the expected artifact path and Codex's direct
-  `-o` output path
-- research normalization now repairs one common local-model artifact shape:
-  `what_found` may arrive as an array of `{ path, content }` entries and is
-  rewritten into the structured `key_files` object that the Research schema
-  expects
-- research normalization also repairs one common colon-heavy scalar shape in
-  `how_it_works`, where local models emit a single unquoted line containing
-  additional `: ` sequences that would otherwise be invalid YAML
-- reviewer normalization now accepts both `**Status: PASS**` and
-  `**Status**: PASS` markdown styles instead of treating the second form as a
-  fatal YAML parse failure
-- native implement/review local-runner invocations now stay fully inside the
-  isolated worktree, so Codex no longer receives the source repo root through
-  the local human-native path during implement/verify
-- the older append-task ambiguity is gone because the smoke task now uses a
-  placeholder-replacement contract in `README.md`
-- reviewer normalization now also repairs the common colon-heavy scalar
-  `test_results:` line that local models can emit
-- live smoke run `be7176` under the `zFHtPJ` smoke root now completes the full
-  pipeline successfully on `qwen3-coder:30b`
-
-Implication:
-
-- Codex is no longer blocked on provider selection, source-repo leakage, or
-  malformed bounded-pipeline review output
-- the remaining Codex work is explain-tactic validation and general smoke
-  throughput, not a known main-pipeline contract failure
+- default live execution uses `codex exec --oss --local-provider ollama`
+- the runner watches both the final artifact path and Codex's direct `-o`
+  output path
+- research and review normalization cover the local-model artifact shapes that
+  previously broke bounded smoke runs
 
 ## Recommended configs
 

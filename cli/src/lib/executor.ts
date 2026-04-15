@@ -675,6 +675,7 @@ async function scopeExistsInWorkspace(worktreeRoot: string, scope: string): Prom
 
 async function captureWorkspacePatch(
   worktreeRoot: string,
+  baselineHead: string,
   artifactDir: string,
   tasksArtifact: CompiledTasksArtifact
 ): Promise<string | undefined> {
@@ -689,11 +690,11 @@ async function captureWorkspacePatch(
     return undefined;
   }
 
-  const addResult = await runCommand("git", ["-C", worktreeRoot, "add", "-A"]);
+  const addResult = await runCommand("git", ["-C", worktreeRoot, "add", "-A", "--", ...scopes]);
   assertSuccess(addResult, `git add -A for ${worktreeRoot}`);
 
-  const diffResult = await runCommand("git", ["-C", worktreeRoot, "diff", "--cached", "--binary", "HEAD", "--", ...scopes]);
-  assertSuccess(diffResult, `git diff --cached --binary HEAD for ${worktreeRoot}`);
+  const diffResult = await runCommand("git", ["-C", worktreeRoot, "diff", "--cached", "--binary", baselineHead, "--", ...scopes]);
+  assertSuccess(diffResult, `git diff --cached --binary ${baselineHead} for ${worktreeRoot}`);
 
   const patch = diffResult.stdout;
   if (patch.trim().length === 0) {
@@ -1282,6 +1283,10 @@ function buildDeveloperExtraInstructions(input: {
         "Native Lineup task:",
         "- Apply edits directly in the provided worktree.",
         "- Keep the change strictly inside the declared write scope.",
+        "- Read the target files in the write scope before editing them.",
+        "- Make the requested file changes on disk before returning.",
+        "- Do not stage, commit, stash, or otherwise clean the worktree.",
+        "- A claimed change with no workspace diff is treated as failure.",
         "- Return JSON only with status, summary, changes_made[], and issues_encountered[].",
         `- Task ID: ${input.task.id}`,
         `- Wave: ${input.task.wave}`,
@@ -1349,6 +1354,9 @@ function buildReviewerPrompt(input: {
     ? [
         "Native Lineup review:",
         "- Review the completed implementation against the approved plan.",
+        "- Treat the provided workspace diff and changed files as the source of truth.",
+        "- Ignore .lineup, .lineup-core, and other runtime scaffolding unless they appear in changes_made or the workspace diff.",
+        "- Do not modify, stage, commit, or clean files while reviewing.",
         "- Return only the final structured Review payload.",
         ...(input.outputPath
           ? [`- Write or emit the payload for ${input.outputPath}.`]
@@ -1493,8 +1501,48 @@ function mergeImplementationResult(
   }
 }
 
+function collectScopedWorkspaceChanges(
+  workspaceRoot: string,
+  baselineHead: string,
+  scope: string[]
+): string[] {
+  if (scope.length === 0) {
+    return []
+  }
+
+  const addResult = spawnSync("git", ["add", "-A", "--", ...scope], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: process.env
+  })
+
+  if (addResult.status !== 0) {
+    return []
+  }
+
+  const diffResult = spawnSync("git", ["diff", "--cached", "--name-only", baselineHead, "--", ...scope], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: process.env
+  })
+
+  if (diffResult.status !== 0) {
+    return []
+  }
+
+  return diffResult.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const renameParts = line.split(" -> ")
+      return renameParts.at(-1)?.trim() ?? line
+    })
+}
+
 function inferTaskChangesFromWorkspace(
   workspaceRoot: string,
+  baselineHead: string,
   task: CompiledTask,
   result: NativeTaskExecutionResult
 ): NativeTaskExecutionResult {
@@ -1503,25 +1551,7 @@ function inferTaskChangesFromWorkspace(
     return result
   }
 
-  const status = spawnSync("git", ["status", "--short", "--untracked-files=all", "--", ...scope], {
-    cwd: workspaceRoot,
-    encoding: "utf8",
-    env: process.env
-  })
-
-  if (status.status !== 0) {
-    return result
-  }
-
-  const changedFiles = status.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const rawPath = line.slice(3).trim()
-      const renameParts = rawPath.split(" -> ")
-      return renameParts.at(-1)?.trim() ?? rawPath
-    })
+  const changedFiles = collectScopedWorkspaceChanges(workspaceRoot, baselineHead, scope)
 
   if (changedFiles.length === 0) {
     if ((result.changes_made?.length ?? 0) > 0) {
@@ -1549,6 +1579,7 @@ function inferTaskChangesFromWorkspace(
 
 function buildWorkspaceDiffContext(
   workspaceRoot: string,
+  baselineHead: string,
   implementationState: ImplementationState
 ): string | undefined {
   const changedFiles = [...new Set(
@@ -1561,7 +1592,17 @@ function buildWorkspaceDiffContext(
     return undefined
   }
 
-  const diff = spawnSync("git", ["diff", "--", ...changedFiles], {
+  const addResult = spawnSync("git", ["add", "-A", "--", ...changedFiles], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    env: process.env
+  })
+
+  if (addResult.status !== 0) {
+    return undefined
+  }
+
+  const diff = spawnSync("git", ["diff", "--cached", "--binary", baselineHead, "--", ...changedFiles], {
     cwd: workspaceRoot,
     encoding: "utf8",
     env: process.env
@@ -1700,7 +1741,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
                 timeoutMs: 600_000,
                 previousErrors: retryContext.previousErrors
               });
-              const result = inferTaskChangesFromWorkspace(workspace.worktreeRoot, task, rawResult)
+              const result = inferTaskChangesFromWorkspace(workspace.worktreeRoot, workspace.baselineHead, task, rawResult)
 
               options.emitProtocol(
                 createLineupNotification({
@@ -1733,7 +1774,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
 
     options.emitStatus("implement", "Native task execution completed.", true);
 
-    const workspaceDiff = buildWorkspaceDiffContext(workspace.worktreeRoot, implementationState)
+    const workspaceDiff = buildWorkspaceDiffContext(workspace.worktreeRoot, workspace.baselineHead, implementationState)
     const reviewPrompt = buildReviewerPrompt({
       projectRoot: options.projectRoot,
       host: options.host,
@@ -1794,7 +1835,7 @@ export async function executeNativeExecutor(options: NativeExecutorOptions): Pro
     const normalizedReviewYaml = normalizeReviewArtifact(reviewResult.reviewYaml, path.join(options.artifactDir, "review.yaml"));
     validateReviewYaml(normalizedReviewYaml, path.join(options.artifactDir, "review.yaml"));
     const reviewRecord = options.artifactStore.persistText("review", normalizedReviewYaml, "yaml");
-    const workspacePatchPath = await captureWorkspacePatch(workspace.worktreeRoot, options.artifactDir, tasksArtifact);
+    const workspacePatchPath = await captureWorkspacePatch(workspace.worktreeRoot, workspace.baselineHead, options.artifactDir, tasksArtifact);
     const parsedReview = parseRestrictedYaml(normalizedReviewYaml, reviewRecord.path) as Record<string, unknown>;
 
     options.emitProtocol(

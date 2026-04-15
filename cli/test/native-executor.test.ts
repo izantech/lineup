@@ -823,6 +823,65 @@ risks:
     expect(result.verifyResult.outputs.status).toBe("PASS");
   });
 
+  it("captures committed isolated-worktree changes relative to the baseline head", async () => {
+    const driver: NativeExecutionDriver = {
+      async executeTask(input) {
+        const changedFile = writeTaskScopedChange(input.workspaceRoot, input.task.write_scope?.[0], "committed");
+        execSync(`git -C "${input.workspaceRoot}" add "${changedFile}"`, { stdio: "ignore" });
+        execSync(`git -C "${input.workspaceRoot}" commit -m "apply ${input.task.id}"`, { stdio: "ignore" });
+
+        return {
+          status: "complete",
+          summary: `completed ${input.task.id}`,
+          changes_made: [
+            {
+              file: changedFile,
+              description: "committed change",
+              task_id: input.task.id
+            }
+          ],
+          issues_encountered: []
+        };
+      },
+      async executeReview(input) {
+        expect(input.prompt).toContain("Workspace diff:");
+        expect(input.prompt).toContain("updated committed");
+        return { reviewYaml: PASS_REVIEW };
+      }
+    };
+
+    const result = await executeNativeExecutor({
+      runId: "testrun",
+      projectRoot,
+      runRoot: join(projectRoot, ".lineup", ".runs", "testrun"),
+      artifactDir: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts"),
+      planPath: join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "plan.yaml"),
+      gitTreeSha: "abc123",
+      artifactStore: createArtifactStore(join(projectRoot, ".lineup", ".artifacts")),
+      nextProtocolRequestId: (() => {
+        let id = 1;
+        return () => id++;
+      })(),
+      emitProtocol() {},
+      emitStatus() {},
+      implementStage: {
+        id: "implement",
+        type: "agent",
+        agent: "developer"
+      },
+      verifyStage: {
+        id: "verify",
+        type: "agent",
+        agent: "reviewer"
+      },
+      driver
+    });
+
+    expect(result.workspacePatchPath).toBeTruthy();
+    await applyWorkspacePatch(projectRoot, result.workspacePatchPath);
+    expect(readFileSync(join(projectRoot, "cli", "src", "lib", "executor.ts"), "utf8")).toContain("updated committed");
+  });
+
   it("applies captured workspace patches back to the source repository", async () => {
     const patchPath = join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native", "workspace.patch");
     mkdirSync(join(projectRoot, ".lineup", ".runs", "testrun", "artifacts", "native"), { recursive: true });
