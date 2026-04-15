@@ -139,7 +139,9 @@ const SUPPORTED_HOSTS: HostName[] = ["claude", "codex", "opencode"];
 
 const PIPELINE_SMOKE_PROMPT = [
   "Run the full Lineup smoke pipeline on this tiny repository.",
-  "Make one deterministic change: append a second sentence to README.md stating that this repo validates Ollama host execution.",
+  "Make one deterministic change: replace the placeholder line `REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION` in README.md with exactly one sentence: 'This repo validates Ollama host execution.'",
+  "Do not add the sentence more than once.",
+  "The final README.md must contain that sentence exactly once and must not contain the placeholder text.",
   "For research, inspect only README.md, .lineup-core/workflows/full-pipeline.yaml, and .lineup/tactics/example.yaml unless a later stage truly requires more.",
   "Do not inspect Ollama service health, host CLI configuration, runtime logs, bridge files, or network endpoints.",
   "Keep every artifact concise, structured, and scoped to this tiny repo.",
@@ -297,7 +299,11 @@ function initGitRepo(repoDir: string): void {
     "git config user.name",
     runHostCommand(repoDir, ["git", "config", "user.name", "Lineup Smoke"])
   );
-  writeFileSync(path.join(repoDir, "README.md"), "# Lineup Ollama smoke\n", "utf8");
+  writeFileSync(
+    path.join(repoDir, "README.md"),
+    "# Lineup Ollama smoke\n\nREPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION\n",
+    "utf8"
+  );
   assertExitZero("git add", runHostCommand(repoDir, ["git", "add", "README.md"]));
   assertExitZero("git commit", runHostCommand(repoDir, ["git", "commit", "-m", "Initial commit"]));
 }
@@ -538,7 +544,10 @@ function filterPathWithoutBinary(binaryName: string): string {
 }
 
 function answerBridgeQuestion(repoDir: string, homeDir: string, runId: string, question: { requestId: number; choices?: string[]; defaultChoice?: string }): void {
-  const choice = question.defaultChoice ?? question.choices?.[0];
+  let choice = question.defaultChoice ?? question.choices?.[0];
+  if (question.choices?.includes("abort") && question.choices.includes("retry")) {
+    choice = "abort";
+  }
   if (!choice) {
     throw new CliError(`Bridge question ${question.requestId} did not include an answer choice.`, {
       code: "smoke_ollama_missing_bridge_choice"
@@ -704,6 +713,15 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
       }
 
       const bridgeDebugPaths = resolveRunDebugPaths(repoDir, bridgePayload.runId);
+      summary.bridgeRunId = bridgePayload.runId;
+      summary.bridgeRunRoot = bridgeDebugPaths.runRoot;
+      summary.bridgeHostTraceRoot = bridgeDebugPaths.hostTraceRoot;
+      summary.bridgeEventsPath = bridgeDebugPaths.bridgeEventsPath;
+      summary.bridgeStdoutPath = bridgeDebugPaths.bridgeStdoutPath;
+      summary.bridgeStderrPath = bridgeDebugPaths.bridgeStderrPath;
+      summary.bridgeStatePath = bridgeDebugPaths.statePath;
+      summary.bridgeDebugBundlePath = bridgeDebugPaths.debugBundlePath;
+      summary.bridgeTraceFiles = listHostTraceFiles(bridgeDebugPaths.hostTraceRoot);
 
       const events = waitForBridgeCompletion(repoDir, homeDir, bridgePayload.runId);
       const completeEvent = [...events.events].reverse().find((event) => event.type === "complete");
@@ -713,28 +731,42 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
         });
       }
 
-      const explainRunSnapshot = snapshotRunIds(repoDir);
-      const explainResult = runDistCli(
+      const explainStart = runDistCli(
         [
-          "run",
+          "bridge",
+          "start",
           "Explain the bundled explain tactic and confirm the smoke path.",
+          "--executor-host",
+          host,
           "--tactic",
           "explain",
           "--host",
           host,
-          "--mode",
-          "human",
-          "--workflow",
-          workflowPath,
-          "--approve-plan"
+          "--json"
         ],
         repoDir,
         homeDir,
         envOverrides
       );
-      assertExitZero(`lineup run --tactic explain (${host})`, explainResult);
-      const explainRunId = detectNewestNewRunId(repoDir, explainRunSnapshot);
-      const explainDebugPaths = explainRunId ? resolveRunDebugPaths(repoDir, explainRunId) : null;
+      assertExitZero(`lineup bridge start --tactic explain (${host})`, explainStart);
+      const explainPayload = parseJson<BridgeStartPayload>("bridge start explain", explainStart.stdout);
+      if (explainPayload.executorHost !== host) {
+        throw new CliError(`bridge start returned executor host '${explainPayload.executorHost}' for explain '${host}'.`, {
+          code: "smoke_ollama_bad_explain_bridge_payload"
+        });
+      }
+      const explainDebugPaths = resolveRunDebugPaths(repoDir, explainPayload.runId);
+      summary.explainRunId = explainPayload.runId;
+      summary.explainRunRoot = explainDebugPaths.runRoot;
+      summary.explainHostTraceRoot = explainDebugPaths.hostTraceRoot;
+      summary.explainTraceFiles = listHostTraceFiles(explainDebugPaths.hostTraceRoot);
+      const explainEvents = waitForBridgeCompletion(repoDir, homeDir, explainPayload.runId);
+      const explainComplete = [...explainEvents.events].reverse().find((event) => event.type === "complete");
+      if (!explainComplete || explainComplete.status !== "succeeded") {
+        throw new CliError(`Explain bridge run ${explainPayload.runId} did not complete successfully.`, {
+          code: "smoke_ollama_explain_incomplete"
+        });
+      }
 
       return {
         host,
@@ -755,10 +787,10 @@ function runHostSmoke(host: HostName, options: SmokeOptions, rootDir: string): H
         bridgeStatePath: bridgeDebugPaths.statePath,
         bridgeDebugBundlePath: bridgeDebugPaths.debugBundlePath,
         bridgeTraceFiles: listHostTraceFiles(bridgeDebugPaths.hostTraceRoot),
-        explainRunId: explainRunId ?? undefined,
-        explainRunRoot: explainDebugPaths?.runRoot,
-        explainHostTraceRoot: explainDebugPaths?.hostTraceRoot,
-        explainTraceFiles: listHostTraceFiles(explainDebugPaths?.hostTraceRoot)
+        explainRunId: explainPayload.runId,
+        explainRunRoot: explainDebugPaths.runRoot,
+        explainHostTraceRoot: explainDebugPaths.hostTraceRoot,
+        explainTraceFiles: listHostTraceFiles(explainDebugPaths.hostTraceRoot)
       };
     };
 

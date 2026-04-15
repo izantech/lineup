@@ -830,7 +830,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
   return {
     async executeTask(input) {
       const result = await localAgentRunner.invoke({
-        projectRoot: input.projectRoot,
+        projectRoot: input.workspaceRoot,
         workingDirectory: input.workspaceRoot,
         agent: "developer",
         prompt: input.prompt,
@@ -843,7 +843,7 @@ function createHumanNativeDriver(localAgentRunner?: LocalAgentRunner): NativeExe
     async executeReview(input) {
       const reviewPath = resolve(input.artifactDir, "review.yaml");
       const result = await localAgentRunner.invoke({
-        projectRoot: input.projectRoot,
+        projectRoot: input.workspaceRoot,
         workingDirectory: input.workspaceRoot,
         agent: "reviewer",
         prompt: input.prompt,

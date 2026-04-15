@@ -46,7 +46,11 @@ The smoke command is:
 - `npm --prefix cli run smoke:ollama-hosts -- --host claude|codex|opencode|all --model <model> [--base-url <url>] [--keep-temp]`
 
 It is local-only and should not be added to CI. Until all hosts are green, run
-the smoke lanes per host instead of relying on `--host all`.
+the smoke lanes per host instead of relying on `--host all`. The smoke task is
+a bounded placeholder replacement in `README.md`, the bundled `explain` tactic
+is exercised through the bridge API rather than interactive human mode, and the
+smoke runner answers verify gates with `abort` when `retry` is also present so
+bad local-model output fails fast instead of compounding.
 
 When updating pipeline behavior, keep the CLI, `.lineup-core/skills/**`, and `docs/`
 aligned on that contract.

@@ -258,6 +258,16 @@ Current instrumentation:
 - OpenCode research guidance now explicitly forbids making the requested code
   change during research and warns that `read` output is display-rendered, not
   edit-ready raw text
+- native implement/review local-runner invocations now use the isolated
+  worktree as both `projectRoot` and `workingDirectory`, so Codex no longer
+  receives the source repo path through the local native execution path
+- the live smoke task now replaces a fixed placeholder in `README.md` instead
+  of asking the model to append a sentence, which removes one source of tiny-
+  repo ambiguity in local-model validation
+- the smoke runner now validates the bundled `explain` tactic through the
+  bridge API instead of interactive human mode, and it chooses `abort` over
+  `retry` for verify gates so smoke failures stop at the first bad local-model
+  result instead of compounding
 
 Comprehensive fix plan:
 
@@ -306,11 +316,14 @@ Comprehensive fix plan:
        deterministic target
      - normalize array-shaped `what_found` entries into structured `key_files`
        so one common local-model artifact shape no longer fails validation
-   - remaining:
      - keep native local-host execution fully inside the isolated worktree so
        the final `workspace.patch` applies cleanly back to the source repo
      - rerun Codex on top of the current branch once the local-runner root leak
        is fixed
+   - remaining:
+     - harden the review artifact path: the latest bounded Codex smoke run now
+       reaches review and fails on malformed `review.yaml` instead of provider
+       routing or source-repo leakage
    - if needed after that, add a Codex-specific completion helper that can
      recover a valid research artifact from returned output when the file is not
      written

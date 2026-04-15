@@ -171,7 +171,12 @@ This command:
 - runs `lineup doctor --json`
 - runs one full pipeline task and one bundled `explain` tactic task per selected host
 - uses a deterministic tiny-repo pipeline prompt instead of a generic freeform smoke request
+- runs the bundled `explain` tactic through `lineup bridge start|events|answer`
+  instead of an interactive `lineup run --mode human` call
 - drives bridge questions through the bridge contract
+- answers `verify-decision` gates with `abort` when both `retry` and `abort`
+  are available so the smoke lane fails fast on bad local-model output instead
+  of compounding it with retries
 - asserts terminal success and captures artifacts/config output
 - treats bridge events plus host trace/log/artifact growth as progress
 - preserves the temp workspace on failure or stall so host-specific debugging
@@ -210,7 +215,10 @@ changing the final output schema or validation rules.
 
 The local smoke lane also uses a deterministic tiny-repo task:
 
-- append a second sentence to `README.md`
+- replace the placeholder line `REPLACE_ME_VALIDATE_OLLAMA_HOST_EXECUTION` in
+  `README.md` with exactly `This repo validates Ollama host execution.`
+- require the final `README.md` to contain that sentence exactly once and to no
+  longer contain the placeholder
 - inspect only `README.md`, `.lineup-core/workflows/full-pipeline.yaml`, and `.lineup/tactics/example.yaml` during research unless later stages truly require more
 - avoid host/service/config/runtime-log exploration during research
 - keep research read-only even when the overall smoke task later requires an implementation change
@@ -295,18 +303,24 @@ Implication:
 - reviewer normalization now accepts both `**Status: PASS**` and
   `**Status**: PASS` markdown styles instead of treating the second form as a
   fatal YAML parse failure
+- native implement/review local-runner invocations now stay fully inside the
+  isolated worktree, so Codex no longer receives the source repo root through
+  the local human-native path during implement/verify
 - tighter researcher prompts and stricter pre-stage artifact validation did not
   eliminate the completion failure
-- the latest preserved live Codex failure moved forward into isolated-worktree
-  application: the generated `workspace.patch` no longer applies cleanly
-  because the host still touched the source repo path instead of staying fully
-  inside the temporary worktree during implement/verify
+- the older append-task ambiguity is gone because the smoke task now uses a
+  placeholder-replacement contract in `README.md`
+- the latest preserved live Codex failure moved forward again: run `1d2e5f`
+  under the `aBFDYI` smoke root completed research, plan, and native implement,
+  then failed on malformed `review.yaml`
 
 Implication:
 
-- Codex is no longer blocked on provider selection or artifact parsing
-- the next Codex fix is to keep native local-host execution fully inside the
-  isolated workspace so the final patch can apply back to the source repo
+- Codex is no longer blocked on provider selection or source-repo leakage in
+  the local native path
+- the next Codex fix is to harden reviewer normalization or the Codex review
+  prompt so malformed `review.yaml` from the bounded smoke task no longer ends
+  the run
 
 ## Recommended configs
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { rmSync } from "node:fs";
@@ -778,11 +778,18 @@ stages:
 `);
 
     const capturedPrompts: Array<{ agent: string; prompt: string }> = [];
+    const capturedInvocations: Array<{ agent: string; projectRoot: string; workingDirectory: string }> = [];
+    const canonicalProjectRoot = realpathSync(projectRoot);
 
     const localAgentRunner: LocalAgentRunner = {
       host: "claude",
       async invoke(input) {
         capturedPrompts.push({ agent: input.agent, prompt: input.prompt });
+        capturedInvocations.push({
+          agent: input.agent,
+          projectRoot: input.projectRoot,
+          workingDirectory: input.workingDirectory
+        });
         if (input.agent === "researcher") {
           return {
             host: "claude",
@@ -867,6 +874,24 @@ gaps:
       expect(result.stageResults.get("plan")?.outputs).toHaveProperty("planPath");
       expect(result.stageResults.get("implement")?.outputs).toHaveProperty("task_results");
       expect(result.stageResults.get("verify")?.outputs).toHaveProperty("status", "PASS");
+      expect(capturedInvocations.find((entry) => entry.agent === "researcher")).toMatchObject({
+        projectRoot: canonicalProjectRoot,
+        workingDirectory: canonicalProjectRoot
+      });
+      expect(capturedInvocations.find((entry) => entry.agent === "architect")).toMatchObject({
+        projectRoot: canonicalProjectRoot,
+        workingDirectory: canonicalProjectRoot
+      });
+
+      const developerInvocation = capturedInvocations.find((entry) => entry.agent === "developer");
+      expect(developerInvocation).toBeDefined();
+      expect(developerInvocation?.projectRoot).toBe(developerInvocation?.workingDirectory);
+      expect(developerInvocation?.projectRoot).not.toBe(canonicalProjectRoot);
+
+      const reviewerInvocation = capturedInvocations.find((entry) => entry.agent === "reviewer");
+      expect(reviewerInvocation).toBeDefined();
+      expect(reviewerInvocation?.projectRoot).toBe(reviewerInvocation?.workingDirectory);
+      expect(reviewerInvocation?.projectRoot).not.toBe(canonicalProjectRoot);
     } finally {
       process.chdir(origCwd);
     }
