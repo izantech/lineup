@@ -1873,12 +1873,22 @@ async function executePreStage(
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
+    if (runMode === "human") {
+      emitStatus(stage.id, "No concrete clarification questions were generated; skipping interactive clarify gate.", true);
+      return { id: stage.id, status: "complete", outputs: {} };
+    }
+
     const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout, onHumanGatePromptStart, onHumanGatePromptEnd);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
+    if (runMode === "human") {
+      emitStatus(stage.id, "No concrete follow-up clarification questions were generated; skipping interactive clarification gate.", true);
+      return { id: stage.id, status: "complete", outputs: {} };
+    }
+
     const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout, onHumanGatePromptStart, onHumanGatePromptEnd);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };

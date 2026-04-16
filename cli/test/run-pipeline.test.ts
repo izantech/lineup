@@ -282,7 +282,8 @@ stages:
 
   it("pauses and resumes the human TUI around interactive gates", async () => {
     const projectRoot = join(tempDir, "project-human-gate");
-    mkdirSync(projectRoot, { recursive: true });
+    writeTemplatesTo(projectRoot);
+    initGitRepo(projectRoot);
 
     const workflowDir = join(projectRoot, ".lineup-core", "workflows");
     mkdirSync(workflowDir, { recursive: true });
@@ -292,24 +293,44 @@ apiVersion: lineup/v3
 kind: Workflow
 name: human-gate
 stages:
-  - id: clarify
+  - id: triage
     type: builtin
-    description: "Ask for clarification before continuing."
+  - id: plan
+    type: agent
+    agent: architect
+    depends_on: [triage]
+  - id: plan-approval
+    type: approval
+    depends_on: [plan]
 `);
 
     const gateModule = await import("../src/lib/interactive-gate.js");
     const runtimeUiModule = await import("../src/lib/ui/runtime-screen.js");
-    const handleGateSpy = vi.spyOn(gateModule, "handleInteractiveGate").mockImplementation(async (_gate, hooks = {}) => {
+    const handleGateSpy = vi.spyOn(gateModule, "handleInteractiveGate").mockImplementation(async (gate, hooks = {}) => {
       await hooks.onPromptStart?.();
       await hooks.onPromptEnd?.();
       return {
-        requestId: 1,
-        choice: "No clarification needed",
+        requestId: gate.requestId,
+        choice: gate.gateType === "approval" ? "approve" : "No clarification needed",
         respondedAt: new Date().toISOString()
       };
     });
     const pauseSpy = vi.spyOn(runtimeUiModule.HumanRunRenderer.prototype, "pause").mockResolvedValue();
     const resumeSpy = vi.spyOn(runtimeUiModule.HumanRunRenderer.prototype, "resume").mockResolvedValue();
+    const localAgentRunner: LocalAgentRunner = {
+      host: "claude",
+      async invoke(input) {
+        if (input.agent !== "architect") {
+          throw new Error(`Unexpected agent ${input.agent}`);
+        }
+
+        return {
+          host: "claude",
+          stderr: "",
+          content: APPROVED_PLAN
+        };
+      }
+    };
 
     const { runPipeline } = await import("../src/lib/run-pipeline.js");
     const origCwd = process.cwd();
@@ -319,10 +340,13 @@ stages:
       const result = await runPipeline({
         workflow: workflowPath,
         mode: "human",
+      }, {
+        localAgentRunner
       });
 
       expect(result.status).toBe("success");
       expect(handleGateSpy).toHaveBeenCalledTimes(1);
+      expect(handleGateSpy.mock.calls[0]?.[0].gateType).toBe("approval");
       expect(pauseSpy).toHaveBeenCalledTimes(1);
       expect(resumeSpy).toHaveBeenCalledTimes(1);
     } finally {
@@ -330,7 +354,7 @@ stages:
     }
   });
 
-  it("routes reasoning-based clarify stages through the interactive gate path", async () => {
+  it("auto-skips generic reasoning-based clarify stages in human mode", async () => {
     const projectRoot = join(tempDir, "project-reasoning-clarify");
     mkdirSync(projectRoot, { recursive: true });
 
@@ -370,11 +394,8 @@ stages:
       });
 
       expect(result.status).toBe("success");
-      expect(handleGateSpy).toHaveBeenCalledTimes(1);
-      expect(handleGateSpy.mock.calls[0]?.[0].gateType).toBe("clarify");
-      expect(result.stageResults.get("clarify")?.outputs).toMatchObject({
-        requirements: "No clarification needed"
-      });
+      expect(handleGateSpy).not.toHaveBeenCalled();
+      expect(result.stageResults.get("clarify")?.outputs).toEqual({});
     } finally {
       process.chdir(origCwd);
     }
