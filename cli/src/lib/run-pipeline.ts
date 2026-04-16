@@ -67,7 +67,7 @@ import { CliError } from "./errors.js";
 import { inspectGitProject } from "./git.js";
 import { DEFAULT_OLLAMA, readOllamaConfig, requireOllamaModel } from "./config.js";
 import { buildAgentSystemPrompt } from "./prompt-builder.js";
-import { HumanRunRenderer } from "./ui/runtime.js";
+import { HumanRunRenderer } from "./ui/runtime-screen.js";
 
 
 export type PipelineResult = {
@@ -175,7 +175,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
     ),
     projectRoot
   );
-  const humanRenderer = runMode === "human" ? new HumanRunRenderer(workflow) : null;
+  const humanRenderer = runMode === "human" ? new HumanRunRenderer(workflow, projectRoot) : null;
 
   const emitProtocol = (message: LineupProtocolMessage): void => {
     protocolMessages.push(message);
@@ -372,13 +372,15 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                 error,
                 timeoutMs ? Math.round(timeoutMs / 1000) : undefined
               );
-            }
+            },
+            () => humanRenderer?.pause(),
+            () => humanRenderer?.resume(pipelineState)
           );
           stageResults.set(stageId, result);
           expressionCtx.stages[stageId] = { outputs: result.outputs };
           if (result.status === "blocked") {
             pipelineState = savePipelineState({ ...pipelineState, status: "blocked" }, projectRoot);
-            humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
+            await humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
             return { runId, status: "blocked", stageResults };
           }
 
@@ -431,7 +433,10 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
             );
             let gateResponse;
             if (runMode === "human") {
-              gateResponse = await handleInteractiveGate(pendingGate);
+              gateResponse = await handleInteractiveGate(pendingGate, {
+                onPromptStart: () => humanRenderer?.pause(),
+                onPromptEnd: () => humanRenderer?.resume(pipelineState)
+              });
             } else {
               writePendingGate(runId, pendingGate, projectRoot);
 
@@ -465,7 +470,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     err,
                     options.gateTimeout
                   );
-                  humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
+                  await humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
                   return { runId, status: "blocked", stageResults };
                 }
                 throw err;
@@ -574,7 +579,10 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                     recordPendingGateState(pipelineState, pendingGate, options.gateTimeout),
                     projectRoot
                   );
-                  gateResponse = await handleInteractiveGate(pendingGate);
+                  gateResponse = await handleInteractiveGate(pendingGate, {
+                    onPromptStart: () => humanRenderer?.pause(),
+                    onPromptEnd: () => humanRenderer?.resume(pipelineState)
+                  });
                 } else {
                   pipelineState = savePipelineState(
                     recordPendingGateState(pipelineState, pendingGate, options.gateTimeout),
@@ -608,7 +616,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
                         err,
                         options.gateTimeout
                       );
-                      humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
+                      await humanRenderer?.finish(pipelineState, `Run ${runId} is blocked. Resume with \`lineup resume ${runId}\` when ready.`);
                       return { runId, status: "blocked", stageResults };
                     }
                     throw err;
@@ -740,7 +748,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
-    humanRenderer?.finish(pipelineState, completionSummary);
+    await humanRenderer?.finish(pipelineState, completionSummary);
     if (runMode === "human") {
       notifyPipelineComplete(runId, "succeeded", "Pipeline completed successfully.");
     }
@@ -784,7 +792,7 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
       ),
       projectRoot
     );
-    humanRenderer?.finish(pipelineState, failureMessage);
+    await humanRenderer?.finish(pipelineState, failureMessage);
     if (runMode === "human") {
       notifyPipelineComplete(runId, "failed", error instanceof Error ? error.message : String(error));
     }
@@ -1856,18 +1864,20 @@ async function executePreStage(
   ollamaModel?: string,
   onGatePending?: (gate: PendingGate, stageId: string, timeoutMs?: number) => void,
   onGateResolved?: (gateType: LineupGateType, response: GateResponse, stageId: string) => void,
-  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
+  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void,
+  onHumanGatePromptStart?: () => void | Promise<void>,
+  onHumanGatePromptEnd?: () => void | Promise<void>
 ): Promise<StageResult> {
   emitStatus(stage.id, `Starting ${stage.type} stage '${stage.id}'.`);
 
   if (stage.id === "clarify") {
-    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout);
+    const result = await emitGateAndWait(stage, "clarify", "Review the user's request and identify any ambiguities that need clarification.", ["No clarification needed", "Ask questions"], "No clarification needed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout, onHumanGatePromptStart, onHumanGatePromptEnd);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
 
   if (stage.id === "gate") {
-    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout);
+    const result = await emitGateAndWait(stage, "clarification", "Review research findings. Are there unresolved ambiguities?", ["No ambiguities \u2014 proceed", "Ask clarification questions"], "No ambiguities \u2014 proceed", runId, projectRoot, nextRequestId, emitProtocol, emitStatus, true, gateTimeoutMs, runMode, undefined, onGatePending, onGateResolved, onGateTimeout, onHumanGatePromptStart, onHumanGatePromptEnd);
     if (result.status !== "complete") return result;
     return { ...result, outputs: { resolved_requirements: result.outputs.choice, reason: result.outputs.reason } };
   }
@@ -1897,7 +1907,9 @@ async function executePreStage(
         contextPayload,
         onGatePending,
         onGateResolved,
-        onGateTimeout
+        onGateTimeout,
+        onHumanGatePromptStart,
+        onHumanGatePromptEnd
       );
 
       if (classifyResult.status !== "complete") return classifyResult;
@@ -2220,7 +2232,9 @@ async function emitGateAndWait(
   context?: string,
   onGatePending?: (gate: PendingGate, stageId: string, timeoutMs?: number) => void,
   onGateResolved?: (gateType: LineupGateType, response: GateResponse, stageId: string) => void,
-  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void
+  onGateTimeout?: (error: GateTimeoutError, stageId: string, timeoutMs?: number) => void,
+  onHumanGatePromptStart?: () => void | Promise<void>,
+  onHumanGatePromptEnd?: () => void | Promise<void>
 ): Promise<StageResult> {
   const reqId = nextRequestId();
   const pendingGate: PendingGate = {
@@ -2238,7 +2252,10 @@ async function emitGateAndWait(
 
   let gateResponse;
   if (runMode === "human") {
-    gateResponse = await handleInteractiveGate(pendingGate);
+    gateResponse = await handleInteractiveGate(pendingGate, {
+      onPromptStart: onHumanGatePromptStart,
+      onPromptEnd: onHumanGatePromptEnd
+    });
   } else {
     writePendingGate(runId, pendingGate, projectRoot);
 

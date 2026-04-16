@@ -8,7 +8,8 @@ import {
 import { printJson, printTableLine } from "../lib/output.js";
 import { loadPipelineState } from "../lib/state.js";
 import { renderWatchDashboard } from "../lib/ui/runtime.js";
-import { LiveRegion, detectTerminalCapabilities } from "../lib/ui/terminal.js";
+import { runWatchDashboardTui } from "../lib/ui/runtime-screen.js";
+import { supportsDynamicTui } from "../lib/ui/terminal.js";
 
 export type ShowCommandOptions = {
   runId: string;
@@ -20,16 +21,22 @@ export type ShowCommandOptions = {
 const TERMINAL_STATUSES = new Set(["blocked", "succeeded", "failed", "canceled"]);
 
 async function runShowWatch(options: ShowCommandOptions): Promise<void> {
-  const region = new LiveRegion(process.stdout, detectTerminalCapabilities(process.stdout));
+  if (supportsDynamicTui(process.stdout)) {
+    await runWatchDashboardTui({
+      runId: options.runId,
+      ...(options.cwd ? { cwd: options.cwd } : {})
+    });
+    return;
+  }
 
   while (true) {
     const state = loadPipelineState(options.runId, options.cwd);
 
     if (!state) {
-      region.finish([`Run not found: ${options.runId}`]);
+      process.stdout.write(`Run not found: ${options.runId}\n`);
       return;
     }
-    region.render(renderWatchDashboard(state, options.cwd));
+    process.stdout.write(`${renderWatchDashboard(state, options.cwd).join("\n")}\n`);
 
     if (TERMINAL_STATUSES.has(state.status)) {
       if (state.status === "blocked") {

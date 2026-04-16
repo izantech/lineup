@@ -1,7 +1,7 @@
 import process from "node:process";
 
 import type { PendingGate } from "../gate-store.js";
-import { loadCompiledTasksForRun, summarizePipelineState } from "../inspection.js";
+import { loadCompiledTasksForRun, summarizePipelineState, type RunSummary } from "../inspection.js";
 import type {
   PipelinePendingGateRecord,
   PipelineStageStateRecord,
@@ -9,7 +9,7 @@ import type {
 } from "../state.js";
 import type { BridgeCompleteEvent, BridgeEvent, BridgeQuestionEvent, BridgeStatusEvent } from "../types.js";
 import type { WorkflowDefinition, WorkflowStage } from "../types.js";
-import { LiveRegion, detectTerminalCapabilities, terminalPalette, terminalSymbols, type TerminalCapabilities } from "./terminal.js";
+import { detectTerminalCapabilities, terminalPalette, terminalSymbols, type TerminalCapabilities } from "./terminal.js";
 
 const KNOWN_STAGE_LABELS: Record<string, string> = {
   triage: "Triage",
@@ -25,6 +25,32 @@ const KNOWN_STAGE_LABELS: Record<string, string> = {
 
 const STAGE_RENDER_ORDER = ["triage", "clarify", "research", "gate", "plan", "plan-approval", "implement", "verify", "document"];
 
+export type RuntimeStageRow = {
+  stageId: string;
+  label: string;
+  status: PipelineStageStateRecord["status"];
+  durationMs: number | null;
+  attemptLabel: string;
+  lastMessage: string;
+  isCurrent: boolean;
+};
+
+export type RuntimeDashboardData = {
+  runId: string;
+  status: PipelineStateRecord["status"];
+  statusLabel: string;
+  elapsedMs: number | null;
+  workflow: string;
+  executionHost: string;
+  runnerHost: string;
+  currentStageHeader: string;
+  currentStageLabel: string;
+  currentStageId?: string;
+  stageRows: RuntimeStageRow[];
+  pendingGate: PipelinePendingGateRecord | null;
+  summary: RunSummary;
+};
+
 export function formatStageLabel(stageId: string): string {
   if (KNOWN_STAGE_LABELS[stageId]) {
     return KNOWN_STAGE_LABELS[stageId];
@@ -36,7 +62,7 @@ export function formatStageLabel(stageId: string): string {
     .join(" ");
 }
 
-function titleCaseStatus(status: string): string {
+export function titleCaseStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -61,7 +87,7 @@ export function formatDuration(durationMs: number | null | undefined): string {
   return `${seconds}s`;
 }
 
-function truncate(value: string, limit: number): string {
+export function truncate(value: string, limit: number): string {
   if (value.length <= limit) {
     return value;
   }
@@ -146,7 +172,7 @@ function renderPendingGateBlock(state: PipelineStateRecord, capabilities: Termin
   return wrapSection("Pending Question", lines, capabilities);
 }
 
-function orderedStageEntries(stageState: Record<string, PipelineStageStateRecord> | undefined): Array<[string, PipelineStageStateRecord]> {
+export function orderedStageEntries(stageState: Record<string, PipelineStageStateRecord> | undefined): Array<[string, PipelineStageStateRecord]> {
   if (!stageState) {
     return [];
   }
@@ -168,7 +194,7 @@ function orderedStageEntries(stageState: Record<string, PipelineStageStateRecord
   });
 }
 
-function inferStageEntries(state: PipelineStateRecord): Array<[string, PipelineStageStateRecord]> {
+export function inferStageEntries(state: PipelineStateRecord): Array<[string, PipelineStageStateRecord]> {
   if (state.stage_state && Object.keys(state.stage_state).length > 0) {
     return orderedStageEntries(state.stage_state);
   }
@@ -194,6 +220,25 @@ function inferStageEntries(state: PipelineStateRecord): Array<[string, PipelineS
   return orderedStageEntries(Object.fromEntries(inferred));
 }
 
+export function stageDurationMs(record: PipelineStageStateRecord, now = Date.now()): number | null {
+  if (record.finished_at && record.started_at) {
+    return Date.parse(record.finished_at) - Date.parse(record.started_at);
+  }
+
+  if (record.started_at) {
+    return now - Date.parse(record.started_at);
+  }
+
+  return null;
+}
+
+export function buildRuntimeDashboardSummary(state: PipelineStateRecord, cwd = process.cwd()): RunSummary {
+  return summarizePipelineState(state, {
+    previousState: undefined,
+    tasks: loadCompiledTasksForRun(state.run_id, cwd)
+  });
+}
+
 function renderStageTable(state: PipelineStateRecord, capabilities: TerminalCapabilities): string[] {
   const entries = inferStageEntries(state);
   if (entries.length === 0) {
@@ -201,12 +246,7 @@ function renderStageTable(state: PipelineStateRecord, capabilities: TerminalCapa
   }
 
   const lines = entries.map(([stageId, record]) => {
-    const durationMs =
-      record.finished_at && record.started_at
-        ? Date.parse(record.finished_at) - Date.parse(record.started_at)
-        : record.started_at
-          ? Date.now() - Date.parse(record.started_at)
-          : null;
+    const durationMs = stageDurationMs(record);
     const attempt =
       record.attempt !== undefined && record.max_attempts !== undefined
         ? `${record.attempt}/${record.max_attempts}`
@@ -226,10 +266,7 @@ export function renderWatchDashboard(
   stream: NodeJS.WriteStream = process.stdout
 ): string[] {
   const capabilities = detectTerminalCapabilities(stream);
-  const summary = summarizePipelineState(state, {
-    previousState: undefined,
-    tasks: loadCompiledTasksForRun(state.run_id, cwd)
-  });
+  const summary = buildRuntimeDashboardSummary(state, cwd);
   const startTime = state.started_at ? Date.parse(state.started_at) : Date.parse(state.updated_at);
   const elapsedMs = Number.isNaN(startTime) ? null : Date.now() - startTime;
   const lines: string[] = [
@@ -276,7 +313,7 @@ function stagePurpose(stage: WorkflowStage | undefined): string {
   return stage?.description?.trim() || "Execute stage work";
 }
 
-function stageHeader(stageId: string, workflow: WorkflowDefinition): string {
+export function stageHeader(stageId: string, workflow: WorkflowDefinition): string {
   const stageMeta = workflowStageMap(workflow).get(stageId);
   if (!stageMeta) {
     return formatStageLabel(stageId);
@@ -285,122 +322,53 @@ function stageHeader(stageId: string, workflow: WorkflowDefinition): string {
   return `Stage ${stageMeta.index}/${stageMeta.total} | ${formatStageLabel(stageId)} | ${stagePurpose(stageMeta.stage)}`;
 }
 
-export class HumanRunRenderer {
-  private readonly workflow: WorkflowDefinition;
-  private readonly capabilities: TerminalCapabilities;
-  private readonly liveRegion: LiveRegion;
-  private readonly stream: NodeJS.WriteStream;
-  private lastStageId: string | null = null;
-  private latestState: PipelineStateRecord | null = null;
-  private refreshTimer: NodeJS.Timeout | null = null;
+export function buildRuntimeDashboardData(
+  state: PipelineStateRecord,
+  options: {
+    summary?: RunSummary;
+    workflow?: WorkflowDefinition;
+    now?: number;
+  } = {}
+): RuntimeDashboardData {
+  const summary = options.summary ?? buildRuntimeDashboardSummary(state);
+  const now = options.now ?? Date.now();
+  const startTime = state.started_at ? Date.parse(state.started_at) : Date.parse(state.updated_at);
+  const elapsedMs = Number.isNaN(startTime) ? null : now - startTime;
+  const currentStageId = state.current_stage;
+  const currentStageHeader = currentStageId
+    ? options.workflow
+      ? stageHeader(currentStageId, options.workflow)
+      : formatStageLabel(currentStageId)
+    : "No active stage";
 
-  constructor(workflow: WorkflowDefinition, stream: NodeJS.WriteStream = process.stderr) {
-    this.workflow = workflow;
-    this.stream = stream;
-    this.capabilities = detectTerminalCapabilities(stream);
-    this.liveRegion = new LiveRegion(stream, this.capabilities);
-  }
-
-  beginStage(stageId: string, state: PipelineStateRecord): void {
-    this.latestState = state;
-    if (this.lastStageId === stageId) {
-      this.startAutoRefresh();
-      return;
-    }
-
-    this.lastStageId = stageId;
-    if (!this.capabilities.isTTY) {
-      this.stream.write(`\n${stageHeader(stageId, this.workflow)}\n`);
-      return;
-    }
-
-    this.startAutoRefresh();
-    this.liveRegion.render(this.dashboardLines(state));
-  }
-
-  update(stageId: string, message: string, state: PipelineStateRecord, final = false): void {
-    this.latestState = state;
-    this.beginStage(stageId, state);
-
-    if (!this.capabilities.isTTY) {
-      const prefix = final ? `${terminalSymbols(this.capabilities).success}` : `${terminalSymbols(this.capabilities).bullet}`;
-      this.stream.write(`${prefix} ${message}\n`);
-      return;
-    }
-
-    this.startAutoRefresh();
-    this.liveRegion.render(this.dashboardLines(state));
-  }
-
-  finish(state: PipelineStateRecord, summary: string): void {
-    this.latestState = state;
-    this.stopAutoRefresh();
-    const capabilities = this.capabilities;
-    const lines = [
-      ...this.dashboardLines(state),
-      "",
-      ...wrapSection("Completion", [summary], capabilities)
-    ];
-
-    if (!capabilities.isTTY) {
-      this.stream.write(`\n${summary}\n`);
-      return;
-    }
-
-    this.liveRegion.finish(lines);
-  }
-
-  pause(): void {
-    this.stopAutoRefresh()
-  }
-
-  resume(state: PipelineStateRecord): void {
-    this.latestState = state
-    if (!this.capabilities.isTTY) {
-      return
-    }
-
-    this.startAutoRefresh()
-    this.liveRegion.render(this.dashboardLines(state))
-  }
-
-  private dashboardLines(state: PipelineStateRecord): string[] {
-    const currentStage = state.current_stage ? stageHeader(state.current_stage, this.workflow) : "No active stage";
-    return [
-      ...wrapSection("Run", [
-        `run_id: ${state.run_id}`,
-        `status: ${titleCaseStatus(state.status)}`,
-        `current: ${currentStage}`
-      ], this.capabilities),
-      "",
-      ...renderStageTable(state, this.capabilities),
-      ...(state.pending_gate ? ["", ...renderPendingGateBlock(state, this.capabilities)] : [])
-    ];
-  }
-
-  private startAutoRefresh(): void {
-    if (!this.capabilities.isTTY || this.refreshTimer) {
-      return
-    }
-
-    this.refreshTimer = setInterval(() => {
-      if (!this.latestState) {
-        return
-      }
-
-      this.liveRegion.render(this.dashboardLines(this.latestState))
-    }, 1_000)
-    this.refreshTimer.unref?.()
-  }
-
-  private stopAutoRefresh(): void {
-    if (!this.refreshTimer) {
-      return
-    }
-
-    clearInterval(this.refreshTimer)
-    this.refreshTimer = null
-  }
+  return {
+    runId: state.run_id,
+    status: state.status,
+    statusLabel: titleCaseStatus(state.status),
+    elapsedMs,
+    workflow: state.workflow ?? "unknown",
+    executionHost: state.execution_host ?? "unknown",
+    runnerHost: state.runner_host ?? "unknown",
+    currentStageHeader,
+    currentStageLabel: currentStageId ? formatStageLabel(currentStageId) : "None",
+    ...(currentStageId ? { currentStageId } : {}),
+    stageRows: inferStageEntries(state).map(([stageId, record]) => ({
+      stageId,
+      label: formatStageLabel(stageId),
+      status: record.status,
+      durationMs: stageDurationMs(record, now),
+      attemptLabel:
+        record.attempt !== undefined && record.max_attempts !== undefined
+          ? `${record.attempt}/${record.max_attempts}`
+          : record.attempt !== undefined
+            ? String(record.attempt)
+            : "-",
+      lastMessage: record.last_message ?? "-",
+      isCurrent: stageId === currentStageId
+    })),
+    pendingGate: state.pending_gate ?? null,
+    summary
+  };
 }
 
 function renderBridgeStatusEvent(event: BridgeStatusEvent, capabilities: TerminalCapabilities): string[] {

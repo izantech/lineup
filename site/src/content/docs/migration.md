@@ -24,7 +24,7 @@ If you install from source instead of npm:
 
 - the recommended first-run path is now `lineup start "<task>"`
 - host commands stay available, but they call into the shared CLI runtime
-- direct terminal runs now use a structured live UI instead of raw stage logs
+- direct terminal runs now use a structured TTY dashboard instead of raw stage logs, with plain-text fallback when the output is not a TTY
 - run inspection is clearer with `lineup show`, `lineup show --watch`, `lineup waves`, and `lineup history`
 - resume and retry flows are more explicit when a run blocks or fails
 

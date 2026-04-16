@@ -96,15 +96,16 @@ When verification fails (`FAIL` or `PASS_WITH_WARNINGS`), the bridge can surface
 `verify-decision` question with retry, accept-with-warnings, or abort choices.
 Skills should present those choices directly and answer with `lineup bridge answer`.
 
-Interactive native gates use the same vocabulary in `human` mode: framed prompt
-blocks, numbered choices where applicable, and a compact default-choice hint on
-empty input.
+Interactive native gates use the same vocabulary in `human` mode: the TTY
+dashboard pauses, the gate prompt is framed on `stderr`, choices stay numbered
+where applicable, and empty input still accepts the default action.
 
 ## Low-Level Host Mode
 
 `lineup run --mode host` still exists for advanced/custom integrations and CI. It is
-the raw protocol path, not the default skill path. Generated skills should not
-background it or tail NDJSON logs directly.
+the raw protocol path, not the default skill path. The human TTY dashboard does
+not apply there, and generated skills should not background it or tail NDJSON
+logs directly.
 
 ## Output Contract
 

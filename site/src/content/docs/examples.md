@@ -57,7 +57,7 @@ lineup waves --run <run-id>
 lineup resume <run-id> --retry-failed
 ```
 
-`lineup show` gives the quick summary, `lineup show --watch` gives the live dashboard for an active run, `lineup waves` shows how implementation work was grouped, and `lineup resume` continues from the point that failed or blocked.
+`lineup show` gives the quick summary, `lineup show --watch` gives the live dashboard for an active run on a TTY and append-only snapshots elsewhere, `lineup waves` shows how implementation work was grouped, and `lineup resume` continues from the point that failed or blocked.
 
 ## Use the same flow from your host
 

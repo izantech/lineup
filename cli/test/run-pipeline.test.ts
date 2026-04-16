@@ -280,6 +280,56 @@ stages:
     }
   });
 
+  it("pauses and resumes the human TUI around interactive gates", async () => {
+    const projectRoot = join(tempDir, "project-human-gate");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: human-gate
+stages:
+  - id: clarify
+    type: builtin
+    description: "Ask for clarification before continuing."
+`);
+
+    const gateModule = await import("../src/lib/interactive-gate.js");
+    const runtimeUiModule = await import("../src/lib/ui/runtime-screen.js");
+    const handleGateSpy = vi.spyOn(gateModule, "handleInteractiveGate").mockImplementation(async (_gate, hooks = {}) => {
+      await hooks.onPromptStart?.();
+      await hooks.onPromptEnd?.();
+      return {
+        requestId: 1,
+        choice: "No clarification needed",
+        respondedAt: new Date().toISOString()
+      };
+    });
+    const pauseSpy = vi.spyOn(runtimeUiModule.HumanRunRenderer.prototype, "pause").mockResolvedValue();
+    const resumeSpy = vi.spyOn(runtimeUiModule.HumanRunRenderer.prototype, "resume").mockResolvedValue();
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      const result = await runPipeline({
+        workflow: workflowPath,
+        mode: "human",
+      });
+
+      expect(result.status).toBe("success");
+      expect(handleGateSpy).toHaveBeenCalledTimes(1);
+      expect(pauseSpy).toHaveBeenCalledTimes(1);
+      expect(resumeSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("fails fast with a clear message when native execution is launched outside git", async () => {
     const projectRoot = join(tempDir, "project-requires-git");
     mkdirSync(projectRoot, { recursive: true });

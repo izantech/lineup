@@ -38,8 +38,10 @@ lineup start "Review the auth middleware in src/auth.ts and identify security ga
 After the first run, you can use `lineup run "<task>"` directly whenever you want.
 
 When you run in a terminal, human mode now shows a structured live view instead
-of raw stage logs. Active progress stays on `stderr`, while JSON and host-mode
-output remain on `stdout`.
+of raw stage logs. On a real TTY that becomes a dynamic dashboard with live
+timers and stage status; on non-TTY output it stays plain append-only text.
+Active progress stays on `stderr`, while JSON and host-mode output remain on
+`stdout`.
 
 ## Start from Claude, Codex, or OpenCode
 
@@ -71,7 +73,8 @@ lineup show <run-id> --watch
 ```
 
 That view shows the run header, stage-by-stage status, any pending question,
-what changed, and the exact next commands to use.
+artifact and change summaries, and the exact next commands to use. On a TTY it
+refreshes live; when piped it stays plain append-only text.
 
 ## When you want more detail
 

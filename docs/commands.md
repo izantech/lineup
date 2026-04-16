@@ -83,17 +83,18 @@ Practical split:
 
 `lineup run` supports two runtime modes:
 
-- `human` — interactive prompts plus a stage-aware terminal UI on `stderr`
+- `human` — interactive prompts plus a TTY dashboard on `stderr`
 - `host` — NDJSON protocol output for skills, automation, and CI
 
 If omitted, `--mode` defaults to `human` on a TTY and `host` otherwise.
 
-Human mode now uses a capability-aware terminal renderer instead of raw
-`[stage]` log lines:
+Human mode now uses a capability-aware terminal UI instead of raw `[stage]`
+log lines:
 
 - transient progress goes to `stderr`
 - stage starts render as `Stage <n>/<total> | <label> | <purpose>`
-- TTY runs redraw a live stage table in place
+- TTY runs mount a dynamic dashboard with live timers, stage attempts, pending gates, artifact hints, and next actions
+- interactive gate prompts temporarily suspend the dashboard, ask on `stderr`, then resume the live view after the answer
 - non-TTY runs append plain ASCII-safe lines with no ANSI cursor movement
 - completion renders one final block with status, changed artifacts, and next commands
 
@@ -194,6 +195,6 @@ For native recovery:
 Inspection polish:
 
 - `lineup show` now prints a compact inspection summary in text mode: timings, task-wave summary when a `tasks` artifact exists, a `what changed in this run?` section, concrete `next:` commands, and artifact-specific inspection commands
-- `lineup show --watch` now renders a live dashboard with a run header, stage table, pending-question block, change summary, and next actions
-- `lineup show --watch` redraws in place on a TTY, falls back to append-only snapshots on non-TTY output, and exits once the run is blocked or terminal with the next concrete step
+- `lineup show --watch` now renders a TTY-only live dashboard with a run header, stage table, pending-question block, change summary, artifact summary, and next actions
+- `lineup show --watch` keeps live durations moving even when no new stage events arrive, falls back to append-only snapshots on non-TTY output, and exits once the run is blocked or terminal with the next concrete step
 - `lineup artifacts diff` now prints a short diff header with run ids and artifact hashes in text mode, and JSON output now includes the compared hashes and paths as additive metadata

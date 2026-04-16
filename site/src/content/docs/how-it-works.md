@@ -89,9 +89,9 @@ The engine is the same in both modes. The difference is how progress and questio
 In `human` mode, Lineup now renders a structured stage view on `stderr`:
 
 - a stage header when each stage begins
-- a live stage table on TTYs
+- a live TTY dashboard with elapsed timers, stage attempts, pending gates, and next actions
 - plain append-only progress in non-interactive environments
-- framed prompts for approvals and other gates
+- framed prompts for approvals and other gates, with the dashboard paused while you answer
 
 Use `host` mode when you need raw protocol integration, such as CI or a custom wrapper.
 
@@ -109,7 +109,8 @@ This is what makes reconnect-safe polling possible. A host can drop and reconnec
 
 Plain-text bridge output is also richer now. Instead of raw progress lines, it
 renders stage-aware status blocks, multi-line question blocks with exact answer
-commands, and completion summaries with the best inspection command.
+commands, and completion summaries with the best inspection command. That stays
+plain text even when human mode and `show --watch` use the TTY dashboard.
 
 ## Why runs are resumable
 

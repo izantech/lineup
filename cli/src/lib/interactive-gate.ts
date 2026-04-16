@@ -3,7 +3,13 @@ import { stdin as input, stderr as output } from "node:process";
 import type { PendingGate, GateResponse } from "./gate-store.js";
 import { writeGatePromptFrame } from "./ui/runtime.js";
 
-export async function handleInteractiveGate(gate: PendingGate): Promise<GateResponse> {
+export type InteractiveGateHooks = {
+  onPromptStart?: () => void | Promise<void>;
+  onPromptEnd?: () => void | Promise<void>;
+};
+
+export async function handleInteractiveGate(gate: PendingGate, hooks: InteractiveGateHooks = {}): Promise<GateResponse> {
+  await hooks.onPromptStart?.();
   const rl = createInterface({ input, output });
 
   try {
@@ -75,5 +81,6 @@ export async function handleInteractiveGate(gate: PendingGate): Promise<GateResp
     };
   } finally {
     rl.close();
+    await hooks.onPromptEnd?.();
   }
 }

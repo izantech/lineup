@@ -53,9 +53,10 @@ In `human` mode, progress and questions are shown for a person in the terminal. 
 Human mode now uses a shared terminal UI layer:
 
 - active run UI is written to `stderr`
-- TTY runs redraw a live stage table in place
+- TTY runs mount a dynamic dashboard with live timers, stage attempts, pending gates, artifact hints, and next actions
 - non-TTY runs degrade to append-only plain text with ASCII-safe symbols
-- the same formatting vocabulary is reused for live runs, `show --watch`, bridge text mode, and interactive gate prompts
+- interactive gate prompts temporarily suspend the dashboard and keep prompt I/O on `stderr`
+- the same formatting vocabulary is reused for non-TTY runs, `show --watch`, bridge text mode, and interactive gate prompts
 
 `lineup bridge` exists so installed host skills do not need to supervise raw protocol streams directly. The bridge starts a detached worker, persists a session, converts low-level protocol messages into compact events, and supports reconnect-safe polling.
 
@@ -139,9 +140,9 @@ sequenceDiagram
   P-->>C: status updates
 
   alt human mode
-    C-->>U: render live stage UI on stderr
+    C-->>U: render TTY dashboard on stderr
     P-->>C: gate request
-    C-->>U: framed interactive question
+    C-->>U: pause dashboard, ask framed interactive question
     U-->>C: answer in terminal
     C->>P: continue
   else host mode

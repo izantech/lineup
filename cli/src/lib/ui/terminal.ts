@@ -39,6 +39,13 @@ export function detectTerminalCapabilities(
   };
 }
 
+export function supportsDynamicTui(
+  stream: TerminalStream = process.stderr,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return Boolean(stream.isTTY) && env.TERM !== "dumb";
+}
+
 export function terminalSymbols(capabilities: TerminalCapabilities): TerminalSymbols {
   if (capabilities.supportsUnicode) {
     return {
@@ -78,54 +85,4 @@ export function terminalPalette(capabilities: TerminalCapabilities) {
     dim: color(2, capabilities.supportsColor),
     strong: color(1, capabilities.supportsColor)
   };
-}
-
-export class LiveRegion {
-  private readonly stream: TerminalStream;
-  private readonly capabilities: TerminalCapabilities;
-  private previousRowCount = 0;
-  private lastSnapshot = "";
-
-  constructor(stream: TerminalStream = process.stdout, capabilities = detectTerminalCapabilities(stream)) {
-    this.stream = stream;
-    this.capabilities = capabilities;
-  }
-
-  render(lines: string[]): void {
-    const snapshot = `${lines.join("\n")}\n`;
-    if (snapshot === this.lastSnapshot) {
-      return;
-    }
-
-    if (!this.capabilities.isTTY) {
-      this.stream.write(snapshot);
-      this.lastSnapshot = snapshot;
-      return;
-    }
-
-    this.clearRegion();
-    for (const line of lines) {
-      this.stream.write(`${line}\n`);
-    }
-    this.previousRowCount = lines.length;
-    this.lastSnapshot = snapshot;
-  }
-
-  finish(lines?: string[]): void {
-    if (lines) {
-      this.render(lines);
-    }
-    this.previousRowCount = 0;
-    this.lastSnapshot = "";
-  }
-
-  private clearRegion(): void {
-    if (this.previousRowCount === 0) {
-      return;
-    }
-
-    for (let index = 0; index < this.previousRowCount; index += 1) {
-      this.stream.write("\u001B[1A\u001B[2K");
-    }
-  }
 }
