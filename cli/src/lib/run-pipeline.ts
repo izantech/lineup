@@ -1245,7 +1245,7 @@ function buildCompactStageExtraInstructions(input: {
     `- schema: ${input.outputSchema}`,
     "- Return only the final structured payload with no wrapper prose or markdown.",
     `- Required fields: ${describeCompactStageOutputs(input.stage)}`,
-    `- Request: ${input.taskPrompt}`
+    `- Request: ${formatStageTaskPrompt(input.stage, input.taskPrompt)}`
   ];
 
   const compactContext = formatCompactStageContext(input.stage, input.ctx);
@@ -1258,6 +1258,23 @@ function buildCompactStageExtraInstructions(input: {
   }
 
   return lines.join("\n");
+}
+
+function formatStageTaskPrompt(stage: WorkflowStage, taskPrompt: string): string {
+  const normalizedTaskPrompt = taskPrompt.trim();
+  if (stage.agent !== "researcher") {
+    return normalizedTaskPrompt;
+  }
+
+  if (normalizedTaskPrompt.length === 0) {
+    return "Research only the repository context needed for later stages. Do not attempt to create files, logos, assets, code changes, or other final deliverables during this stage."
+  }
+
+  return [
+    "Research only the repository context needed to support the overall task later.",
+    "Do not attempt to create files, logos, assets, code changes, or other final deliverables during this stage.",
+    `Overall task: ${normalizedTaskPrompt}`
+  ].join(" ")
 }
 
 function resolveEffectiveStageOutputs(stage: WorkflowStage): Record<string, { type: string; max_length?: number }> {
@@ -1335,7 +1352,7 @@ function buildStageAgentPrompt(input: {
         "Lineup stage contract:",
         `- Stage ID: ${input.stage.id}`,
         `- Stage description: ${input.stage.description ?? "n/a"}`,
-        `- User request: ${input.taskPrompt}`,
+        `- User request: ${formatStageTaskPrompt(input.stage, input.taskPrompt)}`,
         `- Output schema: ${input.outputSchema}`,
         input.outputPath
           ? `- Create or overwrite ${input.outputPath} with the final structured payload. If you cannot write the file directly, emit only the payload content for that path.`

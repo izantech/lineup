@@ -11,6 +11,8 @@ import { planHostLaunch } from "./launch-planner.js";
 import { parseRestrictedYaml } from "./validation.js";
 import type { AgentRole } from "./types.js";
 
+const TIMEOUT_SIGNAL_GRACE_MS = 1_000;
+
 export type LocalAgentInvocationInput = {
   projectRoot: string;
   workingDirectory: string;
@@ -807,7 +809,24 @@ async function runOpencodeAgent(host: HostName, input: LocalAgentInvocationInput
   return result;
 }
 
-async function runSpawnedCommand(input: {
+function buildTimeoutCliError(input: {
+  host: HostName;
+  command: string;
+  timeoutMs?: number;
+  tracePrefixPath?: string;
+}): CliError {
+  return new CliError(
+    [
+      `${input.host} ${input.command} invocation timed out after ${input.timeoutMs}ms.`,
+      input.tracePrefixPath ? `trace: ${tracePaths(input.tracePrefixPath).json}` : null
+    ].filter(Boolean).join("\n"),
+    {
+      code: "timeout"
+    }
+  )
+}
+
+export async function runSpawnedCommand(input: {
   host: HostName;
   command: string;
   args: string[];
@@ -857,6 +876,7 @@ async function runSpawnedCommand(input: {
     let timer: NodeJS.Timeout | undefined;
     let expectedOutputPoller: NodeJS.Timeout | undefined;
     let expectedOutputKillTimer: NodeJS.Timeout | undefined;
+    let timeoutForceRejectTimer: NodeJS.Timeout | undefined;
 
     const clearPendingTimers = (): void => {
       if (timer) {
@@ -867,6 +887,9 @@ async function runSpawnedCommand(input: {
       }
       if (expectedOutputKillTimer) {
         clearTimeout(expectedOutputKillTimer);
+      }
+      if (timeoutForceRejectTimer) {
+        clearTimeout(timeoutForceRejectTimer);
       }
     };
 
@@ -918,10 +941,16 @@ async function runSpawnedCommand(input: {
         recordTraceEvent(trace, input.tracePrefixPath, "timeout", `Timed out after ${input.timeoutMs}ms.`);
         child.kill("SIGTERM");
         recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGTERM after timeout.", { signal: "SIGTERM" });
-        setTimeout(() => {
+        timeoutForceRejectTimer = setTimeout(() => {
+          if (settled) {
+            return;
+          }
           recordTraceEvent(trace, input.tracePrefixPath, "signal", "Sent SIGKILL after timeout grace period.", { signal: "SIGKILL" });
           child.kill("SIGKILL");
-        }, 1_000).unref();
+          recordTraceEvent(trace, input.tracePrefixPath, "timeout_forced_reject", "Rejecting timeout without waiting for process close.");
+          settleReject(buildTimeoutCliError(input));
+        }, TIMEOUT_SIGNAL_GRACE_MS);
+        timeoutForceRejectTimer.unref();
       }, input.timeoutMs);
     }
 
@@ -1013,17 +1042,7 @@ async function runSpawnedCommand(input: {
       }
 
       if (timedOut) {
-        settleReject(
-          new CliError(
-            [
-              `${input.host} ${input.command} invocation timed out after ${input.timeoutMs}ms.`,
-              input.tracePrefixPath ? `trace: ${tracePaths(input.tracePrefixPath).json}` : null
-            ].filter(Boolean).join("\n"),
-            {
-              code: "timeout"
-            }
-          )
-        );
+        settleReject(buildTimeoutCliError(input));
         return;
       }
 

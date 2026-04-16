@@ -1660,7 +1660,7 @@ gaps:
         {
           workflow: workflowPath,
           mode: "human",
-          prompt: "Replace the README placeholder once."
+          prompt: "Analyze what this project is about and generate 5 different potential logos for Lineup at .local/logos/."
         },
         {
           runId: "cmpct1",
@@ -1680,6 +1680,9 @@ gaps:
         expect(prompt).not.toContain("Follow this output template shape exactly.");
       }
       expect(planPrompt).toContain("Required fields: summary, approaches, recommendation, changes (non-empty array of {file, change, rationale}), acceptance_criteria, risks");
+      expect(researchPrompt).toContain("Research only the repository context needed to support the overall task later.");
+      expect(researchPrompt).toContain("Do not attempt to create files, logos, assets, code changes, or other final deliverables during this stage.");
+      expect(researchPrompt).toContain("Overall task: Analyze what this project is about and generate 5 different potential logos for Lineup at .local/logos/.");
     } finally {
       process.chdir(origCwd);
     }
