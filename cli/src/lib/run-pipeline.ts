@@ -309,6 +309,8 @@ export async function runPipeline(options: RunOptions, hooks: RunPipelineHooks =
         }
 
         const isPrePipelineStage =
+          stage.id === "clarify" ||
+          stage.id === "gate" ||
           stage.type === "builtin" ||
           (stage.type === "agent" &&
             stage.id !== "plan" &&

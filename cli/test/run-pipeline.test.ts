@@ -330,6 +330,56 @@ stages:
     }
   });
 
+  it("routes reasoning-based clarify stages through the interactive gate path", async () => {
+    const projectRoot = join(tempDir, "project-reasoning-clarify");
+    mkdirSync(projectRoot, { recursive: true });
+
+    const workflowDir = join(projectRoot, ".lineup-core", "workflows");
+    mkdirSync(workflowDir, { recursive: true });
+    const workflowPath = join(workflowDir, "full-pipeline.yaml");
+    writeFileSync(workflowPath, `
+apiVersion: lineup/v3
+kind: Workflow
+name: reasoning-clarify
+stages:
+  - id: triage
+    type: builtin
+  - id: clarify
+    type: reasoning
+    depends_on: [triage]
+    outputs:
+      requirements: { type: string }
+`);
+
+    const gateModule = await import("../src/lib/interactive-gate.js");
+    const handleGateSpy = vi.spyOn(gateModule, "handleInteractiveGate").mockImplementation(async (gate) => ({
+      requestId: gate.requestId,
+      choice: "No clarification needed",
+      respondedAt: new Date().toISOString()
+    }));
+    handleGateSpy.mockClear();
+
+    const { runPipeline } = await import("../src/lib/run-pipeline.js");
+    const origCwd = process.cwd();
+    process.chdir(projectRoot);
+
+    try {
+      const result = await runPipeline({
+        workflow: workflowPath,
+        mode: "human",
+      });
+
+      expect(result.status).toBe("success");
+      expect(handleGateSpy).toHaveBeenCalledTimes(1);
+      expect(handleGateSpy.mock.calls[0]?.[0].gateType).toBe("clarify");
+      expect(result.stageResults.get("clarify")?.outputs).toMatchObject({
+        requirements: "No clarification needed"
+      });
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
   it("fails fast with a clear message when native execution is launched outside git", async () => {
     const projectRoot = join(tempDir, "project-requires-git");
     mkdirSync(projectRoot, { recursive: true });
