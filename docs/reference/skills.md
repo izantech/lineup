@@ -8,11 +8,11 @@ Lineup workflows are generated from canonical templates in `.lineup-core/skills/
 
 | Workflow | Claude command | Codex command | OpenCode command | Generated files (install-time) |
 | ------- | ---------- | ------- | ------- | ------- |
-| Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `/lineup-kick-off` | `skills/kick-off/SKILL.md`, `.agents/skills/lineup-kick-off/SKILL.md`, `~/.config/opencode/skills/lineup-kick-off/SKILL.md` |
-| Configure | `/lineup:configure` | `$lineup-configure` | `/lineup-configure` | `skills/configure/SKILL.md`, `.agents/skills/lineup-configure/SKILL.md`, `~/.config/opencode/skills/lineup-configure/SKILL.md` |
-| Explain | `/lineup:explain` | `$lineup-explain` | `/lineup-explain` | `skills/explain/SKILL.md`, `.agents/skills/lineup-explain/SKILL.md`, `~/.config/opencode/skills/lineup-explain/SKILL.md` |
-| Playbook | `/lineup:playbook` | `$lineup-playbook` | `/lineup-playbook` | `skills/playbook/SKILL.md`, `.agents/skills/lineup-playbook/SKILL.md`, `~/.config/opencode/skills/lineup-playbook/SKILL.md` |
-| Digest | `/lineup:digest` | `$lineup-digest` | `/lineup-digest` | `skills/digest/SKILL.md`, `.agents/skills/lineup-digest/SKILL.md`, `~/.config/opencode/skills/lineup-digest/SKILL.md` |
+| Kick-off | `/lineup:kick-off` | `$lineup-kick-off` | `/lineup-kick-off` | `skills/kick-off/SKILL.md`, `~/.codex/skills/lineup-kick-off/SKILL.md`, `~/.config/opencode/skills/lineup-kick-off/SKILL.md` |
+| Configure | `/lineup:configure` | `$lineup-configure` | `/lineup-configure` | `skills/configure/SKILL.md`, `~/.codex/skills/lineup-configure/SKILL.md`, `~/.config/opencode/skills/lineup-configure/SKILL.md` |
+| Explain | `/lineup:explain` | `$lineup-explain` | `/lineup-explain` | `skills/explain/SKILL.md`, `~/.codex/skills/lineup-explain/SKILL.md`, `~/.config/opencode/skills/lineup-explain/SKILL.md` |
+| Playbook | `/lineup:playbook` | `$lineup-playbook` | `/lineup-playbook` | `skills/playbook/SKILL.md`, `~/.codex/skills/lineup-playbook/SKILL.md`, `~/.config/opencode/skills/lineup-playbook/SKILL.md` |
+| Digest | `/lineup:digest` | `$lineup-digest` | `/lineup-digest` | `skills/digest/SKILL.md`, `~/.codex/skills/lineup-digest/SKILL.md`, `~/.config/opencode/skills/lineup-digest/SKILL.md` |
 
 Do not edit generated skill files directly. Edit `.lineup-core/skills/**`; host files are generated during `lineup install` and validated in CI with `./dev check`.
 
@@ -68,7 +68,7 @@ $lineup-kick-off
 
 ### Initialization
 
-Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in the host init file (`skills/kick-off/INIT.md` on Claude, `.agents/skills/lineup-kick-off/INIT.md` on Codex, `~/.config/opencode/skills/lineup-kick-off/INIT.md` on OpenCode):
+Before starting pipeline stages or tactic execution, kick-off runs an initialization sequence defined in the host init file (`skills/kick-off/INIT.md` on Claude, `~/.codex/skills/lineup-kick-off/INIT.md` on Codex, `~/.config/opencode/skills/lineup-kick-off/INIT.md` on OpenCode):
 
 1. **Agent configuration overrides** -- reads user override files from `~/.claude/lineup/agents/`, validates them, and merges with plugin defaults
    - Codex path: `~/.codex/lineup/agents/`

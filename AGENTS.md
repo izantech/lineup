@@ -53,7 +53,7 @@ cli/                          → Lineup CLI package (install/update/uninstall/s
 Generated host outputs are **not committed** to git:
 
 - Claude skill files are generated into the CLI-managed local plugin directory during install/update.
-- Codex skill files are generated and synced into `$HOME/.agents/skills/lineup-*`.
+- Codex skill files are generated and synced into `$HOME/.codex/skills/lineup-*`.
 
 ### CLI Package (`cli/`)
 

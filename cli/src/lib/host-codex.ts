@@ -4,17 +4,17 @@ import path from "node:path";
 import { CODEX_REQUIRED_FILES, CODEX_SKILL_DIRS } from "./constants";
 import { CliError } from "./errors";
 import { generateHostFiles, writeGeneratedFiles } from "./generate";
-import { codexGlobalSkillsDir, codexRepoLocalSkillsDir } from "./paths";
+import { codexGlobalSkillsDir, codexLegacyGlobalSkillsDir } from "./paths";
 import type { StatusHost } from "./types";
 
 export function ensureCodexGenerated(sourceRoot: string, outputRoot: string): string {
   const files = generateHostFiles(sourceRoot, "codex");
   writeGeneratedFiles(files, outputRoot);
-  return path.join(outputRoot, ".agents", "skills");
+  return path.join(outputRoot, ".codex", "skills");
 }
 
 function requiredAbsolutePaths(baseDir: string): string[] {
-  return CODEX_REQUIRED_FILES.map((relative) => path.join(baseDir, ...relative.replace(/^\.agents\/skills\//, "").split("/")));
+  return CODEX_REQUIRED_FILES.map((relative) => path.join(baseDir, ...relative.replace(/^\.codex\/skills\//, "").split("/")));
 }
 
 export function validateCodexSkillsDir(baseDir: string): void {
@@ -63,24 +63,28 @@ function replaceDirectoryAtomic(sourceDir: string, targetDir: string): void {
 
 export function installCodex({
   sourceRoot,
-  workspaceRoot,
-  global = true
+  workspaceRoot
 }: {
   sourceRoot: string;
   workspaceRoot: string;
-  global?: boolean;
 }): { skills_dir: string; files_verified: number } {
   const generatedRoot = path.join(workspaceRoot, "generated", "codex");
   const sourceSkills = ensureCodexGenerated(sourceRoot, generatedRoot);
   validateCodexSkillsDir(sourceSkills);
 
-  const destinationRoot = global ? codexGlobalSkillsDir() : codexRepoLocalSkillsDir();
+  const destinationRoot = codexGlobalSkillsDir();
+  const legacyRoot = codexLegacyGlobalSkillsDir();
   mkdirSync(destinationRoot, { recursive: true });
 
   for (const dirName of CODEX_SKILL_DIRS) {
     const from = path.join(sourceSkills, dirName);
     const to = path.join(destinationRoot, dirName);
     replaceDirectoryAtomic(from, to);
+
+    const legacy = path.join(legacyRoot, dirName);
+    if (existsSync(legacy)) {
+      rmSync(legacy, { recursive: true, force: true });
+    }
   }
 
   validateCodexSkillsDir(destinationRoot);
@@ -91,20 +95,26 @@ export function installCodex({
   };
 }
 
-export function uninstallCodex(global = true): { skills_dir: string } {
-  const root = global ? codexGlobalSkillsDir() : codexRepoLocalSkillsDir();
+export function uninstallCodex(): { skills_dir: string } {
+  const root = codexGlobalSkillsDir();
+  const legacyRoot = codexLegacyGlobalSkillsDir();
   for (const dirName of CODEX_SKILL_DIRS) {
     const target = path.join(root, dirName);
     if (existsSync(target)) {
       rmSync(target, { recursive: true, force: true });
+    }
+
+    const legacyTarget = path.join(legacyRoot, dirName);
+    if (existsSync(legacyTarget)) {
+      rmSync(legacyTarget, { recursive: true, force: true });
     }
   }
 
   return { skills_dir: root };
 }
 
-export function statusCodex(global = true): StatusHost {
-  const root = global ? codexGlobalSkillsDir() : codexRepoLocalSkillsDir();
+export function statusCodex(): StatusHost {
+  const root = codexGlobalSkillsDir();
   const missing = requiredAbsolutePaths(root).filter((item) => !existsSync(item));
 
   return {

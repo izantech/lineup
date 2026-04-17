@@ -14,7 +14,7 @@ Generated host files are artifacts, not tracked files.
 | Host | Install-time output |
 | ---- | ------------------- |
 | Claude | Local plugin skills in CLI-managed plugin directory |
-| Codex | `$HOME/.agents/skills/lineup-*` |
+| Codex | `$HOME/.codex/skills/lineup-*` |
 | OpenCode | `~/.config/opencode/skills/lineup-*/` (directory-per-skill with `SKILL.md`) |
 
 Each generated file includes:

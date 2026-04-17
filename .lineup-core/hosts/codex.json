@@ -11,7 +11,7 @@
     "CMD_EXPLAIN": "$lineup-explain",
     "CMD_PLAYBOOK": "$lineup-playbook",
     "CMD_DIGEST": "$lineup-digest",
-    "KICKOFF_INIT_PATH": ".agents/skills/lineup-kick-off/INIT.md",
+    "KICKOFF_INIT_PATH": "~/.codex/skills/lineup-kick-off/INIT.md",
     "QUESTION_PRIMITIVE": "structured multiple-choice prompts",
     "OVERRIDES_DIR": "~/.codex/lineup/agents/",
     "MEMORY_USER_DIR": "~/.codex/lineup/memory/user",

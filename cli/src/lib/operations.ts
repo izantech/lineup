@@ -211,8 +211,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
         if (host === "codex") {
           const codexResult = deps.installCodex({
             sourceRoot: release.sourceRoot,
-            workspaceRoot: deps.codexHostRoot(),
-            global: true
+            workspaceRoot: deps.codexHostRoot()
           });
 
           deps.updateHostState(state, "codex", {
@@ -321,7 +320,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
         }
 
         if (host === "codex") {
-          deps.uninstallCodex(true);
+          deps.uninstallCodex();
           deps.updateHostState(state, "codex", {
             installed: false,
             version: null,
@@ -405,7 +404,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
       }
 
       if (host === "codex") {
-        const runtime = deps.statusCodex(true);
+        const runtime = deps.statusCodex();
         const stateHost = state.hosts.codex
           ? {
               host: "codex" as const,

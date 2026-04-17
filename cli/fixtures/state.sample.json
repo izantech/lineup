@@ -13,7 +13,7 @@
       "installed": true,
       "version": "2.0.0",
       "source": "cli-managed",
-      "skills_dir": "/Users/example/.agents/skills",
+      "skills_dir": "/Users/example/.codex/skills",
       "last_action": "update",
       "last_updated_at": "2026-02-18T00:00:00.000Z"
     }

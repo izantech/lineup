@@ -93,7 +93,8 @@ Purge targets:
 ## Notes on host installs
 
 - Claude installs are CLI-managed local marketplace/plugin installs.
-- Codex installs are global skills in `$HOME/.agents/skills/lineup-*`.
+- Codex installs are global skills in `$HOME/.codex/skills/lineup-*`.
+- Codex installs are global-only; repo-local Codex skill directories are not supported.
 - OpenCode installs are global skills in `~/.config/opencode/skills/`, one directory per skill.
 - Existing legacy Claude marketplace installs are detected and can be migrated.
 

@@ -12,12 +12,12 @@ type HarnessCalls = {
   prepareClaudePluginFromSourceInputs: Array<{ sourceRoot: string; version: string }>;
   installClaudeFromPreparedPluginInputs: Array<{ pluginSource: string; version: string; migrateLegacy: boolean }>;
   updateClaudeLocal: number;
-  installCodexInputs: Array<{ sourceRoot: string; workspaceRoot: string; global?: boolean }>;
+  installCodexInputs: Array<{ sourceRoot: string; workspaceRoot: string }>;
   installOpencodeInputs: Array<{ sourceRoot: string; homeDir: string }>;
   uninstallClaude: number;
-  uninstallCodexInputs: Array<boolean | undefined>;
+  uninstallCodexInputs: number;
   uninstallOpencodeInputs: string[];
-  statusCodexInputs: Array<boolean | undefined>;
+  statusCodexInputs: number;
   statusOpencodeInputs: string[];
   loadState: number;
   saveState: number;
@@ -48,9 +48,9 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
     installCodexInputs: [],
     installOpencodeInputs: [],
     uninstallClaude: 0,
-    uninstallCodexInputs: [],
+    uninstallCodexInputs: 0,
     uninstallOpencodeInputs: [],
-    statusCodexInputs: [],
+    statusCodexInputs: 0,
     statusOpencodeInputs: [],
     loadState: 0,
     saveState: 0,
@@ -115,8 +115,8 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
         files_verified: 5
       };
     },
-    statusCodex: (global) => {
-      calls.statusCodexInputs.push(global);
+    statusCodex: () => {
+      calls.statusCodexInputs += 1;
       return {
         host: "codex",
         installed: false,
@@ -126,8 +126,8 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
         error: "Missing 5 required files."
       };
     },
-    uninstallCodex: (global) => {
-      calls.uninstallCodexInputs.push(global);
+    uninstallCodex: () => {
+      calls.uninstallCodexInputs += 1;
       return {
         skills_dir: "/tmp/codex-skills"
       };
@@ -253,8 +253,7 @@ describe("operations lifecycle flows", () => {
     expect(harness.calls.installCodexInputs).toEqual([
       {
         sourceRoot: "/tmp/release-source",
-        workspaceRoot: "/tmp/codex-host",
-        global: true
+        workspaceRoot: "/tmp/codex-host"
       }
     ]);
     expect(harness.calls.saveState).toBe(1);
@@ -388,7 +387,7 @@ describe("operations lifecycle flows", () => {
     });
 
     expect(harness.calls.uninstallClaude).toBe(1);
-    expect(harness.calls.uninstallCodexInputs).toEqual([true]);
+    expect(harness.calls.uninstallCodexInputs).toBe(1);
     expect(harness.calls.purgeTargetsInputs).toEqual([["claude", "codex"]]);
     expect(harness.calls.removePathTargets).toEqual(["/tmp/purge-a", "/tmp/purge-b"]);
     expect(harness.calls.saveState).toBe(1);
@@ -477,8 +476,8 @@ describe("operations lifecycle flows", () => {
       last_action: null
     });
 
-    harness.deps.statusCodex = (global) => {
-      harness.calls.statusCodexInputs.push(global);
+    harness.deps.statusCodex = () => {
+      harness.calls.statusCodexInputs += 1;
       return {
         host: "codex",
         installed: false,
@@ -509,6 +508,6 @@ describe("operations lifecycle flows", () => {
       last_action: "install",
       error: "Missing 5 required files."
     });
-    expect(harness.calls.statusCodexInputs).toEqual([true]);
+    expect(harness.calls.statusCodexInputs).toBe(1);
   });
 });

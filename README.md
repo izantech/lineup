@@ -36,10 +36,12 @@ lineup status [--host claude|codex|opencode|all] [--json]
 
 | Operation | Claude | Codex | OpenCode |
 | --------- | ------ | ----- | -------- |
-| Install | CLI-managed local marketplace plugin install | Atomic sync into `$HOME/.agents/skills/lineup-*` | Sync into `~/.config/opencode/skills/` |
+| Install | CLI-managed local marketplace plugin install | Global atomic sync into `$HOME/.codex/skills/lineup-*` | Sync into `~/.config/opencode/skills/` |
 | Update | Refresh local marketplace plugin from selected release tag | Re-sync from selected release tag | Re-sync from selected release tag |
-| Uninstall | Remove CLI-managed plugin | Remove `$HOME/.agents/skills/lineup-*` | Remove skill directories from `~/.config/opencode/skills/` |
+| Uninstall | Remove CLI-managed plugin | Remove `$HOME/.codex/skills/lineup-*` | Remove skill directories from `~/.config/opencode/skills/` |
 | Status | Detect install + legacy marketplace state | Verify required skill files | Verify required skill files |
+
+Codex installs are global-only; Lineup does not manage repo-local Codex skill directories.
 
 ## Workflow commands (unchanged)
 

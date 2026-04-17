@@ -38,8 +38,20 @@ function renderPathTemplate(pathTemplate: string, vars: Record<string, string>):
   });
 }
 
-function withBanner(content: string): string {
-  const trimmed = content.replace(/\s+$/u, "");
+function injectBanner(content: string, target: string): string {
+  const normalized = content.replace(/\r\n?/gu, "\n");
+  const trimmed = normalized.replace(/\s+$/u, "");
+
+  if (path.basename(target) === "SKILL.md" && trimmed.startsWith("---\n")) {
+    const closing = trimmed.indexOf("\n---\n", 4);
+    if (closing !== -1) {
+      const frontmatterEnd = closing + "\n---\n".length;
+      const frontmatter = trimmed.slice(0, frontmatterEnd);
+      const body = trimmed.slice(frontmatterEnd).replace(/^\n+/u, "");
+      return `${frontmatter}\n${GENERATED_BANNER}\n\n${body}\n`;
+    }
+  }
+
   return `${GENERATED_BANNER}\n\n${trimmed}\n`;
 }
 
@@ -57,7 +69,7 @@ export function generateHostFiles(sourceRoot: string, host: HostName): Generated
       host,
       source,
       target: renderPathTemplate(pathTemplate, vars),
-      content: withBanner(rendered)
+      content: injectBanner(rendered, renderPathTemplate(pathTemplate, vars))
     };
   });
 }

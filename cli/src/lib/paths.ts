@@ -47,6 +47,10 @@ export function lineupCacheDir(homeDir = os.homedir()): string {
 }
 
 export function codexGlobalSkillsDir(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".codex", "skills");
+}
+
+export function codexLegacyGlobalSkillsDir(homeDir = os.homedir()): string {
   return path.join(homeDir, ".agents", "skills");
 }
 
@@ -72,10 +76,6 @@ export function claudeManagedPluginDir(version: string, homeDir = os.homedir()):
 
 export function claudeMarketplaceRoot(homeDir = os.homedir()): string {
   return path.join(claudeHostRoot(homeDir), "marketplace");
-}
-
-export function codexRepoLocalSkillsDir(cwd = process.cwd()): string {
-  return path.join(cwd, ".agents", "skills");
 }
 
 export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex" | "opencode">, homeDir = os.homedir()): string[] {

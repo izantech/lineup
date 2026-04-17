@@ -50,10 +50,12 @@ Claude managed assets:
 
 Codex managed assets:
 
-- `~/.agents/skills/lineup-kick-off/`
-- `~/.agents/skills/lineup-configure/`
-- `~/.agents/skills/lineup-explain/`
-- `~/.agents/skills/lineup-playbook/`
+Codex installs are global-only.
+
+- `~/.codex/skills/lineup-kick-off/`
+- `~/.codex/skills/lineup-configure/`
+- `~/.codex/skills/lineup-explain/`
+- `~/.codex/skills/lineup-playbook/`
 
 OpenCode managed assets:
 

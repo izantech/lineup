@@ -18,15 +18,15 @@ export const CODEX_SKILL_DIRS = [
 ] as const;
 
 export const CODEX_REQUIRED_FILES = [
-  ".agents/skills/lineup-kick-off/SKILL.md",
-  ".agents/skills/lineup-kick-off/INIT.md",
-  ".agents/skills/lineup-kick-off/STAGES-1-3.md",
-  ".agents/skills/lineup-kick-off/STAGES-4-5.md",
-  ".agents/skills/lineup-kick-off/STAGES-6-7.md",
-  ".agents/skills/lineup-configure/SKILL.md",
-  ".agents/skills/lineup-explain/SKILL.md",
-  ".agents/skills/lineup-playbook/SKILL.md",
-  ".agents/skills/lineup-digest/SKILL.md"
+  ".codex/skills/lineup-kick-off/SKILL.md",
+  ".codex/skills/lineup-kick-off/INIT.md",
+  ".codex/skills/lineup-kick-off/STAGES-1-3.md",
+  ".codex/skills/lineup-kick-off/STAGES-4-5.md",
+  ".codex/skills/lineup-kick-off/STAGES-6-7.md",
+  ".codex/skills/lineup-configure/SKILL.md",
+  ".codex/skills/lineup-explain/SKILL.md",
+  ".codex/skills/lineup-playbook/SKILL.md",
+  ".codex/skills/lineup-digest/SKILL.md"
 ] as const;
 
 export const OPENCODE_SKILL_DIRS = [
@@ -54,7 +54,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/kick-off/core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_KICKOFF}}/SKILL.md",
-      codex: ".agents/skills/{{SKILL_NAME_KICKOFF}}/SKILL.md",
+      codex: ".codex/skills/{{SKILL_NAME_KICKOFF}}/SKILL.md",
       opencode: ".opencode/skills/{{SKILL_NAME_KICKOFF}}/SKILL.md"
     }
   },
@@ -62,7 +62,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/kick-off/init.core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_KICKOFF}}/INIT.md",
-      codex: ".agents/skills/{{SKILL_NAME_KICKOFF}}/INIT.md",
+      codex: ".codex/skills/{{SKILL_NAME_KICKOFF}}/INIT.md",
       opencode: ".opencode/skills/{{SKILL_NAME_KICKOFF}}/INIT.md"
     }
   },
@@ -70,7 +70,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/kick-off/stages-1-3.core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_KICKOFF}}/STAGES-1-3.md",
-      codex: ".agents/skills/{{SKILL_NAME_KICKOFF}}/STAGES-1-3.md",
+      codex: ".codex/skills/{{SKILL_NAME_KICKOFF}}/STAGES-1-3.md",
       opencode: ".opencode/skills/{{SKILL_NAME_KICKOFF}}/STAGES-1-3.md"
     }
   },
@@ -78,7 +78,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/kick-off/stages-4-5.core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_KICKOFF}}/STAGES-4-5.md",
-      codex: ".agents/skills/{{SKILL_NAME_KICKOFF}}/STAGES-4-5.md",
+      codex: ".codex/skills/{{SKILL_NAME_KICKOFF}}/STAGES-4-5.md",
       opencode: ".opencode/skills/{{SKILL_NAME_KICKOFF}}/STAGES-4-5.md"
     }
   },
@@ -86,7 +86,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/kick-off/stages-6-7.core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_KICKOFF}}/STAGES-6-7.md",
-      codex: ".agents/skills/{{SKILL_NAME_KICKOFF}}/STAGES-6-7.md",
+      codex: ".codex/skills/{{SKILL_NAME_KICKOFF}}/STAGES-6-7.md",
       opencode: ".opencode/skills/{{SKILL_NAME_KICKOFF}}/STAGES-6-7.md"
     }
   },
@@ -94,7 +94,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/configure/core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_CONFIGURE}}/SKILL.md",
-      codex: ".agents/skills/{{SKILL_NAME_CONFIGURE}}/SKILL.md",
+      codex: ".codex/skills/{{SKILL_NAME_CONFIGURE}}/SKILL.md",
       opencode: ".opencode/skills/{{SKILL_NAME_CONFIGURE}}/SKILL.md"
     }
   },
@@ -102,7 +102,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/explain/core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_EXPLAIN}}/SKILL.md",
-      codex: ".agents/skills/{{SKILL_NAME_EXPLAIN}}/SKILL.md",
+      codex: ".codex/skills/{{SKILL_NAME_EXPLAIN}}/SKILL.md",
       opencode: ".opencode/skills/{{SKILL_NAME_EXPLAIN}}/SKILL.md"
     }
   },
@@ -110,7 +110,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/playbook/core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md",
-      codex: ".agents/skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md",
+      codex: ".codex/skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md",
       opencode: ".opencode/skills/{{SKILL_NAME_PLAYBOOK}}/SKILL.md"
     }
   },
@@ -118,7 +118,7 @@ export const HOST_TEMPLATE_SPECS = [
     source: ".lineup-core/skills/digest/core.md",
     targetFor: {
       claude: "skills/{{SKILL_NAME_DIGEST}}/SKILL.md",
-      codex: ".agents/skills/{{SKILL_NAME_DIGEST}}/SKILL.md",
+      codex: ".codex/skills/{{SKILL_NAME_DIGEST}}/SKILL.md",
       opencode: ".opencode/skills/{{SKILL_NAME_DIGEST}}/SKILL.md"
     }
   }
