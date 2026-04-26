@@ -171,6 +171,29 @@ function yamlQuote(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+const OPENCODE_COLOR_HEX: Record<string, string> = {
+  red: "#ef4444",
+  yellow: "#eab308",
+  green: "#22c55e",
+  cyan: "#06b6d4",
+  blue: "#3b82f6",
+  magenta: "#ec4899",
+  purple: "#a855f7",
+  orange: "#f97316",
+  pink: "#ec4899",
+  white: "#ffffff",
+  black: "#000000",
+  gray: "#6b7280",
+  grey: "#6b7280"
+};
+
+function toOpencodeColor(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
+  return OPENCODE_COLOR_HEX[trimmed.toLowerCase()];
+}
+
 function translateAgentToOpencode(parsed: ParsedAgent, models: { regular: string; mini: string } | undefined): string {
   if (!models) {
     throw new CliError("OpenCode model config missing — run `lineup install opencode` first.", {
@@ -200,7 +223,8 @@ function translateAgentToOpencode(parsed: ParsedAgent, models: { regular: string
     ? `<!-- Dropped tools (no OpenCode equivalent): ${unknownTools.join(", ")} -->\n\n`
     : "";
 
-  const colorLine = parsed.color ? `color: ${yamlQuote(parsed.color)}\n` : "";
+  const opencodeColor = toOpencodeColor(parsed.color);
+  const colorLine = opencodeColor ? `color: ${yamlQuote(opencodeColor)}\n` : "";
 
   const frontmatter = [
     "---",
