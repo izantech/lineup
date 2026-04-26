@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-26
+
+### Added
+- Native subagent support for Codex and OpenCode -- `lineup install codex` and `lineup install opencode` now deploy translated agent definition files alongside skill files, so the kick-off pipeline can locate and read agent roles at runtime
+  - Codex: `~/.codex/agents/lineup-<role>.toml` (TOML format)
+  - OpenCode: `~/.config/opencode/agents/lineup-<role>.md` (frontmatter rewritten with `mode: subagent` and boolean tools map)
+  - Claude: `agents/` copied verbatim into the plugin (unchanged behavior)
+  - `lineup-` prefix on filenames avoids collisions with user-authored agents
+- Install-time model configuration for all three hosts -- `lineup install` now prompts for model IDs and persists them to the host's config directory; reinstalls reuse the persisted config (delete the file to re-prompt)
+  - Claude: 3 prompts (opus / sonnet / haiku), defaults `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`, persisted to `~/.claude/lineup/install-config.yaml`
+  - Codex: 2 prompts (regular / mini), defaults `gpt-5.4` / `gpt-5.4-mini`, persisted to `~/.codex/lineup/install-config.yaml`
+  - OpenCode: 2 prompts (regular / mini), no defaults, persisted to `~/.config/opencode/lineup/install-config.yaml`
+- Three new host-adapter template variables (`PROJECT_PATH_ENCODING_NOTE`, `OLLAMA_MCP_REGISTER_HINT`, `HOST_CAVEAT_NOTE`) so rendered skill content no longer contains Claude-specific hardcoded paths or commands
+- `SPAWN_PRIMITIVE` and `AGENT_ID_PATTERN` template variables -- the Subagent-mode example in `core.md` now renders each host's native invocation syntax (Claude `Agent(subagent_type=...)`, OpenCode `task({subagent_type:...})`, Codex prose directive)
+
+### Fixed
+- Agent file deployment to non-Claude hosts -- previously `lineup install codex` and `lineup install opencode` deployed only skill files, leaving `agents/<role>.md` paths unresolvable at runtime
+- Teams/tput gating on non-Claude hosts -- `init.core.md` Team Setup now checks `TeamCreate` availability before attempting `tput cols`; the terminal-width check only runs when Teams are applicable, preventing spurious errors on Codex and OpenCode
+- YAML frontmatter `description` field now properly quoted in OpenCode-translated agent files
+- Non-interactive (CI) installs now fail fast with a clear error instead of hanging on stdin prompt
+- Malformed `install-config.yaml` now raises an error instead of silently falling through to re-prompt
+
+### Changed
+
+- **Breaking:** Re-run `lineup install <host>` after upgrading. Codex and OpenCode users will be prompted for model IDs on first re-install.
+
 ## [2.2.0] - 2026-04-12
 
 ### Added
@@ -217,7 +243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive agent configurator via /lineup:configure skill
 - Marketplace distribution via izantech marketplace
 
-[Unreleased]: https://github.com/izantech/lineup/compare/2.2.0...HEAD
+[Unreleased]: https://github.com/izantech/lineup/compare/2.3.0...HEAD
+[2.3.0]: https://github.com/izantech/lineup/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/izantech/lineup/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/izantech/lineup/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/izantech/lineup/compare/2.0.0...2.1.0

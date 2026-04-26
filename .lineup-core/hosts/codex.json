@@ -22,6 +22,11 @@
     "HOST_ARTIFACT_LABEL": "Skill Pack",
     "HOST_ARTIFACT_LABEL_LOWER": "skill pack",
     "AGENTS_DIR": "agents/",
-    "OLLAMA_CONFIG_PATH": "~/.codex/lineup/ollama.yaml"
+    "OLLAMA_CONFIG_PATH": "~/.codex/lineup/ollama.yaml",
+    "AGENT_ID_PATTERN": "lineup-<role>",
+    "SPAWN_PRIMITIVE": "Spawn the lineup-<role> subagent with this directive: \"<task-specific prompt>\".\n\nNote on Codex: this is a natural-language directive, not a tool call. Codex routes the directive to ~/.codex/agents/lineup-<role>.toml and runs the subagent in a parallel thread, returning consolidated output.",
+    "PROJECT_PATH_ENCODING_NOTE": "Codex stores project memory under {{MEMORY_PROJECT_DIR}}/<project-name>/ — no path encoding required.",
+    "OLLAMA_MCP_REGISTER_HINT": "see Codex MCP config docs (~/.codex/config.toml [mcp_servers.ollama])",
+    "HOST_CAVEAT_NOTE": ""
   }
 }

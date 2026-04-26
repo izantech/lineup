@@ -22,6 +22,11 @@
     "HOST_DEFAULTS_TERM": "plugin defaults",
     "HOST_ARTIFACT_LABEL": "Plugin",
     "HOST_ARTIFACT_LABEL_LOWER": "plugin",
-    "AGENTS_DIR": "agents/"
+    "AGENTS_DIR": "agents/",
+    "AGENT_ID_PATTERN": "<role>",
+    "SPAWN_PRIMITIVE": "Agent(subagent_type=\"lineup:<role>\", prompt=\"<task-specific prompt>\")",
+    "PROJECT_PATH_ENCODING_NOTE": "Claude Code encodes project paths by replacing `/` with `-` and prepending `-`. For example: `/Users/izan/Dev/Projects/lineup` becomes `-Users-izan-Dev-Projects-lineup`.",
+    "OLLAMA_MCP_REGISTER_HINT": "claude mcp add ollama -- npx -y ollama-mcp",
+    "HOST_CAVEAT_NOTE": ""
   }
 }

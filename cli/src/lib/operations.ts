@@ -45,11 +45,11 @@ export type OperationsDeps = {
   validateSourceBundle: typeof validateSourceBundle;
   detectLegacyClaudeInstall: typeof detectLegacyClaudeInstall;
   installClaudeFromPreparedPlugin: typeof installClaudeFromPreparedPlugin;
-  prepareClaudePluginFromSource: typeof prepareClaudePluginFromSource;
+  prepareClaudePluginFromSource: (sourceRoot: string, version: string, homeDir: string) => Promise<string>;
   statusClaude: typeof statusClaude;
   uninstallClaude: typeof uninstallClaude;
   updateClaudeLocal: typeof updateClaudeLocal;
-  installCodex: typeof installCodex;
+  installCodex: (args: { sourceRoot: string; workspaceRoot: string; homeDir: string }) => Promise<{ skills_dir: string; files_verified: number }>;
   statusCodex: typeof statusCodex;
   uninstallCodex: typeof uninstallCodex;
   codexHostRoot: typeof codexHostRoot;
@@ -183,7 +183,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
     for (const host of input.hosts) {
       try {
         if (host === "claude") {
-          const pluginSource = deps.prepareClaudePluginFromSource(release.sourceRoot, release.tag);
+          const pluginSource = await deps.prepareClaudePluginFromSource(release.sourceRoot, release.tag, deps.homeDir());
           await deps.installClaudeFromPreparedPlugin({
             pluginSource,
             version: release.tag,
@@ -209,9 +209,10 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
         }
 
         if (host === "codex") {
-          const codexResult = deps.installCodex({
+          const codexResult = await deps.installCodex({
             sourceRoot: release.sourceRoot,
-            workspaceRoot: deps.codexHostRoot()
+            workspaceRoot: deps.codexHostRoot(),
+            homeDir: deps.homeDir()
           });
 
           deps.updateHostState(state, "codex", {
@@ -230,7 +231,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
         }
 
         if (host === "opencode") {
-          const opencodeResult = deps.installOpencode(release.sourceRoot, deps.homeDir());
+          const opencodeResult = await deps.installOpencode(release.sourceRoot, deps.homeDir());
 
           deps.updateHostState(state, "opencode", {
             installed: true,
@@ -320,7 +321,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
         }
 
         if (host === "codex") {
-          deps.uninstallCodex();
+          deps.uninstallCodex(deps.homeDir());
           deps.updateHostState(state, "codex", {
             installed: false,
             version: null,
@@ -404,7 +405,7 @@ export function createOperations(overrides: Partial<OperationsDeps> = {}) {
       }
 
       if (host === "codex") {
-        const runtime = deps.statusCodex();
+        const runtime = deps.statusCodex(deps.homeDir());
         const stateHost = state.hosts.codex
           ? {
               host: "codex" as const,

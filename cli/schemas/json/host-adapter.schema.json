@@ -35,7 +35,12 @@
         "HOST_ARTIFACT_LABEL",
         "HOST_ARTIFACT_LABEL_LOWER",
         "AGENTS_DIR",
-        "OLLAMA_CONFIG_PATH"
+        "OLLAMA_CONFIG_PATH",
+        "AGENT_ID_PATTERN",
+        "SPAWN_PRIMITIVE",
+        "PROJECT_PATH_ENCODING_NOTE",
+        "OLLAMA_MCP_REGISTER_HINT",
+        "HOST_CAVEAT_NOTE"
       ],
       "properties": {
         "SKILL_NAME_KICKOFF": { "type": "string" },
@@ -59,7 +64,12 @@
         "HOST_ARTIFACT_LABEL": { "type": "string" },
         "HOST_ARTIFACT_LABEL_LOWER": { "type": "string" },
         "AGENTS_DIR": { "type": "string" },
-        "OLLAMA_CONFIG_PATH": { "type": "string" }
+        "OLLAMA_CONFIG_PATH": { "type": "string" },
+        "AGENT_ID_PATTERN": { "type": "string" },
+        "SPAWN_PRIMITIVE": { "type": "string" },
+        "PROJECT_PATH_ENCODING_NOTE": { "type": "string" },
+        "OLLAMA_MCP_REGISTER_HINT": { "type": "string" },
+        "HOST_CAVEAT_NOTE": { "type": "string" }
       }
     }
   }

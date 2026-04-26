@@ -1,7 +1,7 @@
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { GENERATED_BANNER, HOST_TEMPLATE_SPECS, type HostName } from "./constants";
+import { GENERATED_BANNER, HOST_TEMPLATE_SPECS, LINEUP_AGENT_ROLES, type HostName } from "./constants";
 import { CliError } from "./errors";
 import type { GeneratedFile } from "./types";
 import { type HostAdapter, validateHostAdapter } from "./validation";
@@ -80,6 +80,193 @@ export function writeGeneratedFiles(files: GeneratedFile[], outputRoot: string):
     mkdirSync(path.dirname(absolute), { recursive: true });
     writeFileSync(absolute, file.content, "utf8");
   }
+}
+
+export interface ParsedAgent {
+  role: string;
+  name: string;
+  color?: string;
+  description: string;
+  tools: string[];
+  model: "haiku" | "sonnet" | "opus" | string;
+  memory?: string;
+  body: string;
+}
+
+function parseAgent(filePath: string): ParsedAgent {
+  const content = readFileSync(filePath, "utf8");
+  const normalized = content.replace(/\r\n?/gu, "\n");
+
+  if (!normalized.startsWith("---\n")) {
+    throw new CliError(`Agent file ${filePath} does not start with YAML frontmatter.`, {
+      code: "agent_parse_failed"
+    });
+  }
+
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (closing === -1) {
+    throw new CliError(`Agent file ${filePath} has unclosed YAML frontmatter.`, {
+      code: "agent_parse_failed"
+    });
+  }
+
+  const frontmatterText = normalized.slice(4, closing);
+  const body = normalized.slice(closing + "\n---\n".length);
+  const role = path.basename(filePath, ".md");
+
+  const parsed: Record<string, string> = {};
+  for (const line of frontmatterText.split("\n")) {
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
+    if (!key) continue;
+    parsed[key] = value;
+  }
+
+  const { name, description, tools: toolsRaw, model, color, memory } = parsed;
+
+  if (!name || !description || !toolsRaw || !model) {
+    throw new CliError(`Agent file ${filePath} is missing required frontmatter fields (name, description, tools, model).`, {
+      code: "agent_parse_failed"
+    });
+  }
+
+  const tools = toolsRaw.split(",").map((t) => t.trim()).filter(Boolean);
+
+  return {
+    role,
+    name,
+    color,
+    description,
+    tools,
+    model,
+    memory,
+    body: body.replace(/^\n+/u, "").replace(/\s+$/u, "")
+  };
+}
+
+function translateAgentToCodex(parsed: ParsedAgent, codexModels: { regular: string; mini: string }): string {
+  // haiku → mini; sonnet and opus → regular; unknown aliases pass through raw
+  const resolvedModel = parsed.model === "haiku" ? codexModels.mini : parsed.model === "sonnet" || parsed.model === "opus" ? codexModels.regular : parsed.model;
+  if (parsed.body.includes('"""')) {
+    throw new CliError(
+      `Agent ${parsed.role}.md body contains '"""' which cannot be safely embedded in a TOML multiline string. Rewrite the canonical agent file to avoid triple double-quotes.`,
+      { code: "agent_translation_failed" }
+    );
+  }
+
+  return [
+    `# AUTO-GENERATED. Edit canonical source in agents/${parsed.role}.md.`,
+    `name = "lineup-${parsed.role}"`,
+    `description = "${parsed.description.replace(/"/g, '\\"')}"`,
+    `model = "${resolvedModel}"`,
+    `developer_instructions = """`,
+    parsed.body,
+    `"""`
+  ].join("\n") + "\n";
+}
+
+function yamlQuote(s: string): string {
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function translateAgentToOpencode(parsed: ParsedAgent, models: { regular: string; mini: string } | undefined): string {
+  if (!models) {
+    throw new CliError("OpenCode model config missing — run `lineup install opencode` first.", {
+      code: "opencode_model_config_missing"
+    });
+  }
+
+  const model = parsed.model === "haiku" ? models.mini : models.regular;
+
+  const knownTools: Record<string, string> = {
+    Read: "read",
+    Grep: "grep",
+    Glob: "glob",
+    LS: "list",
+    Write: "write",
+    Edit: "edit",
+    Bash: "bash",
+    WebFetch: "webfetch"
+  };
+
+  const toolEntries = Object.entries(knownTools)
+    .map(([canonical, ocName]) => `  ${ocName}: ${parsed.tools.includes(canonical)}`)
+    .join("\n");
+
+  const unknownTools = parsed.tools.filter((t) => !(t in knownTools));
+  const dropComment = unknownTools.length > 0
+    ? `<!-- Dropped tools (no OpenCode equivalent): ${unknownTools.join(", ")} -->\n\n`
+    : "";
+
+  const colorLine = parsed.color ? `color: ${yamlQuote(parsed.color)}\n` : "";
+
+  const frontmatter = [
+    "---",
+    `description: ${yamlQuote(parsed.description)}`,
+    `mode: subagent`,
+    `model: ${model}`,
+    colorLine.trimEnd(),
+    `tools:`,
+    toolEntries,
+    "---"
+  ].filter((line) => line !== "").join("\n");
+
+  return `${frontmatter}\n<!-- AUTO-GENERATED. Edit canonical source in agents/${parsed.role}.md. -->\n\n${dropComment}${parsed.body}\n`;
+}
+
+export interface HostModelsConfig {
+  claude?: { opus: string; sonnet: string; haiku: string };
+  codex?: { regular: string; mini: string };
+  opencode?: { regular: string; mini: string };
+}
+
+export function generateHostAgents(
+  sourceRoot: string,
+  host: HostName,
+  models?: HostModelsConfig
+): GeneratedFile[] {
+  if (host === "claude") {
+    return [];
+  }
+
+  const files: GeneratedFile[] = [];
+
+  for (const role of LINEUP_AGENT_ROLES) {
+    const agentPath = path.join(sourceRoot, "agents", `${role}.md`);
+    const parsed = parseAgent(agentPath);
+
+    if (host === "codex") {
+      if (!models?.codex) {
+        throw new CliError("Codex model config missing — run 'lineup install codex' first.", {
+          code: "codex_model_config_missing"
+        });
+      }
+      const content = translateAgentToCodex(parsed, models.codex);
+      files.push({
+        host,
+        source: `agents/${role}.md`,
+        target: `.codex/agents/lineup-${role}.toml`,
+        content
+      });
+    } else if (host === "opencode") {
+      if (!models?.opencode) {
+        throw new CliError("OpenCode model config missing — run 'lineup install opencode' first.", {
+          code: "opencode_model_config_missing"
+        });
+      }
+      const content = translateAgentToOpencode(parsed, models.opencode);
+      files.push({
+        host,
+        source: `agents/${role}.md`,
+        target: `.opencode/agents/lineup-${role}.md`,
+        content
+      });
+    }
+  }
+
+  return files;
 }
 
 export function prepareClaudePluginSkeleton(sourceRoot: string, outputRoot: string): void {

@@ -12,7 +12,7 @@ type HarnessCalls = {
   prepareClaudePluginFromSourceInputs: Array<{ sourceRoot: string; version: string }>;
   installClaudeFromPreparedPluginInputs: Array<{ pluginSource: string; version: string; migrateLegacy: boolean }>;
   updateClaudeLocal: number;
-  installCodexInputs: Array<{ sourceRoot: string; workspaceRoot: string }>;
+  installCodexInputs: Array<{ sourceRoot: string; workspaceRoot: string; homeDir: string }>;
   installOpencodeInputs: Array<{ sourceRoot: string; homeDir: string }>;
   uninstallClaude: number;
   uninstallCodexInputs: number;
@@ -90,7 +90,7 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
     installClaudeFromPreparedPlugin: async (input) => {
       calls.installClaudeFromPreparedPluginInputs.push(input);
     },
-    prepareClaudePluginFromSource: (sourceRoot, version) => {
+    prepareClaudePluginFromSource: async (sourceRoot, version) => {
       calls.prepareClaudePluginFromSourceInputs.push({ sourceRoot, version });
       return "/tmp/generated-claude-plugin";
     },
@@ -108,7 +108,7 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
     updateClaudeLocal: async () => {
       calls.updateClaudeLocal += 1;
     },
-    installCodex: (input) => {
+    installCodex: async (input) => {
       calls.installCodexInputs.push(input);
       return {
         skills_dir: "/tmp/codex-skills",
@@ -133,7 +133,7 @@ function createHarness(overrides: Partial<OperationsDeps> = {}): {
       };
     },
     codexHostRoot: () => "/tmp/codex-host",
-    installOpencode: (sourceRoot, homeDir) => {
+    installOpencode: async (sourceRoot, homeDir) => {
       calls.installOpencodeInputs.push({ sourceRoot, homeDir });
       return {
         skills_dir: "/tmp/opencode-skills",
@@ -253,7 +253,8 @@ describe("operations lifecycle flows", () => {
     expect(harness.calls.installCodexInputs).toEqual([
       {
         sourceRoot: "/tmp/release-source",
-        workspaceRoot: "/tmp/codex-host"
+        workspaceRoot: "/tmp/codex-host",
+        homeDir: "/tmp/opencode-home"
       }
     ]);
     expect(harness.calls.saveState).toBe(1);

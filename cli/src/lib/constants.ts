@@ -49,6 +49,21 @@ export const OPENCODE_REQUIRED_FILES = [
   ".opencode/skills/lineup-digest/SKILL.md"
 ] as const;
 
+export const LINEUP_AGENT_ROLES = [
+  "researcher",
+  "architect",
+  "developer",
+  "reviewer",
+  "documenter"
+] as const;
+
+export const MODEL_ALIASES = {
+  codex: { haiku: "gpt-5.4-mini", sonnet: "gpt-5.4", opus: "gpt-5.4" }
+} as const;
+
+export const CODEX_AGENT_FILES = LINEUP_AGENT_ROLES.map((r) => `.codex/agents/lineup-${r}.toml`);
+export const OPENCODE_AGENT_FILES = LINEUP_AGENT_ROLES.map((r) => `.opencode/agents/lineup-${r}.md`);
+
 export const HOST_TEMPLATE_SPECS = [
   {
     source: ".lineup-core/skills/kick-off/core.md",

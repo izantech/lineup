@@ -22,6 +22,11 @@
     "HOST_ARTIFACT_LABEL": "Skill",
     "HOST_ARTIFACT_LABEL_LOWER": "skill",
     "AGENTS_DIR": "agents/",
-    "OLLAMA_CONFIG_PATH": "~/.config/opencode/lineup/ollama.yaml"
+    "OLLAMA_CONFIG_PATH": "~/.config/opencode/lineup/ollama.yaml",
+    "AGENT_ID_PATTERN": "lineup-<role>",
+    "SPAWN_PRIMITIVE": "task({ subagent_type: \"lineup-<role>\", prompt: \"<task-specific prompt>\" })",
+    "PROJECT_PATH_ENCODING_NOTE": "OpenCode stores project memory under {{MEMORY_PROJECT_DIR}}/<project-name>/ — no path encoding required.",
+    "OLLAMA_MCP_REGISTER_HINT": "see OpenCode MCP config docs (`opencode mcp add` or edit `~/.config/opencode/config.json`)",
+    "HOST_CAVEAT_NOTE": "**OpenCode caveat**: Some OpenCode builds do not honor the `model` and `permission` fields on custom subagents invoked via the `task` tool. If you observe agents running with the wrong model or with insufficient permissions, set the desired values explicitly in the orchestrator's `task(...)` call rather than relying on the agent file's frontmatter."
   }
 }

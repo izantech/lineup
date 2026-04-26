@@ -78,6 +78,26 @@ export function claudeMarketplaceRoot(homeDir = os.homedir()): string {
   return path.join(claudeHostRoot(homeDir), "marketplace");
 }
 
+export function codexAgentsDir(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".codex", "agents");
+}
+
+export function opencodeAgentsDir(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".config", "opencode", "agents");
+}
+
+export function opencodeLineupConfigPath(homeDir = os.homedir()): string {
+  return path.join(homeDir, ".config", "opencode", "lineup", "install-config.yaml");
+}
+
+export function claudeLineupConfigPath(homeDir: string): string {
+  return path.join(homeDir, ".claude", "lineup", "install-config.yaml");
+}
+
+export function codexLineupConfigPath(homeDir: string): string {
+  return path.join(homeDir, ".codex", "lineup", "install-config.yaml");
+}
+
 export function purgeTargets(hosts: ReadonlyArray<"claude" | "codex" | "opencode">, homeDir = os.homedir()): string[] {
   const targets: string[] = [];
 

@@ -47,6 +47,7 @@ Claude managed assets:
 
 - `~/.lineup/hosts/claude/plugins/lineup/<version>/`
 - `~/.lineup/hosts/claude/marketplace/.claude-plugin/marketplace.json`
+- `~/.claude/lineup/install-config.yaml`
 
 Codex managed assets:
 
@@ -56,6 +57,8 @@ Codex installs are global-only.
 - `~/.codex/skills/lineup-configure/`
 - `~/.codex/skills/lineup-explain/`
 - `~/.codex/skills/lineup-playbook/`
+- `~/.codex/agents/lineup-<role>.toml` (one file per agent role)
+- `~/.codex/lineup/install-config.yaml`
 
 OpenCode managed assets:
 
@@ -63,6 +66,8 @@ OpenCode managed assets:
 - `~/.config/opencode/skills/lineup-configure/`
 - `~/.config/opencode/skills/lineup-explain/`
 - `~/.config/opencode/skills/lineup-playbook/`
+- `~/.config/opencode/agents/lineup-<role>.md` (one file per agent role)
+- `~/.config/opencode/lineup/install-config.yaml`
 
 Optional uninstall purge targets:
 

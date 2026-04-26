@@ -111,11 +111,10 @@ For each agent that needs migration:
 
 ### Project path encoding
 
-Claude Code encodes project paths by replacing `/` with `-` and prepending `-`.
-For example: `/Users/izan/Dev/Projects/lineup` becomes `-Users-izan-Dev-Projects-lineup`.
+{{PROJECT_PATH_ENCODING_NOTE}}
 
 The full project memory path for an agent is:
-`{{MEMORY_PROJECT_DIR}}/-Users-izan-Dev-Projects-lineup/agent-memory/lineup-researcher/MEMORY.md`
+`{{MEMORY_PROJECT_DIR}}/<project-id>/agent-memory/lineup-<role>/MEMORY.md`
 
 ### Migration log
 
@@ -249,31 +248,32 @@ When a tactic is selected, **replace the default pipeline** with the tactic's st
 
 ## Team Setup
 
-After tactic resolution, check whether Claude Code Teams are available and
-whether the terminal is wide enough to support side-by-side teammate panels.
+After tactic resolution, check whether Teams are available and whether the
+terminal is wide enough to support side-by-side teammate panels.
+
+### Detection
+
+Check whether the `TeamCreate` tool is available in your environment. If it is
+**not** available, set `TEAMS_MODE = false`, skip the rest of this section (no
+terminal width check, no team creation), and continue to Ollama Detection.
+
+If `TeamCreate` is available, set `TEAMS_MODE = true` and continue to the
+terminal width check below.
 
 ### Terminal width check
 
-Before checking for Teams availability, detect the terminal width:
+(Only reached when TeamCreate is available.)
 
 1. Run `tput cols` using the Bash tool.
 2. If the command succeeds and returns a number **less than 80**, the terminal is
    too narrow for Teams. Set `TEAMS_MODE = false` and skip the rest of this
-   section (Detection, Creating the team, etc.). Log briefly:
+   section (Creating the team, etc.). Log briefly:
    "Note: Terminal width (<N> cols) below 80 — using standard agents."
 3. If the command fails (non-zero exit, no output, or non-numeric output), log a
    warning: "Warning: Could not detect terminal width — disabling Teams mode."
    Set `TEAMS_MODE = false` and skip the rest of this section. Do not abort the
    pipeline over a failed width check.
-4. If the width is **80 or greater**, continue to Detection below.
-
-### Detection
-
-Check whether the `TeamCreate` tool is available in your environment. If it is
-**not available**, skip this section entirely and use the standard subagent path
-for all stages. Set an internal flag: `TEAMS_MODE = false`.
-
-If `TeamCreate` is available, set `TEAMS_MODE = true` and proceed below.
+4. If the width is **80 or greater**, continue to Creating the team below.
 
 ### Creating the team
 
@@ -336,6 +336,10 @@ lifecycle. However, you **must** shut down individual teammates when the pipelin
 completes. See the Pipeline Cleanup section in the core pipeline definition for
 the shutdown procedure.
 
+### Host caveats
+
+{{HOST_CAVEAT_NOTE}}
+
 ---
 
 ## Ollama Detection
@@ -365,8 +369,7 @@ After Team Setup, check whether Ollama is available for use by researcher agents
 
     b. If the tool is not found or the call fails, set `OLLAMA_AVAILABLE = false` and log:
        "Warning: Ollama is enabled in config but the MCP server is not available.
-       Register the Ollama MCP server using your host's configuration method
-       (e.g., for Claude: `claude mcp add ollama -- npx -y ollama-mcp`)."
+       Register the Ollama MCP server: {{OLLAMA_MCP_REGISTER_HINT}}."
 
 Store in working context:
 - `OLLAMA_AVAILABLE` — boolean, whether Ollama is ready for use

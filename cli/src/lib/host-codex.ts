@@ -1,10 +1,11 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { CODEX_REQUIRED_FILES, CODEX_SKILL_DIRS } from "./constants";
+import { CODEX_REQUIRED_FILES, CODEX_SKILL_DIRS, LINEUP_AGENT_ROLES } from "./constants";
 import { CliError } from "./errors";
-import { generateHostFiles, writeGeneratedFiles } from "./generate";
-import { codexGlobalSkillsDir, codexLegacyGlobalSkillsDir } from "./paths";
+import { generateHostAgents, generateHostFiles, writeGeneratedFiles } from "./generate";
+import { codexAgentsDir, codexGlobalSkillsDir, codexLegacyGlobalSkillsDir } from "./paths";
+import { promptCodexModels } from "./prompts";
 import type { StatusHost } from "./types";
 
 export function ensureCodexGenerated(sourceRoot: string, outputRoot: string): string {
@@ -61,19 +62,31 @@ function replaceDirectoryAtomic(sourceDir: string, targetDir: string): void {
   }
 }
 
-export function installCodex({
+export async function installCodex({
   sourceRoot,
-  workspaceRoot
+  workspaceRoot,
+  homeDir
 }: {
   sourceRoot: string;
   workspaceRoot: string;
-}): { skills_dir: string; files_verified: number } {
+  homeDir: string;
+}): Promise<{ skills_dir: string; files_verified: number }> {
+  const codexModels = await promptCodexModels(homeDir);
+
   const generatedRoot = path.join(workspaceRoot, "generated", "codex");
   const sourceSkills = ensureCodexGenerated(sourceRoot, generatedRoot);
   validateCodexSkillsDir(sourceSkills);
 
-  const destinationRoot = codexGlobalSkillsDir();
-  const legacyRoot = codexLegacyGlobalSkillsDir();
+  const agentFiles = generateHostAgents(sourceRoot, "codex", { codex: codexModels });
+  const agentDir = codexAgentsDir(homeDir);
+  mkdirSync(agentDir, { recursive: true });
+  for (const f of agentFiles) {
+    const target = path.join(agentDir, path.basename(f.target));
+    writeFileSync(target, f.content, "utf8");
+  }
+
+  const destinationRoot = codexGlobalSkillsDir(homeDir);
+  const legacyRoot = codexLegacyGlobalSkillsDir(homeDir);
   mkdirSync(destinationRoot, { recursive: true });
 
   for (const dirName of CODEX_SKILL_DIRS) {
@@ -95,9 +108,9 @@ export function installCodex({
   };
 }
 
-export function uninstallCodex(): { skills_dir: string } {
-  const root = codexGlobalSkillsDir();
-  const legacyRoot = codexLegacyGlobalSkillsDir();
+export function uninstallCodex(homeDir: string): { skills_dir: string } {
+  const root = codexGlobalSkillsDir(homeDir);
+  const legacyRoot = codexLegacyGlobalSkillsDir(homeDir);
   for (const dirName of CODEX_SKILL_DIRS) {
     const target = path.join(root, dirName);
     if (existsSync(target)) {
@@ -110,19 +123,30 @@ export function uninstallCodex(): { skills_dir: string } {
     }
   }
 
+  for (const role of LINEUP_AGENT_ROLES) {
+    const f = path.join(codexAgentsDir(homeDir), `lineup-${role}.toml`);
+    if (existsSync(f)) rmSync(f, { force: true });
+  }
+
   return { skills_dir: root };
 }
 
-export function statusCodex(): StatusHost {
-  const root = codexGlobalSkillsDir();
-  const missing = requiredAbsolutePaths(root).filter((item) => !existsSync(item));
+export function statusCodex(homeDir: string): StatusHost {
+  const root = codexGlobalSkillsDir(homeDir);
+  const missingSkills = requiredAbsolutePaths(root).filter((item) => !existsSync(item));
+
+  const missingAgents = LINEUP_AGENT_ROLES.filter(
+    (role) => !existsSync(path.join(codexAgentsDir(homeDir), `lineup-${role}.toml`))
+  );
+
+  const missing = missingSkills.length + missingAgents.length;
 
   return {
     host: "codex",
-    installed: missing.length === 0,
+    installed: missing === 0,
     version: null,
     source: null,
     last_action: null,
-    ...(missing.length > 0 ? { error: `Missing ${missing.length} required files.` } : {})
+    ...(missing > 0 ? { error: `Missing ${missing} required files.` } : {})
   };
 }

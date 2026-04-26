@@ -1,16 +1,18 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
   CLAUDE_LEGACY_PLUGIN,
   CLAUDE_LOCAL_MARKETPLACE_NAME,
   CLAUDE_LOCAL_PLUGIN,
+  LINEUP_AGENT_ROLES,
   LINEUP_PLUGIN_NAME
 } from "./constants";
 import { CliError } from "./errors";
 import { generateHostFiles, prepareClaudePluginSkeleton, writeGeneratedFiles } from "./generate";
 import { claudeManagedPluginDir, claudeMarketplaceRoot } from "./paths";
 import { assertSuccess, runCommand } from "./process";
+import { promptClaudeModels } from "./prompts";
 import type { StatusHost } from "./types";
 
 function parseInstallPresence(output: string): { localInstalled: boolean; legacyInstalled: boolean } {
@@ -56,14 +58,45 @@ function writeMarketplace(root: string, pluginSource: string, version: string): 
   return root;
 }
 
-export function prepareClaudePluginFromSource(sourceRoot: string, version: string): string {
-  const targetRoot = claudeManagedPluginDir(version);
+function rewriteAgentModel(filePath: string, models: { opus: string; sonnet: string; haiku: string }): void {
+  const content = readFileSync(filePath, "utf8");
+  const normalized = content.replace(/\r\n?/g, "\n");
+
+  if (!normalized.startsWith("---\n")) return;
+
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (closing === -1) return;
+
+  const frontmatter = normalized.slice(0, closing + "\n---".length);
+  const rest = normalized.slice(closing + "\n---".length);
+
+  const rewritten = frontmatter.replace(/^(model:\s*)(\S+)$/m, (_match, prefix, alias) => {
+    if (alias === "haiku") return `${prefix}${models.haiku}`;
+    if (alias === "sonnet") return `${prefix}${models.sonnet}`;
+    if (alias === "opus") return `${prefix}${models.opus}`;
+    return _match;
+  });
+
+  writeFileSync(filePath, rewritten + rest, "utf8");
+}
+
+export async function prepareClaudePluginFromSource(sourceRoot: string, version: string, homeDir: string): Promise<string> {
+  const claudeModels = await promptClaudeModels(homeDir);
+
+  const targetRoot = claudeManagedPluginDir(version, homeDir);
   mkdirSync(targetRoot, { recursive: true });
 
   prepareClaudePluginSkeleton(sourceRoot, targetRoot);
 
   const files = generateHostFiles(sourceRoot, "claude");
   writeGeneratedFiles(files, targetRoot);
+
+  for (const role of LINEUP_AGENT_ROLES) {
+    const agentFile = path.join(targetRoot, "agents", `${role}.md`);
+    if (existsSync(agentFile)) {
+      rewriteAgentModel(agentFile, claudeModels);
+    }
+  }
 
   const pluginManifest = path.join(targetRoot, ".claude-plugin", "plugin.json");
   if (!existsSync(pluginManifest)) {

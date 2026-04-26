@@ -83,14 +83,13 @@ every spawn.
 
 ### Subagent mode (`TEAMS_MODE = false`)
 
-Spawn using the Agent tool with `subagent_type: "lineup:<role>"`.
-Example for a researcher:
+Spawn using your host's spawn primitive. Example for a researcher:
 
 ```
-Agent(subagent_type="lineup:researcher", prompt="<task-specific prompt>")
+{{SPAWN_PRIMITIVE}}
 ```
 
-The agent's frontmatter (model, tools, memory) is applied automatically.
+The agent's frontmatter (model, tools, memory) is applied automatically by the host.
 
 ### Team mode (`TEAMS_MODE = true`)
 

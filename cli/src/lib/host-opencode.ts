@@ -1,10 +1,11 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { OPENCODE_REQUIRED_FILES, OPENCODE_SKILL_DIRS } from "./constants";
+import { LINEUP_AGENT_ROLES, OPENCODE_REQUIRED_FILES, OPENCODE_SKILL_DIRS } from "./constants";
 import { CliError } from "./errors";
-import { generateHostFiles, writeGeneratedFiles } from "./generate";
-import { opencodeGlobalSkillsDir, opencodeHostRoot } from "./paths";
+import { generateHostAgents, generateHostFiles, writeGeneratedFiles } from "./generate";
+import { opencodeAgentsDir, opencodeGlobalSkillsDir, opencodeHostRoot } from "./paths";
+import { promptOpencodeModels } from "./prompts";
 import type { StatusHost } from "./types";
 
 export function ensureOpencodeGenerated(sourceRoot: string, homeDir: string): string {
@@ -62,7 +63,16 @@ function replaceDirectoryAtomic(sourceDir: string, targetDir: string): void {
   }
 }
 
-export function installOpencode(sourceRoot: string, homeDir: string): { skills_dir: string; files_verified: number } {
+export async function installOpencode(sourceRoot: string, homeDir: string): Promise<{ skills_dir: string; files_verified: number }> {
+  const opencodeModels = await promptOpencodeModels(homeDir);
+  const agentFiles = generateHostAgents(sourceRoot, "opencode", { opencode: opencodeModels });
+  const agentDir = opencodeAgentsDir(homeDir);
+  mkdirSync(agentDir, { recursive: true });
+  for (const f of agentFiles) {
+    const target = path.join(agentDir, path.basename(f.target));
+    writeFileSync(target, f.content, "utf8");
+  }
+
   const sourceSkills = ensureOpencodeGenerated(sourceRoot, homeDir);
   validateOpencodeSkillsDir(sourceSkills);
 
@@ -92,19 +102,30 @@ export function uninstallOpencode(homeDir: string): { skills_dir: string } {
     }
   }
 
+  for (const role of LINEUP_AGENT_ROLES) {
+    const f = path.join(opencodeAgentsDir(homeDir), `lineup-${role}.md`);
+    if (existsSync(f)) rmSync(f, { force: true });
+  }
+
   return { skills_dir: root };
 }
 
 export function statusOpencode(homeDir: string): StatusHost {
   const root = opencodeGlobalSkillsDir(homeDir);
-  const missing = requiredAbsolutePaths(root).filter((item) => !existsSync(item));
+  const missingSkills = requiredAbsolutePaths(root).filter((item) => !existsSync(item));
+
+  const missingAgents = LINEUP_AGENT_ROLES.filter(
+    (role) => !existsSync(path.join(opencodeAgentsDir(homeDir), `lineup-${role}.md`))
+  );
+
+  const missing = missingSkills.length + missingAgents.length;
 
   return {
     host: "opencode",
-    installed: missing.length === 0,
+    installed: missing === 0,
     version: null,
     source: null,
     last_action: null,
-    ...(missing.length > 0 ? { error: `Missing ${missing.length} required files.` } : {})
+    ...(missing > 0 ? { error: `Missing ${missing} required files.` } : {})
   };
 }

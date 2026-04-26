@@ -67,6 +67,7 @@ Key internals:
 - `cli/src/lib/generate.ts` — template rendering using host adapters
 - `cli/src/lib/host-claude.ts` — Claude lifecycle and migration handling
 - `cli/src/lib/host-codex.ts` — Codex global skill sync/uninstall/status
+- `cli/src/lib/host-opencode.ts` — OpenCode global skill sync/uninstall/status
 - `cli/src/lib/validation.ts` — AJV + YAML parsing + schema checks
 - `cli/schemas/**` — JSON/YAML schemas
 
@@ -170,10 +171,14 @@ the needed roles.
 When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and `TeamCreate` is available,
 the kick-off pipeline runs in **teams mode**, subject to a terminal width check:
 
-- **Terminal width gate**: At pipeline start, `tput cols` is run to detect width.
-  If the terminal is narrower than 80 columns, Teams mode is disabled and agents
-  spawn as standard subagents instead. If `tput` fails, a warning is logged and
-  the pipeline continues with Teams mode enabled.
+- **TeamCreate availability gate**: `init.core.md` checks `TeamCreate` availability
+  before attempting any Teams-mode setup. On hosts where Teams can never apply
+  (Codex, OpenCode), the check exits cleanly and the pipeline proceeds with standard
+  subagents.
+- **Terminal width gate**: Only runs when Teams mode is applicable. `tput cols` is
+  run to detect width. If the terminal is narrower than 80 columns, Teams mode is
+  disabled and agents spawn as standard subagents instead. If `tput` fails, a warning
+  is logged and the pipeline continues with Teams mode enabled.
 
 - A session-scoped team named `lineup-<session_id>` is created once during initialization
   (the 6-character `session_id` is generated randomly to isolate concurrent runs).
