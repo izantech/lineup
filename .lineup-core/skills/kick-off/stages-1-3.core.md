@@ -72,19 +72,32 @@ spawning agents.
 
 ### Effort mapping
 
+Tier-to-Codex mapping:
+
+| Tier | Codex model | Reasoning effort |
+|------|-------------|------------------|
+| haiku | gpt-5.4-mini | low |
+| sonnet | gpt-5.5 | medium |
+| opus | gpt-5.5 | high or xhigh |
+
+Architect planning must use at least `gpt-5.5` with `high` reasoning. Use
+`xhigh` for complex planning or when the architecture stage is substituting for
+a proposal/research synthesis.
+
 | Role | simple | moderate | complex |
 |------|--------|----------|---------|
 | Researcher | haiku | sonnet | sonnet |
-| Architect | sonnet | sonnet | opus |
-| Developer | haiku | haiku | sonnet |
+| Architect | opus | opus | opus |
+| Developer | haiku | sonnet | opus |
 | Reviewer | sonnet | sonnet | sonnet |
+| Documenter | haiku | haiku | sonnet |
 
 ### How to apply
 
 When spawning an agent, select the model from the table above based on the
 triage complexity. Include the effort-assigned model in the Agent tool call
 (`model` parameter for team mode, `model` parameter or equivalent for subagent
-mode).
+mode), and include the mapped reasoning effort when the host supports it.
 
 ### Override interaction
 

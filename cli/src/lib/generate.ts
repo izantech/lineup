@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { GENERATED_BANNER, HOST_TEMPLATE_SPECS, LINEUP_AGENT_ROLES, type HostName } from "./constants";
 import { CliError } from "./errors";
+import type { CodexModelsConfig } from "./prompts";
 import type { GeneratedFile } from "./types";
 import { type HostAdapter, validateHostAdapter } from "./validation";
 
@@ -146,9 +147,17 @@ function parseAgent(filePath: string): ParsedAgent {
   };
 }
 
-function translateAgentToCodex(parsed: ParsedAgent, codexModels: { regular: string; mini: string }): string {
-  // haiku → mini; sonnet and opus → regular; unknown aliases pass through raw
-  const resolvedModel = parsed.model === "haiku" ? codexModels.mini : parsed.model === "sonnet" || parsed.model === "opus" ? codexModels.regular : parsed.model;
+function translateAgentToCodex(parsed: ParsedAgent, codexModels: CodexModelsConfig): string {
+  const resolvedModel =
+    parsed.model === "haiku" ? codexModels.haiku :
+    parsed.model === "sonnet" ? codexModels.sonnet :
+    parsed.model === "opus" ? codexModels.opus :
+    parsed.model;
+  const reasoningEffort =
+    parsed.model === "haiku" ? codexModels.haikuReasoningEffort :
+    parsed.model === "sonnet" ? codexModels.sonnetReasoningEffort :
+    parsed.model === "opus" ? codexModels.opusReasoningEffort :
+    undefined;
   if (parsed.body.includes('"""')) {
     throw new CliError(
       `Agent ${parsed.role}.md body contains '"""' which cannot be safely embedded in a TOML multiline string. Rewrite the canonical agent file to avoid triple double-quotes.`,
@@ -161,10 +170,11 @@ function translateAgentToCodex(parsed: ParsedAgent, codexModels: { regular: stri
     `name = "lineup-${parsed.role}"`,
     `description = "${parsed.description.replace(/"/g, '\\"')}"`,
     `model = "${resolvedModel}"`,
+    reasoningEffort ? `model_reasoning_effort = "${reasoningEffort}"` : "",
     `developer_instructions = """`,
     parsed.body,
     `"""`
-  ].join("\n") + "\n";
+  ].filter((line) => line !== "").join("\n") + "\n";
 }
 
 function yamlQuote(s: string): string {
@@ -242,7 +252,7 @@ function translateAgentToOpencode(parsed: ParsedAgent, models: { regular: string
 
 export interface HostModelsConfig {
   claude?: { opus: string; sonnet: string; haiku: string };
-  codex?: { regular: string; mini: string };
+  codex?: CodexModelsConfig;
   opencode?: { regular: string; mini: string };
 }
 

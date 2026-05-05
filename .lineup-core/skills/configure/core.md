@@ -29,9 +29,9 @@ These are the {{HOST_DEFAULTS_TERM}} (used as reference if agent files cannot be
 |-------|-------|--------|-------|
 | researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 | architect | opus | project | Read, Grep, Glob, LS, Write |
-| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
-| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| developer | sonnet | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | sonnet | project | Read, Grep, Glob, LS, Bash |
+| documenter | haiku | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 ### 1b. Read user overrides

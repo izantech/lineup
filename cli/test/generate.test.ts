@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { GENERATED_BANNER, HOST_TEMPLATE_SPECS } from "../src/lib/constants";
-import { generateHostFiles } from "../src/lib/generate";
+import { generateHostAgents, generateHostFiles } from "../src/lib/generate";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -66,5 +66,28 @@ describe("host file generation", () => {
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true });
     }
+  });
+
+  it("generates Codex agents with tier-specific models and reasoning effort", () => {
+    const files = generateHostAgents(sourceRoot, "codex", {
+      codex: {
+        haiku: "gpt-5.4-mini",
+        haikuReasoningEffort: "low",
+        sonnet: "gpt-5.5",
+        sonnetReasoningEffort: "medium",
+        opus: "gpt-5.5",
+        opusReasoningEffort: "xhigh"
+      }
+    });
+
+    const byRole = new Map(
+      files.map((file) => [path.basename(file.target, ".toml").replace(/^lineup-/u, ""), file.content])
+    );
+
+    expect(byRole.get("researcher")).toContain('model = "gpt-5.4-mini"\nmodel_reasoning_effort = "low"');
+    expect(byRole.get("architect")).toContain('model = "gpt-5.5"\nmodel_reasoning_effort = "xhigh"');
+    expect(byRole.get("developer")).toContain('model = "gpt-5.5"\nmodel_reasoning_effort = "medium"');
+    expect(byRole.get("reviewer")).toContain('model = "gpt-5.5"\nmodel_reasoning_effort = "medium"');
+    expect(byRole.get("documenter")).toContain('model = "gpt-5.4-mini"\nmodel_reasoning_effort = "low"');
   });
 });

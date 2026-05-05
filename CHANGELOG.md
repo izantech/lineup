@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `lineup-` prefix on filenames avoids collisions with user-authored agents
 - Install-time model configuration for all three hosts -- `lineup install` now prompts for model IDs and persists them to the host's config directory; reinstalls reuse the persisted config (delete the file to re-prompt)
   - Claude: 3 prompts (opus / sonnet / haiku), defaults `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`, persisted to `~/.claude/lineup/install-config.yaml`
-  - Codex: 2 prompts (regular / mini), defaults `gpt-5.4` / `gpt-5.4-mini`, persisted to `~/.codex/lineup/install-config.yaml`
+  - Codex: 3 prompts (opus / sonnet / haiku), defaults `gpt-5.5` xhigh / `gpt-5.5` medium / `gpt-5.4-mini` low, persisted to `~/.codex/lineup/install-config.yaml`
   - OpenCode: 2 prompts (regular / mini), no defaults, persisted to `~/.config/opencode/lineup/install-config.yaml`
 - Three new host-adapter template variables (`PROJECT_PATH_ENCODING_NOTE`, `OLLAMA_MCP_REGISTER_HINT`, `HOST_CAVEAT_NOTE`) so rendered skill content no longer contains Claude-specific hardcoded paths or commands
 - `SPAWN_PRIMITIVE` and `AGENT_ID_PATTERN` template variables -- the Subagent-mode example in `core.md` now renders each host's native invocation syntax (Claude `Agent(subagent_type=...)`, OpenCode `task({subagent_type:...})`, Codex prose directive)

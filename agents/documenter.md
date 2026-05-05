@@ -3,7 +3,7 @@ name: documenter
 color: cyan
 description: Generates project documentation for newly implemented features or fills gaps in existing docs. Use after implementation is verified to create or update READMEs, API docs, guides, or inline documentation. Writes files to the project.
 tools: Read, Grep, Glob, LS, Write, WebFetch
-model: opus
+model: haiku
 memory: project
 ---
 

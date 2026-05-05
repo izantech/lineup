@@ -221,7 +221,16 @@ export async function promptClaudeModels(homeDir: string, force = false): Promis
   }
 }
 
-export async function promptCodexModels(homeDir: string, force = false): Promise<{ regular: string; mini: string }> {
+export interface CodexModelsConfig {
+  haiku: string;
+  sonnet: string;
+  opus: string;
+  haikuReasoningEffort: string;
+  sonnetReasoningEffort: string;
+  opusReasoningEffort: string;
+}
+
+export async function promptCodexModels(homeDir: string, force = false): Promise<CodexModelsConfig> {
   const configPath = codexLineupConfigPath(homeDir);
 
   if (!force && existsSync(configPath)) {
@@ -240,15 +249,34 @@ export async function promptCodexModels(homeDir: string, force = false): Promise
       const value = line.slice(colonIdx + 1).trim();
       if (key) parsed[key] = value;
     }
-    const REQUIRED_KEYS = ["regular", "mini"];
-    const missing = REQUIRED_KEYS.filter((k) => !parsed[k]);
+    const hasTierConfig = Boolean(parsed["haiku"] && parsed["sonnet"] && parsed["opus"]);
+    const hasLegacyConfig = Boolean(parsed["regular"] && parsed["mini"]);
+    const REQUIRED_KEYS = ["haiku", "sonnet", "opus"];
+    const missing = hasTierConfig ? [] : REQUIRED_KEYS.filter((k) => !parsed[k]);
     if (missing.length > 0) {
-      throw new CliError(
-        `Codex install-config at ${configPath} is missing required keys: ${missing.join(", ")}. Edit the file or delete it to re-prompt.`,
-        { code: "codex_models_invalid" }
-      );
+      if (!hasLegacyConfig) {
+        throw new CliError(
+          `Codex install-config at ${configPath} is missing required keys: ${missing.join(", ")}. Edit the file or delete it to re-prompt.`,
+          { code: "codex_models_invalid" }
+        );
+      }
+      return {
+        haiku: parsed["mini"],
+        sonnet: MODEL_ALIASES.codex.sonnet,
+        opus: MODEL_ALIASES.codex.opus,
+        haikuReasoningEffort: MODEL_ALIASES.codex.haikuReasoningEffort,
+        sonnetReasoningEffort: MODEL_ALIASES.codex.sonnetReasoningEffort,
+        opusReasoningEffort: MODEL_ALIASES.codex.opusReasoningEffort
+      };
     }
-    return { regular: parsed["regular"], mini: parsed["mini"] };
+    return {
+      haiku: parsed["haiku"],
+      sonnet: parsed["sonnet"],
+      opus: parsed["opus"],
+      haikuReasoningEffort: parsed["haiku_reasoning_effort"] || MODEL_ALIASES.codex.haikuReasoningEffort,
+      sonnetReasoningEffort: parsed["sonnet_reasoning_effort"] || MODEL_ALIASES.codex.sonnetReasoningEffort,
+      opusReasoningEffort: parsed["opus_reasoning_effort"] || MODEL_ALIASES.codex.opusReasoningEffort
+    };
   }
 
   if (!isInteractive()) {
@@ -263,22 +291,43 @@ export async function promptCodexModels(homeDir: string, force = false): Promise
   try {
     output.write("Codex model configuration\n");
 
-    let regular = "";
-    while (!regular) {
-      regular = (await rl.question(`Codex regular model (used for sonnet/opus tiers) [${MODEL_ALIASES.codex.sonnet}]: `)).trim();
-      if (!regular) regular = MODEL_ALIASES.codex.sonnet;
+    let haiku = "";
+    while (!haiku) {
+      haiku = (await rl.question(`Codex Haiku-tier model [${MODEL_ALIASES.codex.haiku}]: `)).trim();
+      if (!haiku) haiku = MODEL_ALIASES.codex.haiku;
     }
 
-    let mini = "";
-    while (!mini) {
-      mini = (await rl.question(`Codex mini model (used for haiku tier) [${MODEL_ALIASES.codex.haiku}]: `)).trim();
-      if (!mini) mini = MODEL_ALIASES.codex.haiku;
+    let sonnet = "";
+    while (!sonnet) {
+      sonnet = (await rl.question(`Codex Sonnet-tier model [${MODEL_ALIASES.codex.sonnet}]: `)).trim();
+      if (!sonnet) sonnet = MODEL_ALIASES.codex.sonnet;
+    }
+
+    let opus = "";
+    while (!opus) {
+      opus = (await rl.question(`Codex Opus-tier model [${MODEL_ALIASES.codex.opus}]: `)).trim();
+      if (!opus) opus = MODEL_ALIASES.codex.opus;
     }
 
     mkdirSync(path.dirname(configPath), { recursive: true });
-    writeFileSync(configPath, `regular: ${regular}\nmini: ${mini}\n`, "utf8");
+    writeFileSync(configPath, [
+      `haiku: ${haiku}`,
+      `haiku_reasoning_effort: ${MODEL_ALIASES.codex.haikuReasoningEffort}`,
+      `sonnet: ${sonnet}`,
+      `sonnet_reasoning_effort: ${MODEL_ALIASES.codex.sonnetReasoningEffort}`,
+      `opus: ${opus}`,
+      `opus_reasoning_effort: ${MODEL_ALIASES.codex.opusReasoningEffort}`,
+      ""
+    ].join("\n"), "utf8");
 
-    return { regular, mini };
+    return {
+      haiku,
+      sonnet,
+      opus,
+      haikuReasoningEffort: MODEL_ALIASES.codex.haikuReasoningEffort,
+      sonnetReasoningEffort: MODEL_ALIASES.codex.sonnetReasoningEffort,
+      opusReasoningEffort: MODEL_ALIASES.codex.opusReasoningEffort
+    };
   } finally {
     rl.close();
   }

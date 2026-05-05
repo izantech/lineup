@@ -12,8 +12,8 @@ Before spawning any agent, check for user-level configuration overrides:
 1. Check if `{{OVERRIDES_DIR}}` exists.
 2. For each agent about to be spawned, look for `{{OVERRIDES_DIR}}<agent>.yaml`.
 3. If an override file exists, read it and apply the overridden values (model,
-   tools, memory) when spawning the agent. These values take precedence over
-   the agent's frontmatter defaults.
+   reasoning effort, tools, memory) when spawning the agent. These values take
+   precedence over the agent's frontmatter defaults.
 4. If no override file exists, use the agent's {{HOST_DEFAULTS_TERM}} as-is.
 
 Override files contain only the fields the user customized:
@@ -21,12 +21,23 @@ Override files contain only the fields the user customized:
 ```yaml
 plugin_version: "1.5.0"
 model: sonnet
+reasoning_effort: medium
 tools: Read, Grep, Glob, LS, WebFetch, mcp__brave-search__brave_web_search
 ```
 
-When spawning an agent with overrides, specify the overridden model and tools
-in the agent invocation. For example, if the researcher's override sets
-`model: sonnet`, spawn the researcher with Sonnet instead of its default Haiku.
+When spawning an agent with overrides, specify the overridden model, reasoning
+effort, and tools in the agent invocation. For example, if the researcher's
+override sets `model: sonnet`, spawn the researcher with Sonnet instead of its
+default Haiku.
+
+Tier-to-Codex mapping:
+
+- `haiku` = `gpt-5.4-mini`, low reasoning.
+- `sonnet` = `gpt-5.5`, medium reasoning.
+- `opus` = `gpt-5.5`, high or xhigh reasoning.
+
+Architects must run at least `gpt-5.5` with high reasoning; use xhigh for
+complex planning and proposal synthesis.
 
 **Version mismatch warning:** If the override file's `plugin_version` does not
 match the current Lineup version (from `.claude-plugin/plugin.json`), note this
@@ -43,6 +54,7 @@ When reading an override file:
    Proceed with {{HOST_DEFAULTS_TERM}} for that agent.
 2. Validate known fields:
    - `model` must be one of `haiku`, `sonnet`, `opus`
+   - `reasoning_effort`, when present, must be one of `low`, `medium`, `high`, `xhigh`
    - `memory` must be one of `user`, `project`, `local`
    - `tools` must be a non-empty comma-space separated string
 3. If a field has an invalid value, report and use the {{HOST_DEFAULTS_TERM}} for

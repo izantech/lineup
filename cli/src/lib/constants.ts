@@ -58,7 +58,14 @@ export const LINEUP_AGENT_ROLES = [
 ] as const;
 
 export const MODEL_ALIASES = {
-  codex: { haiku: "gpt-5.4-mini", sonnet: "gpt-5.4", opus: "gpt-5.4" }
+  codex: {
+    haiku: "gpt-5.4-mini",
+    sonnet: "gpt-5.5",
+    opus: "gpt-5.5",
+    haikuReasoningEffort: "low",
+    sonnetReasoningEffort: "medium",
+    opusReasoningEffort: "xhigh"
+  }
 } as const;
 
 export const CODEX_AGENT_FILES = LINEUP_AGENT_ROLES.map((r) => `.codex/agents/lineup-${r}.toml`);

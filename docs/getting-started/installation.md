@@ -105,7 +105,7 @@ All three host installers prompt for model IDs on first install and persist the 
 | Host | Config file | Prompts | Defaults |
 |------|-------------|---------|---------|
 | Claude | `~/.claude/lineup/install-config.yaml` | opus / sonnet / haiku | `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5` |
-| Codex | `~/.codex/lineup/install-config.yaml` | regular / mini | `gpt-5.4` / `gpt-5.4-mini` |
+| Codex | `~/.codex/lineup/install-config.yaml` | opus / sonnet / haiku | `gpt-5.5` xhigh / `gpt-5.5` medium / `gpt-5.4-mini` low |
 | OpenCode | `~/.config/opencode/lineup/install-config.yaml` | regular / mini | none |
 
 Reinstalls reuse the persisted config. To be re-prompted, delete the config file before running `lineup install`.

@@ -8,10 +8,10 @@ Lineup uses specialized subagents for different stages of the pipeline. Each age
 | ---- | ------------- | ----- | ------- |
 | **Orchestrator** | -- | All | Coordinates the pipeline, delegates work, interacts with the user |
 | **Researcher** | Haiku | Read-only + Web + Write (ephemeral) | Explores code, reads docs, gathers context |
-| **Architect** | Sonnet | Read-only + Write | Synthesizes findings into actionable plans |
-| **Developer** | Haiku | All | Implements the approved plan |
+| **Architect** | Opus | Read-only + Write | Synthesizes findings into actionable plans |
+| **Developer** | Sonnet | All | Implements the approved plan |
 | **Reviewer** | Sonnet | Read-only + Bash | Runs tests, reviews diffs, validates work |
-| **Documenter** | Opus | Read-only + Write + Web | Generates project documentation |
+| **Documenter** | Haiku | Read-only + Write + Web | Generates project documentation |
 | **Teacher** | Opus | Read-only + Web | Explains codebase components |
 
 The "Default Model" column shows the model used for simple-complexity tasks. The orchestrator is the top-level coordinator that manages and delegates to host-specific subagents.
@@ -23,13 +23,14 @@ Models are not fixed per agent. The orchestrator selects a model for each agent 
 | Role | simple | moderate | complex |
 | ---- | ------ | -------- | ------- |
 | **Researcher** | Haiku | Sonnet | Sonnet |
-| **Architect** | Sonnet | Sonnet | Opus |
-| **Developer** | Haiku | Haiku | Sonnet |
+| **Architect** | Opus | Opus | Opus |
+| **Developer** | Haiku | Sonnet | Opus |
 | **Reviewer** | Sonnet | Sonnet | Sonnet |
+| **Documenter** | Haiku | Haiku | Sonnet |
 
-This means a simple bug fix runs researchers on Haiku (fast and cheap), while a complex multi-module refactor upgrades architects to Opus (deeper reasoning for harder planning).
+This means a simple bug fix can run implementation on Haiku (fast and cheap), while complex multi-module work upgrades developers to Opus. Architects always use Opus-tier planning.
 
-Agents not in the effort mapping table (documenter, teacher) use their frontmatter default model regardless of complexity.
+Agents not in the effort mapping table (teacher) use their frontmatter default model regardless of complexity. Documenter stays on Haiku unless documentation work is unusually complex.
 
 ### Override interaction
 

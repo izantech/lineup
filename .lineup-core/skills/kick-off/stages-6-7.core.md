@@ -28,6 +28,10 @@ After verification passes, ask the user if they want documentation generated for
   2. Skip documentation
 - If the user chooses to generate documentation, spawn a `documenter` agent
   following the **Agent Spawning** rules in `SKILL.md`.
+- Documenter model selection defaults to Haiku tier. Escalate to Sonnet tier
+  only for unusually complex documentation work, such as broad cross-module docs,
+  migration guides, or documentation that requires reconciling multiple
+  architectural narratives.
 - Feed it the implementation plan, the implementation report, and the review report as context.
 - The documenter will write documentation files directly to the project.
 - **Output:** documentation report listing what files were created or updated.

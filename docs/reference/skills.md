@@ -169,9 +169,9 @@ Writes override files to host override directories (`~/.claude/lineup/agents/` f
 | ----- | ----- | ------ | ----- |
 | researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 | architect | opus | project | Read, Grep, Glob, LS, Write |
-| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
-| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| developer | sonnet | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | sonnet | project | Read, Grep, Glob, LS, Bash |
+| documenter | haiku | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 ## Explain (`/lineup:explain` / `$lineup-explain` / `/lineup-explain`)

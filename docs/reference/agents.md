@@ -49,6 +49,10 @@ memory: project
 | `sonnet` | Balanced cost and capability. Strong general reasoning. |
 | `opus` | Most capable. Best for planning, implementation, and review. |
 
+For Codex installs, these tiers map to `gpt-5.4-mini` with low reasoning
+for Haiku, `gpt-5.5` with medium reasoning for Sonnet, and `gpt-5.5` with
+high/xhigh reasoning for Opus.
+
 ### Memory values
 
 | Value | Storage location | Shared across |
@@ -91,11 +95,11 @@ Reads the codebase and research findings, then writes implementation plans. Has 
 | ----- | ------- |
 | Name | `developer` |
 | Color | `yellow` |
-| Model | `opus` |
+| Model | `sonnet` |
 | Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit` |
 
-Full tool access. Creates files, edits code, runs build commands, handles notebooks. The only agent with unrestricted tools.
+Full tool access. Creates files, edits code, runs build commands, handles notebooks. The only agent with unrestricted tools. Runtime effort selection may use Haiku for trivial implementation, Sonnet for regular work, and Opus for complex implementation.
 
 ### Reviewer
 
@@ -103,7 +107,7 @@ Full tool access. Creates files, edits code, runs build commands, handles notebo
 | ----- | ------- |
 | Name | `reviewer` |
 | Color | `green` |
-| Model | `opus` |
+| Model | `sonnet` |
 | Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Bash` |
 
@@ -115,11 +119,11 @@ Read access plus Bash to run tests. Cannot modify code. Reports issues rather th
 | ----- | ------- |
 | Name | `documenter` |
 | Color | `cyan` |
-| Model | `opus` |
+| Model | `haiku` |
 | Memory | `project` |
 | Tools | `Read, Grep, Glob, LS, Write, WebFetch` |
 
-Read access, Write (for creating documentation files), and WebFetch (for pulling in external references). No Bash -- documentation doesn't require running commands.
+Read access, Write (for creating documentation files), and WebFetch (for pulling in external references). No Bash -- documentation doesn't require running commands. Runtime effort selection keeps documentation on Haiku by default and escalates to Sonnet only for unusually complex documentation.
 
 ### Teacher
 

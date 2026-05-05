@@ -20,9 +20,9 @@ The configurator reads all agent files and displays a summary table:
 | ----- | ----- | ------ | ----- |
 | researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 | architect | opus | project | Read, Grep, Glob, LS, Write |
-| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
-| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| developer | sonnet | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | sonnet | project | Read, Grep, Glob, LS, Bash |
+| documenter | haiku | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 This shows you the starting point before any changes.
@@ -224,9 +224,9 @@ Run `/lineup:configure` and choose "Reset". The configurator restores all agents
 | ----- | ----- | ------ | ----- |
 | researcher | haiku | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 | architect | opus | project | Read, Grep, Glob, LS, Write |
-| developer | opus | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
-| reviewer | opus | project | Read, Grep, Glob, LS, Bash |
-| documenter | opus | project | Read, Grep, Glob, LS, Write, WebFetch |
+| developer | sonnet | project | Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit |
+| reviewer | sonnet | project | Read, Grep, Glob, LS, Bash |
+| documenter | haiku | project | Read, Grep, Glob, LS, Write, WebFetch |
 | teacher | opus | project | Read, Grep, Glob, LS, WebFetch, WebSearch |
 
 This is a hard reset -- it doesn't depend on git history, so it works even if you've modified agent files manually.

@@ -3,7 +3,7 @@ name: reviewer
 color: green
 description: Validates implementations by reviewing diffs, running tests, and checking against the plan. Use after a developer has completed implementation and before presenting results to the user. Catches issues before they reach the user.
 tools: Read, Grep, Glob, LS, Bash
-model: opus
+model: sonnet
 memory: project
 ---
 
