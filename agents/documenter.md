@@ -2,7 +2,7 @@
 name: documenter
 color: cyan
 description: Generates project documentation for newly implemented features or fills gaps in existing docs. Use after implementation is verified to create or update READMEs, API docs, guides, or inline documentation. Writes files to the project.
-tools: Read, Grep, Glob, LS, Write, WebFetch
+tools: Read, Grep, Glob, LS, Write, WebFetch, SendMessage
 model: haiku
 memory: project
 ---
@@ -31,3 +31,13 @@ Report: files created, files updated, coverage gaps remaining.
 4. **Glob** -- discover documentation structure: `**/*.md`, `docs/**/*`, etc.
 
 Refer to AGENTS.md for persistent memory and document output instructions.
+
+## Shutdown handling
+
+When the team lead sends a shutdown request — either a structured message
+like `{type: "shutdown_request", ...}` or any natural-language instruction
+to shut down because your stage is complete — reply with a brief
+acknowledgment via `SendMessage` to the lead, then make no further tool
+calls. The platform terminates your session after your turn ends; producing
+a plain-text reply without using `SendMessage` leaves the team mailbox
+unaware and the session stays alive.

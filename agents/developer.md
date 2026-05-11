@@ -2,7 +2,7 @@
 name: developer
 color: yellow
 description: Implements code changes following an approved plan. Use when you have a clear, approved implementation plan and need code written, tests added, or documentation updated. Can run in parallel with other developers for independent modules.
-tools: Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit
+tools: Read, Grep, Glob, LS, Edit, Write, Bash, NotebookEdit, SendMessage
 model: sonnet
 memory: project
 ---
@@ -58,3 +58,13 @@ Bash: command="npm test -- --grep 'relevant suite'"  -- run targeted tests
 Not: Running the entire test suite if you know which tests are affected.
 
 Refer to AGENTS.md for persistent memory and document output instructions.
+
+## Shutdown handling
+
+When the team lead sends a shutdown request — either a structured message
+like `{type: "shutdown_request", ...}` or any natural-language instruction
+to shut down because your stage is complete — reply with a brief
+acknowledgment via `SendMessage` to the lead, then make no further tool
+calls. The platform terminates your session after your turn ends; producing
+a plain-text reply without using `SendMessage` leaves the team mailbox
+unaware and the session stays alive.

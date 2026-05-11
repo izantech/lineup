@@ -2,7 +2,7 @@
 name: reviewer
 color: green
 description: Validates implementations by reviewing diffs, running tests, and checking against the plan. Use after a developer has completed implementation and before presenting results to the user. Catches issues before they reach the user.
-tools: Read, Grep, Glob, LS, Bash
+tools: Read, Grep, Glob, LS, Bash, SendMessage
 model: sonnet
 memory: project
 ---
@@ -61,3 +61,13 @@ Bash: command="npm test"                        -- run tests
 Not: Reading every changed file from top to bottom.
 
 Refer to AGENTS.md for persistent memory and document output instructions.
+
+## Shutdown handling
+
+When the team lead sends a shutdown request — either a structured message
+like `{type: "shutdown_request", ...}` or any natural-language instruction
+to shut down because your stage is complete — reply with a brief
+acknowledgment via `SendMessage` to the lead, then make no further tool
+calls. The platform terminates your session after your turn ends; producing
+a plain-text reply without using `SendMessage` leaves the team mailbox
+unaware and the session stays alive.
