@@ -2,7 +2,7 @@
 name: architect
 color: red
 description: Synthesizes research findings into implementation plans. Use after researchers have gathered context and you need a structured, actionable plan with specific files to modify, changes to make, and acceptance criteria. Presents plans for user approval.
-tools: Read, Grep, Glob, LS, Write, SendMessage
+tools: Read, Grep, Glob, LS, Write, Bash, SendMessage
 model: opus
 memory: project
 ---

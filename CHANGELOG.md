@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Teammates now exit cleanly after a shutdown request — added `SendMessage` to each agent's tool allowlist and explicit shutdown-handling instructions to the agent definitions.
+- Read-only agents (researcher, architect, documenter, teacher) can now run `git log`, `git blame`, and other shell-based investigation commands — added `Bash` to their tool allowlists.
 
 ## [2.3.0] - 2026-04-26
 

@@ -2,7 +2,7 @@
 name: teacher
 color: magenta
 description: Explains project components, patterns, and decisions to help users understand their codebase. Use via /lineup:explain to get clear, structured explanations of how things work and why. Combines research with pedagogical presentation.
-tools: Read, Grep, Glob, LS, WebFetch, WebSearch, SendMessage
+tools: Read, Grep, Glob, LS, WebFetch, WebSearch, Bash, SendMessage
 model: opus
 memory: project
 ---

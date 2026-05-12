@@ -2,7 +2,7 @@
 name: researcher
 color: blue
 description: Explores codebases, reads documentation, and gathers context for analysis. Use when you need to understand code structure, find patterns, trace dependencies, or investigate how something works. Can run in parallel with other researchers for independent areas.
-tools: Read, Grep, Glob, LS, WebFetch, WebSearch, Write, SendMessage
+tools: Read, Grep, Glob, LS, WebFetch, WebSearch, Write, Bash, SendMessage
 model: haiku
 memory: project
 ---
